@@ -1,6 +1,6 @@
 # Chinese Flashcards
 
-A personal, single-user flashcard web app with FSRS spaced repetition, browser
+A personal, single-user flashcard web app with FSRS spaced repetition, browsef
 text-to-speech for Mandarin/English, CSV import/export, and an installable
 iPhone PWA. Built with Next.js 15 (App Router), TypeScript, React, and
 Tailwind CSS; data lives in a single DynamoDB table.
