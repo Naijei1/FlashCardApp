@@ -11,6 +11,7 @@ export default function DeckSettings({ deck }: { deck: Deck }) {
   const [name, setName] = useState(deck.name);
   const [frontLanguage, setFrontLanguage] = useState(deck.frontLanguage ?? "");
   const [backLanguage, setBackLanguage] = useState(deck.backLanguage ?? "");
+  const [chineseSide, setChineseSide] = useState(deck.chineseSide ?? "");
   const [busy, setBusy] = useState(false);
 
   async function save() {
@@ -18,7 +19,7 @@ export default function DeckSettings({ deck }: { deck: Deck }) {
     const res = await fetch(`/api/decks/${deck.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, frontLanguage, backLanguage }),
+      body: JSON.stringify({ name, frontLanguage, backLanguage, chineseSide }),
     }).catch(() => null);
     setBusy(false);
     if (res?.ok) {
@@ -88,6 +89,20 @@ export default function DeckSettings({ deck }: { deck: Deck }) {
           </select>
         </label>
       </div>
+      <label className="block text-sm">
+        <span className="text-muted">
+          Chinese side for Write mode (used when no zh language is set above)
+        </span>
+        <select
+          value={chineseSide}
+          onChange={(e) => setChineseSide(e.target.value)}
+          className={selectClass + " mt-1"}
+        >
+          <option value="">Auto (from languages)</option>
+          <option value="front">Front</option>
+          <option value="back">Back</option>
+        </select>
+      </label>
       <div className="flex flex-wrap gap-2">
         <button
           onClick={save}

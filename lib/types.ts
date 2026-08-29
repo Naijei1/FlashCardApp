@@ -4,6 +4,8 @@ export type Deck = {
   /** BCP-47 tag used to pick a speech voice for the front side, e.g. "zh-CN" */
   frontLanguage?: string;
   backLanguage?: string;
+  /** Which side holds Chinese for Write mode, when languages aren't set. */
+  chineseSide?: "front" | "back";
   createdAt: string;
   updatedAt: string;
 };

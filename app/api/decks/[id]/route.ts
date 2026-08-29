@@ -21,6 +21,12 @@ export async function PATCH(request: Request, { params }: Context) {
   // Empty string clears a language; undefined leaves it unchanged.
   if ("frontLanguage" in body) deck.frontLanguage = body.frontLanguage || undefined;
   if ("backLanguage" in body) deck.backLanguage = body.backLanguage || undefined;
+  if ("chineseSide" in body) {
+    deck.chineseSide =
+      body.chineseSide === "front" || body.chineseSide === "back"
+        ? body.chineseSide
+        : undefined;
+  }
   deck.updatedAt = new Date().toISOString();
   await putDeck(deck);
   return NextResponse.json(deck);

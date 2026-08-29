@@ -34,29 +34,58 @@ export default async function DeckPage({
         <DeckSettings deck={deck} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="space-y-2">
         <Link
           href={`/review/${deck.id}`}
-          className="rounded-xl bg-accent px-4 py-3 text-center font-medium text-accent-foreground"
+          className="pressable flex items-center justify-between rounded-2xl bg-accent px-5 py-4 text-accent-foreground"
         >
-          Review ({counts.due})
+          <span>
+            <span className="block text-lg font-semibold">Spaced Repetition</span>
+            <span className="block text-sm opacity-80">
+              {counts.due > 0
+                ? `Review ${counts.due} due card${counts.due === 1 ? "" : "s"}`
+                : "Nothing due right now"}
+            </span>
+          </span>
+          <span aria-hidden className="text-xl opacity-70">
+            ›
+          </span>
         </Link>
         <Link
           href={`/study/${deck.id}`}
-          className="rounded-xl border border-border bg-surface px-4 py-3 text-center font-medium"
+          className="pressable flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4"
         >
-          Study
+          <span>
+            <span className="block text-lg font-semibold">Normal Review</span>
+            <span className="block text-sm text-muted">
+              Browse cards freely — doesn&apos;t affect scheduling
+            </span>
+          </span>
+          <span aria-hidden className="text-xl text-muted">
+            ›
+          </span>
         </Link>
         <Link
-          href={`/import?deck=${deck.id}`}
-          className="rounded-xl border border-border bg-surface px-4 py-3 text-center font-medium"
+          href={`/write/${deck.id}`}
+          className="pressable flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4"
         >
+          <span>
+            <span className="block text-lg font-semibold">Write Chinese</span>
+            <span className="block text-sm text-muted">
+              See English and type the Chinese answer
+            </span>
+          </span>
+          <span aria-hidden className="text-xl text-muted">
+            ›
+          </span>
+        </Link>
+      </div>
+
+      <div className="flex gap-4 px-1 text-sm">
+        <Link href={`/import?deck=${deck.id}`} className="text-accent">
           Import CSV
         </Link>
-        <a
-          href={`/api/decks/${deck.id}/export`}
-          className="rounded-xl border border-border bg-surface px-4 py-3 text-center font-medium"
-        >
+        <a href={`/api/decks/${deck.id}/export`} className="text-accent">
           Export CSV
         </a>
       </div>

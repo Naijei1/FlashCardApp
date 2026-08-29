@@ -18,7 +18,10 @@ function isActive(pathname: string, href: string) {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   // Study screens use their own full-screen layout with no nav chrome.
-  const immersive = pathname.startsWith("/study/") || pathname.startsWith("/review/");
+  const immersive =
+    pathname.startsWith("/study/") ||
+    pathname.startsWith("/review/") ||
+    pathname.startsWith("/write/");
 
   if (immersive) {
     return <div className="min-h-dvh pt-safe">{children}</div>;

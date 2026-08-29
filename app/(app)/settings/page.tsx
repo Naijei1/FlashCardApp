@@ -14,8 +14,9 @@ export default function SettingsPage() {
         </p>
         <p>
           <strong className="text-foreground">Keyboard shortcuts (review):</strong> Space =
-          reveal · 1 = Again · 2 = Hard · 3 = Good · 4 = Easy · ←/→ = previous/next in study
-          mode.
+          reveal · 1 = Retry · 2 = Hard · 3 = Good · 4 = Easy · Space/Enter after reveal =
+          Good · ←/→ = previous/next in normal mode. In Write mode, Enter checks your
+          answer, then Enter again continues.
         </p>
         <p>
           <strong className="text-foreground">Pronunciation:</strong> speech uses your

@@ -48,6 +48,57 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Study screens: no text-selection flashes, no double-tap zoom, no rubber-band */
+.study-surface {
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.study-surface .selectable {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Instant press feedback, native-app style */
+.pressable {
+  touch-action: manipulation;
+  transition:
+    transform 100ms ease-out,
+    background-color 100ms ease-out,
+    opacity 100ms ease-out;
+}
+.pressable:active {
+  transform: scale(0.96);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pressable,
+  .pressable:active {
+    transform: none;
+  }
+}
+
+/* Answer reveal: short fade + rise, question stays put */
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.reveal-in {
+  animation: reveal-in 180ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal-in {
+    animation: none;
+  }
+}
+
 /* Safe-area helpers for iPhone standalone mode */
 .pt-safe {
   padding-top: env(safe-area-inset-top);
