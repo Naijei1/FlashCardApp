@@ -48,11 +48,21 @@ export function shuffle<T>(items: T[], random: () => number = Math.random): T[] 
   return result;
 }
 
-/** Due cards, shuffled, for a review session. */
+/** Cap on cards per review session; a short break is enforced between batches. */
+export const SESSION_LIMIT = 25;
+
+/**
+ * Cards for one review session: the most overdue cards first (FSRS priority),
+ * capped at `limit`, then shuffled so the batch order isn't predictable.
+ */
 export function buildQueue(
   cards: Card[],
   now: Date,
-  random: () => number = Math.random
+  random: () => number = Math.random,
+  limit: number = SESSION_LIMIT
 ): Card[] {
-  return shuffle(dueCards(cards, now), random);
+  const batch = dueCards(cards, now)
+    .sort((a, b) => new Date(a.fsrs.due).getTime() - new Date(b.fsrs.due).getTime())
+    .slice(0, limit);
+  return shuffle(batch, random);
 }

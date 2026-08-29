@@ -2,13 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  IconHome,
+  IconImport,
+  IconSearch,
+  IconSettings,
+  IconStats,
+} from "./icons";
 
 const NAV = [
-  { href: "/", label: "Home", icon: "🏠" },
-  { href: "/browse", label: "Browse", icon: "🔍" },
-  { href: "/import", label: "Import", icon: "📥" },
-  { href: "/stats", label: "Stats", icon: "📊" },
-  { href: "/settings", label: "Settings", icon: "⚙️" },
+  { href: "/", label: "Home", Icon: IconHome },
+  { href: "/browse", label: "Browse", Icon: IconSearch },
+  { href: "/import", label: "Import", Icon: IconImport },
+  { href: "/stats", label: "Stats", Icon: IconStats },
+  { href: "/settings", label: "Settings", Icon: IconSettings },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -46,7 +53,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     : "text-muted hover:bg-border/40 hover:text-foreground"
                 }`}
               >
-                <span aria-hidden>{item.icon}</span>
+                <item.Icon className="text-base" />
                 {item.label}
               </Link>
             ))}
@@ -66,13 +73,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] ${
+              className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-[11px] ${
                 isActive(pathname, item.href) ? "text-accent" : "text-muted"
               }`}
             >
-              <span className="text-xl leading-none" aria-hidden>
-                {item.icon}
-              </span>
+              <item.Icon className="text-[22px]" strokeWidth={1.8} />
               {item.label}
             </Link>
           ))}

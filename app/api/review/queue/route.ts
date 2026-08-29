@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api";
 import { listCards, scanAllCards } from "@/lib/db";
-import { buildQueue } from "@/lib/due";
+import { buildQueue, dueCards } from "@/lib/due";
 import { previewIntervals } from "@/lib/fsrs";
 
 export async function GET(request: Request) {
@@ -11,9 +11,10 @@ export async function GET(request: Request) {
   const cards =
     deckId && deckId !== "all" ? await listCards(deckId) : await scanAllCards();
   const now = new Date();
+  // One batch: the most overdue cards, capped (SESSION_LIMIT), shuffled.
   const queue = buildQueue(cards, now).map((card) => ({
     card,
     intervals: previewIntervals(card.fsrs, now),
   }));
-  return NextResponse.json({ queue });
+  return NextResponse.json({ queue, totalDue: dueCards(cards, now).length });
 }

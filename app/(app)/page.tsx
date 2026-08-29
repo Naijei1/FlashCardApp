@@ -33,7 +33,7 @@ export default async function HomePage() {
               : "pointer-events-none border border-border text-muted"
           }`}
         >
-          {totals.due > 0 ? "Start Review" : "Nothing due 🎉"}
+          {totals.due > 0 ? "Start Review" : "Nothing due"}
         </Link>
       </section>
 

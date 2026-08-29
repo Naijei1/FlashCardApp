@@ -1,5 +1,6 @@
 "use client";
 
+import { IconSpeaker } from "./icons";
 import { useSpeech } from "./useSpeech";
 
 export default function TtsButton({
@@ -21,9 +22,9 @@ export default function TtsButton({
         e.stopPropagation();
         speak(text, lang);
       }}
-      className={`inline-flex h-11 w-11 items-center justify-center rounded-full text-xl text-muted hover:bg-border/40 hover:text-foreground ${className}`}
+      className={`pressable inline-flex h-11 w-11 items-center justify-center rounded-full text-xl text-muted hover:bg-border/40 hover:text-foreground ${className}`}
     >
-      🔊
+      <IconSpeaker strokeWidth={1.8} />
     </button>
   );
 }

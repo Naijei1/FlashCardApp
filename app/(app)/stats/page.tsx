@@ -1,6 +1,9 @@
 import { countReviewLogs, listDecks, scanAllCards } from "@/lib/db";
 import { countsByDeck, totalCounts } from "@/lib/due";
+import { formatInterval } from "@/lib/interval-label";
 import { State } from "ts-fsrs";
+
+const DAY_MS = 86_400_000;
 
 const STATE_LABELS: Record<number, string> = {
   [State.New]: "New",
@@ -26,8 +29,33 @@ export default async function StatsPage() {
 
   const in7Days = cards.filter((c) => {
     const due = new Date(c.fsrs.due).getTime();
-    return due > now.getTime() && due <= now.getTime() + 7 * 86_400_000;
+    return due > now.getTime() && due <= now.getTime() + 7 * DAY_MS;
   }).length;
+
+  // Forecast: how many cards become due on each of the next 7 days.
+  const forecast = Array.from({ length: 7 }, (_, i) => {
+    const start = now.getTime() + i * DAY_MS;
+    const end = start + DAY_MS;
+    const count = cards.filter((c) => {
+      const due = new Date(c.fsrs.due).getTime();
+      return i === 0 ? due < end : due >= start && due < end;
+    }).length;
+    const label =
+      i === 0
+        ? "Today"
+        : i === 1
+          ? "Tomorrow"
+          : new Date(start).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    return { label, count };
+  });
+  const maxForecast = Math.max(1, ...forecast.map((f) => f.count));
+
+  // The soonest upcoming (not-yet-due) cards, with time until their review.
+  const deckNames = new Map(decks.map((d) => [d.id, d.name]));
+  const upcoming = cards
+    .filter((c) => new Date(c.fsrs.due).getTime() > now.getTime())
+    .sort((a, b) => new Date(a.fsrs.due).getTime() - new Date(b.fsrs.due).getTime())
+    .slice(0, 15);
 
   return (
     <div className="space-y-6 py-6">
@@ -52,6 +80,54 @@ export default async function StatsPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-surface p-4">
+        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
+          Review forecast — next 7 days
+        </h2>
+        <div className="space-y-1.5">
+          {forecast.map((day) => (
+            <div key={day.label} className="flex items-center gap-3 text-sm">
+              <span className="w-24 shrink-0 text-muted">{day.label}</span>
+              <div className="h-4 flex-1 overflow-hidden rounded bg-border/40">
+                <div
+                  className="h-full rounded bg-accent/70"
+                  style={{ width: `${(day.count / maxForecast) * 100}%` }}
+                />
+              </div>
+              <span className="w-8 shrink-0 text-right tabular-nums">{day.count}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-surface p-4">
+        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
+          Next reviews
+        </h2>
+        {upcoming.length === 0 ? (
+          <p className="text-sm text-muted">
+            No scheduled reviews yet — everything is either due now or unreviewed.
+          </p>
+        ) : (
+          <div className="space-y-2 text-sm">
+            {upcoming.map((card) => (
+              <div
+                key={card.id}
+                className="flex items-baseline justify-between gap-3 border-b border-border pb-2 last:border-0 last:pb-0"
+              >
+                <span className="min-w-0 truncate">
+                  {card.front} <span className="text-muted">→ {card.back}</span>
+                </span>
+                <span className="shrink-0 text-right text-muted">
+                  in {formatInterval(new Date(card.fsrs.due).getTime() - now.getTime())}
+                  <span className="hidden sm:inline"> · {deckNames.get(card.deckId) ?? ""}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="rounded-2xl border border-border bg-surface p-4">

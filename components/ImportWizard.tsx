@@ -83,7 +83,7 @@ export default function ImportWizard({
 
       {result !== null && (
         <p className="rounded-xl border border-green-600/40 bg-surface p-4 text-green-600">
-          Imported {result} card{result === 1 ? "" : "s"} 🎉
+          Imported {result} card{result === 1 ? "" : "s"}
         </p>
       )}
       {error && <p className="text-sm text-red-500">{error}</p>}

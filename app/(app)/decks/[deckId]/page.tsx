@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AddCardForm from "@/components/AddCardForm";
+import { IconChevronRight } from "@/components/icons";
 import CardRow from "@/components/CardRow";
 import DeckSettings from "@/components/DeckSettings";
 import { getDeck, listCards, listDecks } from "@/lib/db";
@@ -47,9 +48,7 @@ export default async function DeckPage({
                 : "Nothing due right now"}
             </span>
           </span>
-          <span aria-hidden className="text-xl opacity-70">
-            ›
-          </span>
+          <IconChevronRight className="text-xl opacity-70" />
         </Link>
         <Link
           href={`/study/${deck.id}`}
@@ -61,9 +60,7 @@ export default async function DeckPage({
               Browse cards freely — doesn&apos;t affect scheduling
             </span>
           </span>
-          <span aria-hidden className="text-xl text-muted">
-            ›
-          </span>
+          <IconChevronRight className="text-xl text-muted" />
         </Link>
         <Link
           href={`/write/${deck.id}`}
@@ -75,9 +72,7 @@ export default async function DeckPage({
               See English and type the Chinese answer
             </span>
           </span>
-          <span aria-hidden className="text-xl text-muted">
-            ›
-          </span>
+          <IconChevronRight className="text-xl text-muted" />
         </Link>
       </div>
 

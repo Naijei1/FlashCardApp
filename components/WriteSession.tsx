@@ -17,6 +17,9 @@ import {
   type ChineseSide,
   type DiffChar,
 } from "@/lib/write";
+import { getBreakUntil, startBreak } from "@/lib/study-break";
+import BreakScreen from "./BreakScreen";
+import { IconCheck, IconX } from "./icons";
 import RatingBar from "./RatingBar";
 import { createReviewSync } from "./reviewSync";
 import TtsButton from "./TtsButton";
@@ -46,6 +49,9 @@ export default function WriteSession({
   backHref: string;
 }) {
   const [queue, setQueue] = useState<QueueItem[] | null>(null);
+  const [totalDue, setTotalDue] = useState(0);
+  const [batchSize, setBatchSize] = useState(0);
+  const [breakUntil, setBreakUntil] = useState(0);
   const [value, setValue] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [reviewed, setReviewed] = useState(0);
@@ -55,25 +61,31 @@ export default function WriteSession({
   const advancedAtRef = useRef(0);
   const sync = useMemo(() => createReviewSync(setSaveFailures), []);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadQueue = useCallback(() => {
+    setQueue(null);
     fetch(`/api/review/queue?deckId=${encodeURIComponent(deckId)}`)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
-      .then((data: { queue: QueueItem[] }) => {
-        if (cancelled) return;
-        setQueue(
-          data.queue.filter(
-            (item) => chineseSideForCard(item.card, deckSide) !== null
-          )
+      .then((data: { queue: QueueItem[]; totalDue: number }) => {
+        const usable = data.queue.filter(
+          (item) => chineseSideForCard(item.card, deckSide) !== null
         );
+        setQueue(usable);
+        setTotalDue(data.totalDue);
+        setBatchSize(usable.length);
       })
-      .catch(() => {
-        if (!cancelled) setLoadError(true);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .catch(() => setLoadError(true));
   }, [deckId, deckSide]);
+
+  useEffect(() => {
+    // An unfinished break (even across a reload) blocks the next batch.
+    const until = getBreakUntil();
+    if (until > Date.now()) {
+      setBreakUntil(until);
+      setQueue([]);
+    } else {
+      loadQueue();
+    }
+  }, [loadQueue]);
 
   const current = queue?.[0];
   const currentSide = current
@@ -113,14 +125,19 @@ export default function WriteSession({
       setQueue((q) => {
         if (!q) return q;
         const rest = q.slice(1);
-        if (!dueSoon) return rest;
-        const card = { ...item.card, fsrs };
-        return [...rest, { card, intervals: previewIntervals(fsrs, new Date(fsrs.due)) }];
+        const next = dueSoon
+          ? [...rest, { card: { ...item.card, fsrs }, intervals: previewIntervals(fsrs, new Date(fsrs.due)) }]
+          : rest;
+        if (next.length === 0 && totalDue > batchSize) {
+          // Batch finished with more cards waiting — enforce the pause.
+          setBreakUntil(startBreak());
+        }
+        return next;
       });
       // Called from a tap/keypress, so refocusing keeps the keyboard up on iOS.
       inputRef.current?.focus();
     },
-    [queue, result, sync]
+    [queue, result, sync, totalDue, batchSize]
   );
 
   const defaultRating = result ? (result.correct ? 3 : 1) : 3;
@@ -156,6 +173,21 @@ export default function WriteSession({
       <Screen backHref={backHref} title="Something went wrong" body="Could not load the queue." />
     );
   }
+  if (breakUntil > 0 && (queue === null || queue.length === 0)) {
+    return (
+      <BreakScreen
+        until={breakUntil}
+        reviewed={reviewed}
+        waiting={reviewed > 0 ? Math.max(totalDue - batchSize, 0) : null}
+        backHref={backHref}
+        onContinue={() => {
+          setBreakUntil(0);
+          setReviewed(0);
+          loadQueue();
+        }}
+      />
+    );
+  }
   if (queue === null) {
     return <Screen backHref={backHref} title="" body="" />;
   }
@@ -163,7 +195,7 @@ export default function WriteSession({
     return (
       <Screen
         backHref={backHref}
-        title={reviewed > 0 ? "Session complete 🎉" : "Nothing due"}
+        title={reviewed > 0 ? "Session complete" : "Nothing due"}
         body={
           reviewed > 0
             ? `You wrote ${reviewed} card${reviewed === 1 ? "" : "s"}.`
@@ -179,7 +211,9 @@ export default function WriteSession({
         <Link href={backHref} className="pressable rounded-lg px-3 py-2 text-muted">
           ← Back
         </Link>
-        <span className="text-sm tabular-nums text-muted">{queue.length} left</span>
+        <span className="text-sm tabular-nums text-muted">
+          {queue.length} left{totalDue > batchSize ? ` · ${totalDue - batchSize} waiting` : ""}
+        </span>
         <span className="w-16 text-right text-sm tabular-nums text-muted">{reviewed} done</span>
       </header>
 
@@ -229,12 +263,14 @@ export default function WriteSession({
           {result ? (
             <div key={current.card.id} className="reveal-in flex flex-col items-center gap-2">
               {result.correct ? (
-                <p className="text-lg font-medium text-green-600 dark:text-green-400">
-                  ✓ Correct
+                <p className="flex items-center gap-1.5 text-lg font-medium text-green-600 dark:text-green-400">
+                  <IconCheck strokeWidth={2.5} /> Correct
                 </p>
               ) : (
                 <>
-                  <p className="text-lg font-medium text-red-500">✕ Incorrect</p>
+                  <p className="flex items-center gap-1.5 text-lg font-medium text-red-500">
+                    <IconX strokeWidth={2.5} /> Incorrect
+                  </p>
                   {result.typed.length > 0 && (
                     <p className="text-sm text-muted">
                       Your answer:{" "}

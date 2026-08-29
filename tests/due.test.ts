@@ -67,4 +67,25 @@ describe("buildQueue", () => {
     const queue = buildQueue(cards, NOW, () => 0);
     expect(queue.map((c) => c.id).sort()).toEqual(["a", "c"]);
   });
+
+  it("caps a session at the limit", () => {
+    const cards = Array.from({ length: 40 }, (_, i) => makeCard({ id: `c${i}` }));
+    expect(buildQueue(cards, NOW, () => 0)).toHaveLength(25);
+    expect(buildQueue(cards, NOW, () => 0, 10)).toHaveLength(10);
+  });
+
+  it("selects the most overdue cards first when capping", () => {
+    const overdue = (hoursAgo: number) => {
+      const fsrs = emptyCardState(NOW);
+      fsrs.due = new Date(NOW.getTime() - hoursAgo * 3_600_000).toISOString();
+      return fsrs;
+    };
+    const cards = [
+      makeCard({ id: "recent", fsrs: overdue(1) }),
+      makeCard({ id: "oldest", fsrs: overdue(48) }),
+      makeCard({ id: "older", fsrs: overdue(24) }),
+    ];
+    const queue = buildQueue(cards, NOW, () => 0, 2);
+    expect(queue.map((c) => c.id).sort()).toEqual(["older", "oldest"]);
+  });
 });

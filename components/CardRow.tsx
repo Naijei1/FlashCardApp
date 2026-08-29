@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Card, Deck } from "@/lib/types";
 import { formatInterval } from "@/lib/interval-label";
+import { IconPencil } from "./icons";
 import TtsButton from "./TtsButton";
 import { DEFAULT_FRONT_LANG } from "@/lib/languages";
 
@@ -134,9 +135,9 @@ export default function CardRow({
       <button
         onClick={() => setEditing(true)}
         aria-label={`Edit ${card.front}`}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-border/40 hover:text-foreground"
+        className="pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg text-muted hover:bg-border/40 hover:text-foreground"
       >
-        ✏️
+        <IconPencil strokeWidth={1.8} />
       </button>
     </div>
   );

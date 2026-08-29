@@ -10,6 +10,8 @@ import {
   type IntervalPreview,
 } from "@/lib/fsrs";
 import { DEFAULT_BACK_LANG, DEFAULT_FRONT_LANG } from "@/lib/languages";
+import { getBreakUntil, startBreak } from "@/lib/study-break";
+import BreakScreen from "./BreakScreen";
 import RatingBar from "./RatingBar";
 import { createReviewSync } from "./reviewSync";
 import TtsButton from "./TtsButton";
@@ -35,6 +37,9 @@ export default function ReviewSession({
   backHref: string;
 }) {
   const [queue, setQueue] = useState<QueueItem[] | null>(null);
+  const [totalDue, setTotalDue] = useState(0);
+  const [batchSize, setBatchSize] = useState(0);
+  const [breakUntil, setBreakUntil] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [reviewed, setReviewed] = useState(0);
   const [loadError, setLoadError] = useState(false);
@@ -42,20 +47,28 @@ export default function ReviewSession({
   const advancedAtRef = useRef(0);
   const sync = useMemo(() => createReviewSync(setSaveFailures), []);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadQueue = useCallback(() => {
+    setQueue(null);
     fetch(`/api/review/queue?deckId=${encodeURIComponent(deckId)}`)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
-      .then((data) => {
-        if (!cancelled) setQueue(data.queue);
+      .then((data: { queue: QueueItem[]; totalDue: number }) => {
+        setQueue(data.queue);
+        setTotalDue(data.totalDue);
+        setBatchSize(data.queue.length);
       })
-      .catch(() => {
-        if (!cancelled) setLoadError(true);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .catch(() => setLoadError(true));
   }, [deckId]);
+
+  useEffect(() => {
+    // An unfinished break (even across a reload) blocks the next batch.
+    const until = getBreakUntil();
+    if (until > Date.now()) {
+      setBreakUntil(until);
+      setQueue([]);
+    } else {
+      loadQueue();
+    }
+  }, [loadQueue]);
 
   const reveal = useCallback(() => setRevealed(true), []);
 
@@ -82,12 +95,17 @@ export default function ReviewSession({
       setQueue((q) => {
         if (!q) return q;
         const rest = q.slice(1);
-        if (!dueSoon) return rest;
-        const card = { ...current.card, fsrs };
-        return [...rest, { card, intervals: previewIntervals(fsrs, new Date(fsrs.due)) }];
+        const next = dueSoon
+          ? [...rest, { card: { ...current.card, fsrs }, intervals: previewIntervals(fsrs, new Date(fsrs.due)) }]
+          : rest;
+        if (next.length === 0 && totalDue > batchSize) {
+          // Batch finished with more cards waiting — enforce the pause.
+          setBreakUntil(startBreak());
+        }
+        return next;
       });
     },
-    [queue, sync]
+    [queue, sync, totalDue, batchSize]
   );
 
   useKeyboard((event) => {
@@ -108,6 +126,21 @@ export default function ReviewSession({
       <Screen backHref={backHref} title="Something went wrong" body="Could not load the review queue." />
     );
   }
+  if (breakUntil > 0 && (queue === null || queue.length === 0)) {
+    return (
+      <BreakScreen
+        until={breakUntil}
+        reviewed={reviewed}
+        waiting={reviewed > 0 ? Math.max(totalDue - batchSize, 0) : null}
+        backHref={backHref}
+        onContinue={() => {
+          setBreakUntil(0);
+          setReviewed(0);
+          loadQueue();
+        }}
+      />
+    );
+  }
   if (queue === null) {
     return <Screen backHref={backHref} title="" body="" />;
   }
@@ -115,7 +148,7 @@ export default function ReviewSession({
     return (
       <Screen
         backHref={backHref}
-        title={reviewed > 0 ? "Session complete 🎉" : "Nothing due"}
+        title={reviewed > 0 ? "Session complete" : "Nothing due"}
         body={
           reviewed > 0
             ? `You reviewed ${reviewed} card${reviewed === 1 ? "" : "s"}.`
@@ -135,7 +168,9 @@ export default function ReviewSession({
         <Link href={backHref} className="pressable rounded-lg px-3 py-2 text-muted">
           ← Back
         </Link>
-        <span className="text-sm tabular-nums text-muted">{queue.length} left</span>
+        <span className="text-sm tabular-nums text-muted">
+          {queue.length} left{totalDue > batchSize ? ` · ${totalDue - batchSize} waiting` : ""}
+        </span>
         <span className="w-16 text-right text-sm tabular-nums text-muted">{reviewed} done</span>
       </header>
 
