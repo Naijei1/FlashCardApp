@@ -1,0 +1,71 @@
+import Link from "next/link";
+import NewDeckButton from "@/components/NewDeckButton";
+import { listDecks, scanAllCards } from "@/lib/db";
+import { countsByDeck, totalCounts } from "@/lib/due";
+
+export default async function HomePage() {
+  const [decks, cards] = await Promise.all([listDecks(), scanAllCards()]);
+  const now = new Date();
+  const totals = totalCounts(cards, now);
+  const byDeck = countsByDeck(cards, now);
+
+  return (
+    <div className="space-y-8 py-6">
+      <h1 className="text-2xl font-bold">Chinese Flashcards</h1>
+
+      <section className="rounded-2xl border border-border bg-surface p-5">
+        <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Today</h2>
+        <div className="mt-3 flex items-end gap-6">
+          <div>
+            <div className="text-4xl font-bold text-accent">{totals.due}</div>
+            <div className="text-sm text-muted">due</div>
+          </div>
+          <div>
+            <div className="text-4xl font-bold">{totals.newCards}</div>
+            <div className="text-sm text-muted">new</div>
+          </div>
+        </div>
+        <Link
+          href="/review/all"
+          className={`mt-5 block w-full rounded-xl px-4 py-3 text-center text-lg font-medium ${
+            totals.due > 0
+              ? "bg-accent text-accent-foreground"
+              : "pointer-events-none border border-border text-muted"
+          }`}
+        >
+          {totals.due > 0 ? "Start Review" : "Nothing due 🎉"}
+        </Link>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Decks</h2>
+        {decks.length === 0 && (
+          <p className="text-sm text-muted">No decks yet — create one to get started.</p>
+        )}
+        {decks.map((deck) => {
+          const counts = byDeck.get(deck.id) ?? { total: 0, due: 0, newCards: 0 };
+          return (
+            <Link
+              key={deck.id}
+              href={`/decks/${deck.id}`}
+              className="flex items-center justify-between rounded-2xl border border-border bg-surface p-4 hover:border-accent"
+            >
+              <div>
+                <div className="font-medium">{deck.name}</div>
+                <div className="text-sm text-muted">
+                  {counts.total} card{counts.total === 1 ? "" : "s"} · {counts.due} due
+                </div>
+              </div>
+              {counts.due > 0 && (
+                <span className="rounded-full bg-accent/15 px-3 py-1 text-sm font-medium text-accent">
+                  {counts.due}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+        <NewDeckButton />
+      </section>
+    </div>
+  );
+}
