@@ -19,9 +19,9 @@ export function chineseSideForDeck(
   return deck.chineseSide ?? null;
 }
 
-/** CJK unified ideographs (incl. extension A) — good enough to spot hanzi. */
+/** Unicode ideographs, including simplified/traditional and extended hanzi. */
 export function hasChinese(text: string): boolean {
-  return /[一-鿿㐀-䶿]/.test(text);
+  return /[\p{Unified_Ideograph}〇]/u.test(text);
 }
 
 /**

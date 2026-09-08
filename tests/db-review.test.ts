@@ -60,6 +60,8 @@ describe("atomic review persistence", () => {
 
     const existing = await db.getCard("deck-1", "card-1");
     if (!existing) throw new Error("expected card");
+    expect(Object.getOwnPropertySymbols(existing)).toEqual([]);
+    expect(existing).not.toHaveProperty("reviewVersion");
     existing.front = "edited";
     await db.putCard(existing);
 

@@ -11,9 +11,9 @@ export async function GET(request: Request) {
   const searchParams = new URL(request.url).searchParams;
   const deckId = searchParams.get("deckId") || "all";
   const mode = searchParams.get("mode") || "review";
-  if (mode !== "review" && mode !== "write") return badRequest("unsupported mode");
-  if (mode === "write" && deckId === "all") {
-    return badRequest("write mode requires a deck");
+  if (mode !== "review" && mode !== "write" && mode !== "pinyin") return badRequest("unsupported mode");
+  if (mode !== "review" && deckId === "all") {
+    return badRequest(`${mode} mode requires a deck`);
   }
 
   let cards: Card[];
@@ -26,6 +26,10 @@ export async function GET(request: Request) {
     ]);
     if (!deck) return notFound("deck not found");
     const deckSide = chineseSideForDeck(deck);
+    if (mode === "pinyin") {
+      const { buildPinyinQueueData } = await import("@/lib/pinyin-queue");
+      return NextResponse.json(buildPinyinQueueData(deckCards, deckSide));
+    }
     cards =
       mode === "write"
         ? deckCards.filter((card) => chineseSideForCard(card, deckSide) !== null)

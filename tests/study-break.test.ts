@@ -68,6 +68,10 @@ describe("persisted study breaks", () => {
     expect(getBreakUntil(reviewA, 1_001)).toBe(until);
     expect(getBreakUntil({ deckId: "deck/b", mode: "review" }, 1_001)).toBe(0);
     expect(getBreakUntil({ deckId: "deck/a", mode: "write" }, 1_001)).toBe(0);
+    expect(getBreakUntil({ deckId: "deck/a", mode: "pinyin" }, 1_001)).toBe(0);
+    const pinyinUntil = startBreak({ deckId: "deck/a", mode: "pinyin" }, 2_000);
+    expect(getBreakUntil({ deckId: "deck/a", mode: "pinyin" }, 2_001)).toBe(pinyinUntil);
+    expect(getBreakUntil(reviewA, 2_001)).toBe(until);
   });
 
   it("migrates the legacy global break once", () => {

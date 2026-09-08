@@ -90,6 +90,18 @@ export default async function DeckPage({
           </span>
           <IconChevronRight className="text-xl text-muted" />
         </Link>
+        <Link
+          href={`/pinyin/${deck.id}`}
+          className="pressable flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4"
+        >
+          <span>
+            <span className="block text-lg font-semibold">Write Pinyin</span>
+            <span className="block text-sm text-muted">
+              Read Chinese characters and type their pronunciation
+            </span>
+          </span>
+          <IconChevronRight className="text-xl text-muted" />
+        </Link>
       </div>
 
       <div className="flex gap-4 px-1 text-sm">

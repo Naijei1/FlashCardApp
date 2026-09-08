@@ -30,8 +30,9 @@ import RatingBar from "./RatingBar";
 import { createReviewSync, type ReviewSyncState } from "./reviewSync";
 import TtsButton from "./TtsButton";
 import { useKeyboard } from "./useKeyboard";
+import { checkPinyinAnswer, numberedPinyin, type PinyinReading } from "@/lib/pinyin";
 
-export type WriteQueueItem = { card: Card; intervals: IntervalPreview };
+export type WriteQueueItem = { card: Card; intervals: IntervalPreview; pinyin?: PinyinReading };
 export type WriteSessionInitialData = {
   queue: WriteQueueItem[];
   totalDue: number;
@@ -53,12 +54,14 @@ type Result = {
 };
 
 export default function WriteSession({
+  mode = "write",
   deckId,
   deckSide,
   chineseLang,
   backHref,
   initialData,
 }: {
+  mode?: "write" | "pinyin";
   deckId: string;
   /** Deck-level fallback; each card's side is detected from its own text. */
   deckSide: ChineseSide | null;
@@ -73,6 +76,7 @@ export default function WriteSession({
   const [batchSize, setBatchSize] = useState(0);
   const [breakUntil, setBreakUntil] = useState(0);
   const [value, setValue] = useState("");
+  const [checkTones, setCheckTones] = useState(true);
   const [result, setResult] = useState<Result | null>(null);
   const [reviewed, setReviewed] = useState(0);
   const [loadError, setLoadError] = useState(false);
@@ -90,7 +94,7 @@ export default function WriteSession({
       ),
     []
   );
-  const breakScope = useMemo(() => ({ deckId, mode: "write" as const }), [deckId]);
+  const breakScope = useMemo(() => ({ deckId, mode }), [deckId, mode]);
   const resolveSyncFailures = useCallback(() => {
     sync.discardBlocked();
     sync.retryFailed();
@@ -99,7 +103,9 @@ export default function WriteSession({
   const applyQueueData = useCallback(
     (data: WriteSessionInitialData) => {
       const usable = data.queue.filter(
-        (item) => chineseSideForCard(item.card, deckSide) !== null
+        (item) => mode === "pinyin"
+          ? !!item.pinyin?.syllables.length
+          : chineseSideForCard(item.card, deckSide) !== null
       );
       setNowMs(Date.now());
       setQueue(usable);
@@ -107,7 +113,7 @@ export default function WriteSession({
       // The batch boundary comes from the server, not the write-compatible subset.
       setBatchSize(data.queue.length);
     },
-    [deckSide]
+    [deckSide, mode]
   );
 
   const loadQueue = useCallback(() => {
@@ -125,7 +131,7 @@ export default function WriteSession({
     loadAbortRef.current = controller;
     setLoadError(false);
     setQueue(null);
-    fetch(`/api/review/queue?deckId=${encodeURIComponent(deckId)}&mode=write`, {
+    fetch(`/api/review/queue?deckId=${encodeURIComponent(deckId)}&mode=${mode}`, {
       signal: controller.signal,
     })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
@@ -136,7 +142,7 @@ export default function WriteSession({
       .catch(() => {
         if (!controller.signal.aborted) setLoadError(true);
       });
-  }, [applyQueueData, deckId, sync]);
+  }, [applyQueueData, deckId, mode, sync]);
 
   useEffect(() => {
     const update = (state: ReviewSyncState) => {
@@ -198,18 +204,36 @@ export default function WriteSession({
   const currentSide = current
     ? chineseSideForCard(current.card, deckSide)
     : null;
-  const prompt =
-    current && currentSide ? toWritePrompt(current.card, currentSide) : null;
+  const prompt = useMemo(() => mode === "pinyin"
+    ? current?.pinyin
+      ? {
+          prompt: current.pinyin.hanzi,
+          answer: current.pinyin.syllables.join(" "),
+          notes: current.card.notes,
+        }
+      : null
+    : current && currentSide ? toWritePrompt(current.card, currentSide) : null,
+  [current, currentSide, mode]);
 
   const check = useCallback(
     (giveUp = false) => {
       if (!prompt || result) return;
       const typed = giveUp ? "" : value;
-      const correct = checkAnswer(typed, prompt.answer);
+      const correct = mode === "pinyin"
+        ? checkPinyinAnswer(typed, current?.pinyin?.syllables ?? [], checkTones)
+        : checkAnswer(typed, prompt.answer);
       navigator.vibrate?.(10);
-      setResult({ correct, ...diffChars(typed, prompt.answer) });
+      // Numbered and marked answers can be equivalent without sharing literal
+      // characters. Show the complete suggested reading for Pinyin feedback.
+      const feedback = mode === "pinyin"
+        ? {
+            typed: [...typed].map((char) => ({ char, ok: correct })),
+            expected: [...prompt.answer].map((char) => ({ char, ok: correct })),
+          }
+        : diffChars(typed, prompt.answer);
+      setResult({ correct, ...feedback });
     },
-    [prompt, result, value]
+    [checkTones, current?.pinyin, mode, prompt, result, value]
   );
 
   const rate = useCallback(
@@ -231,6 +255,7 @@ export default function WriteSession({
         ? [
             ...rest,
             {
+              ...item,
               card: { ...item.card, fsrs },
               intervals: previewIntervals(fsrs, new Date(fsrs.due)),
             },
@@ -297,7 +322,7 @@ export default function WriteSession({
       <Screen
         backHref={backHref}
         title="Something went wrong"
-        body="Could not load the writing queue."
+        body={mode === "pinyin" ? "Could not load the Pinyin queue." : "Could not load the writing queue."}
         syncState={syncState}
         onRetrySaves={resolveSyncFailures}
         onRetry={loadQueue}
@@ -331,7 +356,7 @@ export default function WriteSession({
         body={
           syncState.pendingCount > 0
             ? "Finishing pending reviews before refreshing the queue."
-            : "Preparing your writing queue."
+            : mode === "pinyin" ? "Preparing your Pinyin queue." : "Preparing your writing queue."
         }
         syncState={syncState}
         onRetrySaves={resolveSyncFailures}
@@ -354,7 +379,9 @@ export default function WriteSession({
         body={
           reviewed > 0
             ? `You wrote ${reviewed} card${reviewed === 1 ? "" : "s"}.`
-            : "No writable cards are due right now — come back later."
+            : mode === "pinyin"
+              ? "No cards with recognizable Chinese characters are due. Add Chinese to either side of a card, or come back later."
+              : "No writable cards are due right now — come back later."
         }
         syncState={syncState}
         onRetrySaves={resolveSyncFailures}
@@ -379,7 +406,7 @@ export default function WriteSession({
       <Screen
         backHref={backHref}
         title="Nothing writable"
-        body="No cards in this batch have a Chinese answer to write."
+        body={mode === "pinyin" ? "No cards in this batch have a Pinyin reading available." : "No cards in this batch have a Chinese answer to write."}
         syncState={syncState}
         onRetrySaves={resolveSyncFailures}
       />
@@ -405,19 +432,25 @@ export default function WriteSession({
       />
 
       <div className="flex flex-col rounded-2xl border border-border bg-surface px-5 py-6">
+        {mode === "pinyin" && (
+          <h1 className="mb-3 text-center text-sm font-medium text-muted">Write Pinyin</h1>
+        )}
         <div className="text-center">
-          <span className="selectable text-3xl font-medium break-words sm:text-4xl">
+          <span lang={mode === "pinyin" ? chineseLang : undefined} className="selectable text-3xl font-medium break-words sm:text-4xl">
             {prompt.prompt}
           </span>
         </div>
 
         <label className="mt-6 block text-sm text-muted" htmlFor="write-input">
-          Write the Chinese:
+          {mode === "pinyin" ? "Type the Pinyin:" : "Write the Chinese:"}
         </label>
         <input
           id="write-input"
           ref={inputRef}
-          lang={chineseLang}
+          lang={mode === "pinyin" ? "en" : chineseLang}
+          aria-describedby={mode === "pinyin" ? "pinyin-input-help" : undefined}
+          inputMode="text"
+          maxLength={mode === "pinyin" ? 10_000 : undefined}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={onInputKeyDown}
@@ -428,7 +461,7 @@ export default function WriteSession({
           autoCapitalize="off"
           spellCheck={false}
           enterKeyHint={result ? "next" : "go"}
-          placeholder={result ? "" : "输入中文…"}
+          placeholder={result ? "" : mode === "pinyin" ? "e.g. ni3 hao3" : "输入中文…"}
           className={`mt-2 w-full rounded-xl border bg-background px-4 py-3 text-center text-2xl outline-none transition-colors duration-150 ${
             result
               ? result.correct
@@ -437,9 +470,29 @@ export default function WriteSession({
               : "border-border focus:border-accent"
           }`}
         />
+        {mode === "pinyin" && (
+          <div className="mt-3 space-y-2 text-sm text-muted">
+            <label className="flex w-fit items-center gap-2">
+              <input
+                type="checkbox"
+                checked={checkTones}
+                onChange={(event) => setCheckTones(event.target.checked)}
+                disabled={!!result}
+                className="h-4 w-4 accent-accent"
+              />
+              Check tones
+            </label>
+            <p id="pinyin-input-help" className="text-xs">
+              {checkTones
+                ? "Use tone marks or numbers: nǐ hǎo or ni3 hao3."
+                : "Tones are optional: ni hao is accepted."}
+              {" "}Use ü, v, or u: for ü. Neutral tones can be blank, 0, or 5.
+            </p>
+          </div>
+        )}
 
         {/* Result area: reserved so checking doesn't shift the layout. */}
-        <div className="mt-5 flex min-h-36 flex-col items-center justify-start gap-2 text-center">
+        <div aria-live="polite" className="mt-5 flex min-h-36 flex-col items-center justify-start gap-2 text-center">
           {result ? (
             <div key={current.card.id} className="reveal-in flex flex-col items-center gap-2">
               {result.correct ? (
@@ -454,7 +507,7 @@ export default function WriteSession({
                   {result.typed.length > 0 && (
                     <p className="text-sm text-muted">
                       Your answer:{" "}
-                      <span lang={chineseLang} className="selectable text-2xl">
+                      <span lang={mode === "pinyin" ? "zh-Latn-pinyin" : chineseLang} className="selectable text-2xl break-all">
                         {result.typed.map((c, i) => (
                           <span
                             key={i}
@@ -473,7 +526,7 @@ export default function WriteSession({
                 </>
               )}
               <div className="flex items-center gap-2">
-                <span lang={chineseLang} className="selectable text-4xl break-words">
+                <span lang={mode === "pinyin" ? "zh-Latn-pinyin" : chineseLang} className={`selectable break-words ${mode === "pinyin" ? "text-3xl" : "text-4xl"}`}>
                   {result.expected.map((c, i) => (
                     <span
                       key={i}
@@ -487,8 +540,17 @@ export default function WriteSession({
                     </span>
                   ))}
                 </span>
-                <TtsButton text={prompt.answer} lang={chineseLang} />
+                <TtsButton text={mode === "pinyin" ? prompt.prompt : prompt.answer} lang={chineseLang} />
               </div>
+              {mode === "pinyin" && current.pinyin && (
+                <>
+                  <p className="selectable text-sm text-muted">{numberedPinyin(current.pinyin.syllables)}</p>
+                  <p className="selectable text-base">{current.pinyin.meaning}</p>
+                  <p className="max-w-sm text-xs text-muted">
+                    If a word has another valid reading, choose your own rating.
+                  </p>
+                </>
+              )}
               {prompt.notes && (
                 <p className="selectable text-sm text-muted">{prompt.notes}</p>
               )}

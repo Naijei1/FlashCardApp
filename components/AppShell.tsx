@@ -28,7 +28,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const immersive =
     pathname.startsWith("/study/") ||
     pathname.startsWith("/review/") ||
-    pathname.startsWith("/write/");
+    pathname.startsWith("/write/") ||
+    pathname.startsWith("/pinyin/");
 
   if (immersive) {
     // Put the top safe-area padding inside the full-height study screen. A

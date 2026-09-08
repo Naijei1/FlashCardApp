@@ -89,11 +89,9 @@ function activeDeckCheck(deckId: string) {
   };
 }
 
-// This is database metadata, not part of the public Card shape. Keeping it on a
-// non-enumerable symbol lets read-modify-write callers use optimistic locking
-// without leaking the implementation detail into API responses.
-const cardReviewVersion = Symbol("cardReviewVersion");
-type VersionedCard = Card & { [cardReviewVersion]?: number | null };
+// Keep optimistic-lock metadata outside the public card object. Even a
+// non-enumerable symbol causes React Server Component serialization warnings.
+const cardReviewVersions = new WeakMap<Card, number | null>();
 
 function toDeck(item: Item): Deck {
   const { PK, SK, deletingAt, ...rest } = item;
@@ -104,23 +102,22 @@ function toDeck(item: Item): Deck {
 
 function toCard(item: Item): Card {
   const { PK, SK, reviewVersion, ...rest } = item;
-  const card: VersionedCard = {
+  const card: Card = {
     ...(rest as Omit<Card, "id" | "deckId">),
     deckId: (PK as string).slice("DECK#".length),
     id: (SK as string).slice("CARD#".length),
   };
-  Object.defineProperty(card, cardReviewVersion, {
-    value:
-      typeof reviewVersion === "number" && Number.isSafeInteger(reviewVersion)
-        ? reviewVersion
-        : null,
-    enumerable: false,
-  });
+  cardReviewVersions.set(
+    card,
+    typeof reviewVersion === "number" && Number.isSafeInteger(reviewVersion)
+      ? reviewVersion
+      : null
+  );
   return card;
 }
 
 function reviewVersionOf(card: Card): number | null | undefined {
-  return (card as VersionedCard)[cardReviewVersion];
+  return cardReviewVersions.get(card);
 }
 
 export async function listDecks(): Promise<Deck[]> {

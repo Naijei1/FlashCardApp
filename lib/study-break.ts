@@ -6,7 +6,7 @@ const KEY_PREFIX = "study-break-until-v2";
 
 export type StudyBreakScope = {
   deckId: string;
-  mode: "review" | "write";
+  mode: "review" | "write" | "pinyin";
 };
 
 function keyFor({ deckId, mode }: StudyBreakScope): string {

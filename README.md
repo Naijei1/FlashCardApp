@@ -19,6 +19,14 @@ Tailwind CSS; data lives in a single DynamoDB table.
   flipped-duplicate warning.
 - **Pronunciation**: browser `speechSynthesis`, Mandarin (`zh-CN`) and English
   (`en-US`) by default, per-deck override; fails silently when unavailable.
+- **Write Pinyin**: detects Chinese on either side of existing cards and
+  generates Mandarin readings using `pinyin-pro`, including traditional text.
+  Type tone marks (`nǐ hǎo`) or numbers (`ni3 hao3`), or turn off **Check tones**
+  for spelling practice. `ü`, `v`, and `u:` are equivalent; neutral tones can
+  be omitted or written as `0`/`5`. Like Write Chinese, ratings update the
+  original card's FSRS schedule and use 25-card batches with five-minute breaks.
+  Readings use dictionary tones; names and words with multiple pronunciations
+  may need the user's judgment. The dictionary runs only on the server.
 - **Auth**: single password (`APP_PASSWORD`) checked server-side; 30-day
   HttpOnly session cookie signed with `SESSION_SECRET`.
 - **Keyboard shortcuts** (desktop): Space = reveal, 1–4 = Again/Hard/Good/Easy,
