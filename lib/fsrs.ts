@@ -11,7 +11,11 @@ import {
 import type { StoredFsrs } from "./types";
 import { formatInterval } from "./interval-label";
 
-const scheduler = fsrs(generatorParameters({ enable_fuzz: true }));
+// A single-user app benefits more from truthful button labels than from
+// randomized workload distribution. Fuzzing is timestamp-seeded, so a label
+// previewed milliseconds before submission can otherwise differ by days from
+// the interval that is actually stored.
+const scheduler = fsrs(generatorParameters({ enable_fuzz: false }));
 
 export { Rating, State };
 export type { Grade };

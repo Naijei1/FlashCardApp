@@ -1,9 +1,8 @@
-import { countReviewLogs, listDecks, scanAllCards } from "@/lib/db";
+import { countReviewLogs, listAllCards, listDecks } from "@/lib/db";
 import { countsByDeck, totalCounts } from "@/lib/due";
 import { formatInterval } from "@/lib/interval-label";
+import { appTimeZone, buildReviewForecast } from "@/lib/forecast";
 import { State } from "ts-fsrs";
-
-const DAY_MS = 86_400_000;
 
 const STATE_LABELS: Record<number, string> = {
   [State.New]: "New",
@@ -13,11 +12,8 @@ const STATE_LABELS: Record<number, string> = {
 };
 
 export default async function StatsPage() {
-  const [decks, cards, reviewCount] = await Promise.all([
-    listDecks(),
-    scanAllCards(),
-    countReviewLogs(),
-  ]);
+  const [decks, reviewCount] = await Promise.all([listDecks(), countReviewLogs()]);
+  const cards = await listAllCards(decks);
   const now = new Date();
   const totals = totalCounts(cards, now);
   const byDeck = countsByDeck(cards, now);
@@ -27,27 +23,11 @@ export default async function StatsPage() {
     byState.set(card.fsrs.state, (byState.get(card.fsrs.state) ?? 0) + 1);
   }
 
-  const in7Days = cards.filter((c) => {
-    const due = new Date(c.fsrs.due).getTime();
-    return due > now.getTime() && due <= now.getTime() + 7 * DAY_MS;
-  }).length;
-
-  // Forecast: how many cards become due on each of the next 7 days.
-  const forecast = Array.from({ length: 7 }, (_, i) => {
-    const start = now.getTime() + i * DAY_MS;
-    const end = start + DAY_MS;
-    const count = cards.filter((c) => {
-      const due = new Date(c.fsrs.due).getTime();
-      return i === 0 ? due < end : due >= start && due < end;
-    }).length;
-    const label =
-      i === 0
-        ? "Today"
-        : i === 1
-          ? "Tomorrow"
-          : new Date(start).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-    return { label, count };
-  });
+  const { days: forecast, upcomingCount: in7Days } = buildReviewForecast(
+    cards.map((card) => new Date(card.fsrs.due)),
+    now,
+    appTimeZone()
+  );
   const maxForecast = Math.max(1, ...forecast.map((f) => f.count));
 
   // The soonest upcoming (not-yet-due) cards, with time until their review.
@@ -88,7 +68,7 @@ export default async function StatsPage() {
         </h2>
         <div className="space-y-1.5">
           {forecast.map((day) => (
-            <div key={day.label} className="flex items-center gap-3 text-sm">
+            <div key={day.key} className="flex items-center gap-3 text-sm">
               <span className="w-24 shrink-0 text-muted">{day.label}</span>
               <div className="h-4 flex-1 overflow-hidden rounded bg-border/40">
                 <div

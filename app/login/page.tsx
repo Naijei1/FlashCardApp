@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { responseError } from "@/lib/response-error";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,10 +21,13 @@ export default function LoginPage() {
     }).catch(() => null);
     setBusy(false);
     if (res?.ok) {
-      router.push("/");
-      router.refresh();
+      router.replace("/");
     } else {
-      setError("Wrong password");
+      setError(
+        res?.status === 429
+          ? "Too many attempts. Wait a moment and try again."
+          : await responseError(res, "Could not sign in. Please try again.")
+      );
     }
   }
 
@@ -34,22 +38,25 @@ export default function LoginPage() {
           <div className="text-5xl">学</div>
           <h1 className="mt-3 text-xl font-semibold">Chinese Flashcards</h1>
         </div>
-        <input
-          type="password"
-          inputMode="numeric"
-          autoFocus
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-lg outline-none focus:border-accent"
-        />
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        <label className="block">
+          <span className="sr-only">Password</span>
+          <input
+            type="password"
+            autoComplete="current-password"
+            autoFocus
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-lg outline-none focus:border-accent"
+          />
+        </label>
+        {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
         <button
           type="submit"
           disabled={busy || !password}
           className="w-full rounded-xl bg-accent px-4 py-3 text-lg font-medium text-accent-foreground disabled:opacity-50"
         >
-          {busy ? "…" : "Unlock"}
+          {busy ? "Unlocking…" : "Unlock"}
         </button>
       </form>
     </main>

@@ -1,16 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-
-// Module-level so voices load once and the current utterance survives GC
-// (browsers stop speech if the utterance object is collected).
+// Shared across every TTS button. A deck can render dozens of buttons, so voice
+// discovery and the global `voiceschanged` listener must not live in each
+// component instance.
+let synthesis: SpeechSynthesis | null = null;
 let voices: SpeechSynthesisVoice[] = [];
 let currentUtterance: SpeechSynthesisUtterance | null = null;
 
 function loadVoices() {
-  if (typeof speechSynthesis !== "undefined") {
-    voices = speechSynthesis.getVoices();
+  voices = synthesis?.getVoices() ?? [];
+}
+
+function getSynthesis(): SpeechSynthesis | null {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+
+  if (!synthesis) {
+    synthesis = window.speechSynthesis;
+    loadVoices();
+    synthesis.addEventListener("voiceschanged", loadVoices);
   }
+  return synthesis;
 }
 
 function normalizeLang(lang: string): string {
@@ -27,35 +36,30 @@ function pickVoice(lang: string): SpeechSynthesisVoice | undefined {
   );
 }
 
-export function useSpeech() {
-  const [supported, setSupported] = useState(false);
+// Must be called from a user gesture on iOS Safari / Chrome.
+function speak(text: string, lang: string) {
+  const activeSynthesis = getSynthesis();
+  if (!activeSynthesis) return;
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    setSupported(true);
+  try {
+    activeSynthesis.cancel();
     loadVoices();
-    speechSynthesis.addEventListener("voiceschanged", loadVoices);
-    return () => speechSynthesis.removeEventListener("voiceschanged", loadVoices);
-  }, []);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    const voice = pickVoice(lang);
+    if (voice) utterance.voice = voice;
+    utterance.rate = 0.9;
+    currentUtterance = utterance;
+    void currentUtterance;
+    activeSynthesis.speak(utterance);
+  } catch {
+    // Speech is best-effort; fail silently.
+  }
+}
 
-  // Must be called from a user gesture on iOS Safari / Chrome.
-  const speak = useCallback((text: string, lang: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    try {
-      speechSynthesis.cancel();
-      loadVoices();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = lang;
-      const voice = pickVoice(lang);
-      if (voice) utterance.voice = voice;
-      utterance.rate = 0.9;
-      currentUtterance = utterance;
-      void currentUtterance;
-      speechSynthesis.speak(utterance);
-    } catch {
-      // Speech is best-effort; fail silently.
-    }
-  }, []);
+const sharedSpeech = { speak };
 
-  return { supported, speak };
+/** Stable shared speech controller; it owns no per-button state or effects. */
+export function useSpeech() {
+  return sharedSpeech;
 }

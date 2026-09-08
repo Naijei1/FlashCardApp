@@ -48,6 +48,11 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+:where(a, button, input, select, textarea, [role="button"]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* Study screens: no text-selection flashes, no double-tap zoom, no rubber-band */
 .study-surface {
   touch-action: manipulation;

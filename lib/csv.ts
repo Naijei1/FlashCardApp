@@ -21,7 +21,7 @@ export type ParsedCardCsv = {
 };
 
 /** RFC-4180 parser: quoted fields, "" escapes, embedded newlines, CRLF/LF, BOM. */
-export function parseCsv(text: string): string[][] {
+function parseCsvRows(text: string, keepBlankRows: boolean): string[][] {
   let input = text;
   if (input.charCodeAt(0) === 0xfeff) input = input.slice(1);
 
@@ -73,25 +73,31 @@ export function parseCsv(text: string): string[][] {
       i += 1;
     }
   }
+  if (inQuotes) {
+    throw new Error("Unterminated quoted CSV field");
+  }
   if (field !== "" || row.length > 0) endRow();
 
-  // Drop rows that are entirely empty (e.g. trailing blank lines).
-  return rows.filter((r) => r.some((cell) => cell.trim() !== ""));
+  return keepBlankRows
+    ? rows
+    : rows.filter((r) => r.some((cell) => cell.trim() !== ""));
 }
 
-const HEADER_NAMES = new Set(["front", "back", "notes", "reverse"]);
+export function parseCsv(text: string): string[][] {
+  // Generic callers do not need blank records (for example trailing lines).
+  return parseCsvRows(text, false);
+}
 
 /**
- * Row 0 is a header iff every cell is a known column name and at least one
- * is front/back. Headerless files map columns to front, back, [notes].
+ * Row 0 is a header when it contains both required column names. Unknown
+ * columns are allowed and ignored, so exports from other tools do not turn
+ * their header row into a bogus flashcard. Headerless files map columns to
+ * front, back, [notes], [reverse].
  */
 export function detectHeader(rows: string[][]): boolean {
   if (rows.length === 0) return false;
   const cells = rows[0].map((c) => c.trim().toLowerCase());
-  return (
-    cells.every((c) => HEADER_NAMES.has(c)) &&
-    (cells.includes("front") || cells.includes("back"))
-  );
+  return cells.includes("front") && cells.includes("back");
 }
 
 function parseBool(value: string): boolean {
@@ -99,22 +105,25 @@ function parseBool(value: string): boolean {
 }
 
 export function parseCardCsv(text: string): ParsedCardCsv {
-  const allRows = parseCsv(text);
+  // Retain source record positions while discarding blank data rows so error
+  // messages still point at the right row after blank lines.
+  const sourceRows = parseCsvRows(text, true)
+    .map((cells, index) => ({ cells, rowNumber: index + 1 }))
+    .filter(({ cells }) => cells.some((cell) => cell.trim() !== ""));
+  const allRows = sourceRows.map(({ cells }) => cells);
   const hasHeader = detectHeader(allRows);
 
-  let columns = ["front", "back", "notes"];
-  let dataRows = allRows;
-  let rowOffset = 1;
+  let columns = ["front", "back", "notes", "reverse"];
+  let dataRows = sourceRows;
   if (hasHeader) {
     columns = allRows[0].map((c) => c.trim().toLowerCase());
-    dataRows = allRows.slice(1);
-    rowOffset = 2;
+    dataRows = sourceRows.slice(1);
   }
 
   const rows: CsvCardRow[] = [];
   const invalid: InvalidRow[] = [];
 
-  dataRows.forEach((cells, index) => {
+  dataRows.forEach(({ cells, rowNumber }) => {
     const get = (name: string) => {
       const col = columns.indexOf(name);
       return col >= 0 && col < cells.length ? cells[col].trim() : "";
@@ -123,7 +132,7 @@ export function parseCardCsv(text: string): ParsedCardCsv {
     const back = get("back");
     if (!front || !back) {
       invalid.push({
-        rowNumber: index + rowOffset,
+        rowNumber,
         cells,
         reason: !front && !back ? "missing front and back" : !front ? "missing front" : "missing back",
       });
@@ -152,6 +161,11 @@ function escapeField(value: string): string {
     return '"' + value.replace(/"/g, '""') + '"';
   }
   return value;
+}
+
+/** Prevent spreadsheet programs from evaluating imported card text as a formula. */
+export function spreadsheetSafeField(value: string): string {
+  return /^[=+\-@]/.test(value) ? `\t${value}` : value;
 }
 
 export function toCsv(rows: string[][]): string {

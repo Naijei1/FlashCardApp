@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { parseCardCsv, type ParsedCardCsv } from "@/lib/csv";
+import { responseError } from "@/lib/response-error";
 import type { Deck } from "@/lib/types";
+
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_IMPORT_ROWS = 2_000;
 
 export default function ImportWizard({
   decks,
@@ -13,7 +16,6 @@ export default function ImportWizard({
   decks: Deck[];
   initialDeckId?: string;
 }) {
-  const router = useRouter();
   const [fileName, setFileName] = useState("");
   const [parsed, setParsed] = useState<ParsedCardCsv | null>(null);
   const [deckId, setDeckId] = useState(
@@ -25,14 +27,38 @@ export default function ImportWizard({
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const readGeneration = useRef(0);
+  const importId = useRef("");
+  const fileInput = useRef<HTMLInputElement>(null);
 
   async function onFile(file: File | undefined) {
     if (!file) return;
+    const generation = ++readGeneration.current;
     setFileName(file.name);
     setResult(null);
     setError("");
-    const text = await file.text();
-    setParsed(parseCardCsv(text));
+    setParsed(null);
+    if (file.size > MAX_FILE_BYTES) {
+      setError("CSV files are limited to 8 MB.");
+      if (fileInput.current) fileInput.current.value = "";
+      return;
+    }
+    try {
+      const text = await file.text();
+      if (generation !== readGeneration.current) return;
+      const parsedFile = parseCardCsv(text);
+      if (parsedFile.rows.length > MAX_IMPORT_ROWS) {
+        setError(`Imports are limited to ${MAX_IMPORT_ROWS.toLocaleString()} valid rows.`);
+        if (fileInput.current) fileInput.current.value = "";
+        return;
+      }
+      importId.current = crypto.randomUUID();
+      setParsed(parsedFile);
+    } catch (cause) {
+      if (generation !== readGeneration.current) return;
+      setError(cause instanceof Error ? cause.message : "Could not read that CSV file.");
+      if (fileInput.current) fileInput.current.value = "";
+    }
   }
 
   async function doImport() {
@@ -42,16 +68,25 @@ export default function ImportWizard({
     const res = await fetch("/api/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deckId, rows: parsed.rows, reverse }),
+      body: JSON.stringify({
+        deckId,
+        rows: parsed.rows,
+        reverse,
+        importId: importId.current || crypto.randomUUID(),
+      }),
     }).catch(() => null);
     setBusy(false);
     if (res?.ok) {
       const data = await res.json();
       setResult(data.created);
       setParsed(null);
-      router.refresh();
+      setFileName("");
+      importId.current = "";
+      if (fileInput.current) fileInput.current.value = "";
     } else {
-      setError("Import failed — check your connection and try again.");
+      setError(
+        await responseError(res, "Import failed — check your connection and try again.")
+      );
     }
   }
 
@@ -74,6 +109,7 @@ export default function ImportWizard({
           CSV file — columns front, back, optional notes/reverse; a header row is optional
         </span>
         <input
+          ref={fileInput}
           type="file"
           accept=".csv,text/csv"
           onChange={(e) => onFile(e.target.files?.[0])}
@@ -86,7 +122,7 @@ export default function ImportWizard({
           Imported {result} card{result === 1 ? "" : "s"}
         </p>
       )}
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
 
       {parsed && (
         <>
@@ -171,13 +207,18 @@ export default function ImportWizard({
           </label>
 
           <button
+            type="button"
             onClick={doImport}
             disabled={busy || parsed.rows.length === 0}
             className="w-full rounded-xl bg-accent px-4 py-3 text-lg font-medium text-accent-foreground disabled:opacity-50"
           >
             {busy
               ? "Importing…"
-              : `Import ${parsed.rows.length * (reverse ? 2 : 1)} cards`}
+              : `Import ${parsed.rows.reduce(
+                  (count, row) =>
+                    count + ((typeof row.reverse === "boolean" ? row.reverse : reverse) ? 2 : 1),
+                  0
+                )} cards`}
           </button>
         </>
       )}

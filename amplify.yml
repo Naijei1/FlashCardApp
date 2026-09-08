@@ -4,12 +4,15 @@ frontend:
     preBuild:
       commands:
         - nvm use 22
-        - npm ci
+        - npm ci --prefer-offline
+        - npm test
+        - npm run typecheck
+        - npm run lint
     build:
       commands:
         # Amplify does not expose console env vars to the SSR runtime; bake the
-        # ones our server code needs into .env.production at build time.
-        - env | grep -e APP_PASSWORD -e SESSION_SECRET -e TABLE_NAME -e APP_REGION >> .env.production
+        # validated/encoded values our server needs into the build artifact.
+        - npm run env:production
         - npm run build
   artifacts:
     baseDirectory: .next
@@ -17,5 +20,5 @@ frontend:
       - "**/*"
   cache:
     paths:
-      - node_modules/**/*
+      - ~/.npm/**/*
       - .next/cache/**/*

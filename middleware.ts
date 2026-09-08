@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { jwtVerify } from "jose";
+import { jwtVerify } from "jose/jwt/verify";
 import { SESSION_COOKIE } from "@/lib/constants";
 
-// UX-only redirect layer: every API route and page re-verifies the session
-// itself (never trust middleware alone — CVE-2025-29927).
+// UX-only redirect for authenticated visitors who open the login page. The
+// protected layout and every API route enforce auth themselves, avoiding a
+// duplicate middleware invocation/JWT verification on every app navigation.
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   let authenticated = false;
-  if (token && process.env.SESSION_SECRET) {
+  if (token && (process.env.SESSION_SECRET_HEX || process.env.SESSION_SECRET)) {
     try {
-      await jwtVerify(token, new TextEncoder().encode(process.env.SESSION_SECRET));
+      const encoded = process.env.SESSION_SECRET_HEX;
+      if (encoded && (encoded.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(encoded))) {
+        throw new Error("SESSION_SECRET_HEX is invalid");
+      }
+      // Middleware runs at the edge, where Node's Buffer is unavailable.
+      const key = encoded
+        ? Uint8Array.from(encoded.match(/.{2}/g)!, (byte) => Number.parseInt(byte, 16))
+        : new TextEncoder().encode(process.env.SESSION_SECRET);
+      await jwtVerify(token, key);
       authenticated = true;
     } catch {
       authenticated = false;
@@ -30,8 +39,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    // Pages only; API routes return their own 401s. Skip Next internals and PWA assets.
-    "/((?!api|_next|favicon.ico|manifest.webmanifest|icon|apple-icon).*)",
-  ],
+  matcher: ["/login"],
 };

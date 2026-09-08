@@ -10,32 +10,48 @@ import {
   type IntervalPreview,
 } from "@/lib/fsrs";
 import { DEFAULT_BACK_LANG, DEFAULT_FRONT_LANG } from "@/lib/languages";
-import { getBreakUntil, startBreak } from "@/lib/study-break";
+import {
+  belongsInCurrentSession,
+  canAcceptRating,
+  firstReadyIndex,
+  nextQueuedDue,
+} from "@/lib/session-scheduling";
+import { formatCountdown, getBreakUntil, startBreak } from "@/lib/study-break";
 import BreakScreen from "./BreakScreen";
 import RatingBar from "./RatingBar";
-import { createReviewSync } from "./reviewSync";
+import { createReviewSync, type ReviewSyncState } from "./reviewSync";
 import TtsButton from "./TtsButton";
 import { useKeyboard } from "./useKeyboard";
 
-type QueueItem = { card: Card; intervals: IntervalPreview };
+export type ReviewQueueItem = { card: Card; intervals: IntervalPreview };
+export type ReviewSessionInitialData = {
+  queue: ReviewQueueItem[];
+  totalDue: number;
+};
+type QueueItem = ReviewQueueItem;
 type DeckLangs = Record<string, { front?: string; back?: string }>;
 
-// Cards rated Retry/Hard land in a learning step minutes away; keep them in
-// this session rather than making the user restart.
-const SESSION_HORIZON_MS = 15 * 60_000;
-// Ignore ratings briefly after a new card appears so a double-tap on a rating
-// button can't accidentally rate the next card too.
-const RATE_LOCKOUT_MS = 250;
+const INITIAL_SYNC_STATE: ReviewSyncState = {
+  pendingCount: 0,
+  failedCount: 0,
+  blockedCount: 0,
+  isSyncing: false,
+  persistenceAvailable: true,
+};
 
 export default function ReviewSession({
   deckId,
   deckLangs,
   backHref,
+  initialData,
 }: {
   deckId: string;
   deckLangs: DeckLangs;
   backHref: string;
+  initialData?: ReviewSessionInitialData;
 }) {
+  // Client storage can contain a pending review or enforced break that the
+  // server cannot see. Gate the first card until that local check completes.
   const [queue, setQueue] = useState<QueueItem[] | null>(null);
   const [totalDue, setTotalDue] = useState(0);
   const [batchSize, setBatchSize] = useState(0);
@@ -43,43 +59,126 @@ export default function ReviewSession({
   const [revealed, setRevealed] = useState(false);
   const [reviewed, setReviewed] = useState(0);
   const [loadError, setLoadError] = useState(false);
-  const [saveFailures, setSaveFailures] = useState(0);
-  const advancedAtRef = useRef(0);
-  const sync = useMemo(() => createReviewSync(setSaveFailures), []);
+  const [syncState, setSyncState] = useState<ReviewSyncState>(INITIAL_SYNC_STATE);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const advancedAtRef = useRef<number | null>(null);
+  const loadAbortRef = useRef<AbortController | null>(null);
+  const syncPendingRef = useRef<number | null>(null);
+  const waitingToLoadRef = useRef(false);
+  const sync = useMemo(
+    () =>
+      createReviewSync((failedCount) =>
+        setSyncState((state) => ({ ...state, failedCount }))
+      ),
+    []
+  );
+  const breakScope = useMemo(() => ({ deckId, mode: "review" as const }), [deckId]);
+  const resolveSyncFailures = useCallback(() => {
+    sync.discardBlocked();
+    sync.retryFailed();
+  }, [sync]);
+
+  const applyQueueData = useCallback((data: ReviewSessionInitialData) => {
+    setNowMs(Date.now());
+    setQueue(data.queue);
+    setTotalDue(data.totalDue);
+    setBatchSize(data.queue.length);
+  }, []);
 
   const loadQueue = useCallback(() => {
+    loadAbortRef.current?.abort();
+    const syncSnapshot = sync.getState();
+    syncPendingRef.current = syncSnapshot.pendingCount;
+    if (syncSnapshot.pendingCount > 0) {
+      waitingToLoadRef.current = true;
+      setLoadError(false);
+      setQueue(null);
+      return;
+    }
+    waitingToLoadRef.current = false;
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
+    setLoadError(false);
     setQueue(null);
-    fetch(`/api/review/queue?deckId=${encodeURIComponent(deckId)}`)
+    fetch(`/api/review/queue?deckId=${encodeURIComponent(deckId)}`, {
+      signal: controller.signal,
+    })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((data: { queue: QueueItem[]; totalDue: number }) => {
-        setQueue(data.queue);
-        setTotalDue(data.totalDue);
-        setBatchSize(data.queue.length);
+        if (controller.signal.aborted) return;
+        applyQueueData(data);
       })
-      .catch(() => setLoadError(true));
-  }, [deckId]);
+      .catch(() => {
+        if (!controller.signal.aborted) setLoadError(true);
+      });
+  }, [applyQueueData, deckId, sync]);
 
   useEffect(() => {
+    const update = (state: ReviewSyncState) => {
+      syncPendingRef.current = state.pendingCount;
+      setSyncState(state);
+    };
+    const snapshot = sync.getState();
+    syncPendingRef.current = snapshot.pendingCount;
+    const unsubscribe = sync.subscribe(update);
+    return () => {
+      unsubscribe();
+      sync.dispose();
+    };
+  }, [sync]);
+
+  useEffect(() => {
+    setBreakUntil(0);
+    setReviewed(0);
+    setRevealed(false);
+    setTotalDue(0);
+    setBatchSize(0);
+    advancedAtRef.current = null;
     // An unfinished break (even across a reload) blocks the next batch.
-    const until = getBreakUntil();
-    if (until > Date.now()) {
+    const until = getBreakUntil(breakScope);
+    if (until > 0) {
+      waitingToLoadRef.current = false;
       setBreakUntil(until);
       setQueue([]);
+    } else if ((syncPendingRef.current ?? sync.getState().pendingCount) > 0) {
+      // Loading from the server while restored reviews are still pending can
+      // bring already-rated cards back into the queue.
+      waitingToLoadRef.current = true;
+      setQueue(null);
+    } else if (initialData) {
+      waitingToLoadRef.current = false;
+      applyQueueData(initialData);
     } else {
       loadQueue();
     }
-  }, [loadQueue]);
+    return () => loadAbortRef.current?.abort();
+  }, [applyQueueData, breakScope, initialData, loadQueue, sync]);
+
+  useEffect(() => {
+    if (waitingToLoadRef.current && syncPendingRef.current === 0) loadQueue();
+  }, [loadQueue, syncState.pendingCount]);
+
+  const readyIndex = queue ? firstReadyIndex(queue, nowMs) : -1;
+  const nextDueAt = queue && readyIndex < 0 ? nextQueuedDue(queue, nowMs) : null;
+
+  useEffect(() => {
+    if (nextDueAt === null) return;
+    const delay = Math.max(25, Math.min(1000, nextDueAt - nowMs));
+    const id = window.setTimeout(() => setNowMs(Date.now()), delay);
+    return () => window.clearTimeout(id);
+  }, [nextDueAt, nowMs]);
 
   const reveal = useCallback(() => setRevealed(true), []);
 
   const rate = useCallback(
     (rating: number) => {
-      if (!queue || queue.length === 0) return;
-      if (performance.now() - advancedAtRef.current < RATE_LOCKOUT_MS) return;
-      advancedAtRef.current = performance.now();
+      if (!queue || readyIndex < 0) return;
+      const advancedAt = performance.now();
+      if (!canAcceptRating(advancedAtRef.current, advancedAt)) return;
+      advancedAtRef.current = advancedAt;
       navigator.vibrate?.(10);
 
-      const current = queue[0];
+      const current = queue[readyIndex];
       // Persist in the background; advance instantly.
       sync.push({ cardId: current.card.id, deckId: current.card.deckId, rating });
 
@@ -88,24 +187,28 @@ export default function ReviewSession({
       // recomputation stays canonical for storage.
       const now = new Date();
       const { fsrs } = applyRating(current.card.fsrs, rating as Grade, now);
-      const dueSoon = new Date(fsrs.due).getTime() <= now.getTime() + SESSION_HORIZON_MS;
+      const dueSoon = belongsInCurrentSession(fsrs.due, now.getTime());
+      const rest = [...queue.slice(0, readyIndex), ...queue.slice(readyIndex + 1)];
+      const next = dueSoon
+        ? [
+            ...rest,
+            {
+              card: { ...current.card, fsrs },
+              intervals: previewIntervals(fsrs, new Date(fsrs.due)),
+            },
+          ]
+        : rest;
 
       setReviewed((n) => n + 1);
       setRevealed(false);
-      setQueue((q) => {
-        if (!q) return q;
-        const rest = q.slice(1);
-        const next = dueSoon
-          ? [...rest, { card: { ...current.card, fsrs }, intervals: previewIntervals(fsrs, new Date(fsrs.due)) }]
-          : rest;
-        if (next.length === 0 && totalDue > batchSize) {
-          // Batch finished with more cards waiting — enforce the pause.
-          setBreakUntil(startBreak());
-        }
-        return next;
-      });
+      setNowMs(now.getTime());
+      setQueue(next);
+      if (next.length === 0 && totalDue > batchSize) {
+        // Only start a break after every scheduled learning step in this batch.
+        setBreakUntil(startBreak(breakScope, now.getTime()));
+      }
     },
-    [queue, sync, totalDue, batchSize]
+    [batchSize, breakScope, queue, readyIndex, sync, totalDue]
   );
 
   useKeyboard((event) => {
@@ -114,16 +217,25 @@ export default function ReviewSession({
       if (revealed) rate(3);
       else reveal();
     } else if (event.key === "Enter") {
+      event.preventDefault();
       if (revealed) rate(3);
       else reveal();
     } else if (revealed && ["1", "2", "3", "4"].includes(event.key)) {
+      event.preventDefault();
       rate(Number(event.key));
     }
   });
 
   if (loadError) {
     return (
-      <Screen backHref={backHref} title="Something went wrong" body="Could not load the review queue." />
+      <Screen
+        backHref={backHref}
+        title="Something went wrong"
+        body="Could not load the review queue."
+        syncState={syncState}
+        onRetrySaves={resolveSyncFailures}
+        onRetry={loadQueue}
+      />
     );
   }
   if (breakUntil > 0 && (queue === null || queue.length === 0)) {
@@ -132,33 +244,71 @@ export default function ReviewSession({
         until={breakUntil}
         reviewed={reviewed}
         waiting={reviewed > 0 ? Math.max(totalDue - batchSize, 0) : null}
+        syncState={syncState}
+        scope={breakScope}
         backHref={backHref}
+        onRetrySaves={resolveSyncFailures}
         onContinue={() => {
           setBreakUntil(0);
           setReviewed(0);
+          advancedAtRef.current = null;
           loadQueue();
         }}
       />
     );
   }
   if (queue === null) {
-    return <Screen backHref={backHref} title="" body="" />;
+    return (
+      <Screen
+        backHref={backHref}
+        title="Loading…"
+        body={
+          syncState.pendingCount > 0
+            ? "Finishing pending reviews before refreshing the queue."
+            : "Preparing your review queue."
+        }
+        syncState={syncState}
+        onRetrySaves={resolveSyncFailures}
+      />
+    );
   }
   if (queue.length === 0) {
     return (
       <Screen
         backHref={backHref}
-        title={reviewed > 0 ? "Session complete" : "Nothing due"}
+        title={
+          reviewed === 0
+            ? "Nothing due"
+            : syncState.failedCount > 0
+              ? "Reviews need attention"
+              : syncState.pendingCount > 0
+                ? "Saving reviews…"
+                : "Session complete"
+        }
         body={
           reviewed > 0
             ? `You reviewed ${reviewed} card${reviewed === 1 ? "" : "s"}.`
             : "No cards are due right now — come back later."
         }
+        syncState={syncState}
+        onRetrySaves={resolveSyncFailures}
       />
     );
   }
 
-  const { card, intervals } = queue[0];
+  if (readyIndex < 0 && nextDueAt !== null) {
+    return (
+      <Screen
+        backHref={backHref}
+        title="Next card is still learning"
+        body={`Ready in ${formatCountdown(nextDueAt - nowMs)}. It will appear automatically when it is due.`}
+        syncState={syncState}
+        onRetrySaves={resolveSyncFailures}
+      />
+    );
+  }
+
+  const { card, intervals } = queue[readyIndex];
   const frontLang = deckLangs[card.deckId]?.front || DEFAULT_FRONT_LANG;
   const backLang = deckLangs[card.deckId]?.back || DEFAULT_BACK_LANG;
 
@@ -174,17 +324,14 @@ export default function ReviewSession({
         <span className="w-16 text-right text-sm tabular-nums text-muted">{reviewed} done</span>
       </header>
 
-      {saveFailures > 0 && (
-        <p className="mb-2 rounded-lg bg-red-500/10 px-3 py-2 text-center text-xs text-red-500">
-          {saveFailures} review{saveFailures === 1 ? "" : "s"} failed to save — check your
-          connection.
-        </p>
-      )}
+      <SyncNotice
+        state={syncState}
+        onRetry={resolveSyncFailures}
+        compact
+      />
 
       {/* Tap anywhere on the card to reveal; two fixed halves so nothing jumps. */}
       <div
-        role="button"
-        tabIndex={-1}
         onClick={reveal}
         className="flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden rounded-2xl border border-border bg-surface"
       >
@@ -235,14 +382,85 @@ export default function ReviewSession({
   );
 }
 
-function Screen({ backHref, title, body }: { backHref: string; title: string; body: string }) {
+function SyncNotice({
+  state,
+  onRetry,
+  compact = false,
+}: {
+  state: ReviewSyncState;
+  onRetry: () => void;
+  compact?: boolean;
+}) {
+  if (state.pendingCount === 0) return null;
+  return (
+    <div className={`flex flex-col items-center gap-2 ${compact ? "mb-2 text-xs" : "text-sm"}`}>
+      {state.pendingCount > 0 && (
+        <p
+          role={state.failedCount > 0 ? "alert" : undefined}
+          className={`rounded-lg px-3 py-2 text-center ${
+            state.failedCount > 0 ? "bg-red-500/10 text-red-500" : "text-muted"
+          }`}
+        >
+          {state.blockedCount > 0
+            ? `${state.blockedCount} review${state.blockedCount === 1 ? "" : "s"} cannot be saved because the card changed or was removed. Discard to continue.`
+            : state.failedCount > 0
+              ? `${state.failedCount} review${state.failedCount === 1 ? "" : "s"} still need to be saved.`
+            : `Saving ${state.pendingCount} review${state.pendingCount === 1 ? "" : "s"}…`}
+        </p>
+      )}
+      {state.failedCount > 0 && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="pressable rounded-lg border border-red-500/30 px-4 py-2 font-medium text-red-500"
+        >
+          {state.blockedCount > 0 ? "Discard unsavable and continue" : "Retry saving"}
+        </button>
+      )}
+      {!state.persistenceAvailable && (
+        <p role="alert" className="max-w-sm text-center text-amber-600 dark:text-amber-400">
+          This browser could not store pending reviews. Keep this page open until saving
+          finishes.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Screen({
+  backHref,
+  title,
+  body,
+  syncState,
+  onRetrySaves,
+  onRetry,
+}: {
+  backHref: string;
+  title: string;
+  body: string;
+  syncState: ReviewSyncState;
+  onRetrySaves: () => void;
+  onRetry?: () => void;
+}) {
   return (
     <div className="flex h-dvh flex-col items-center justify-center gap-3 px-6 pb-safe text-center">
       {title && <h1 className="text-xl font-semibold">{title}</h1>}
       {body && <p className="text-muted">{body}</p>}
+      <SyncNotice state={syncState} onRetry={onRetrySaves} />
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="pressable mt-2 min-h-12 rounded-xl bg-accent px-5 py-3 font-medium text-accent-foreground"
+        >
+          Try again
+        </button>
+      )}
       <Link
         href={backHref}
-        className="pressable mt-2 rounded-xl bg-accent px-5 py-3 font-medium text-accent-foreground"
+        className={`pressable rounded-xl px-5 py-3 font-medium ${
+          onRetry ? "text-muted" : "mt-2 bg-accent text-accent-foreground"
+        }`}
       >
         ← Back
       </Link>

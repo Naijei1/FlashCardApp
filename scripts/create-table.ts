@@ -1,11 +1,14 @@
 // Creates the DynamoDB table. Usage:
 //   npx tsx scripts/create-table.ts            (uses .env.local-style env vars)
 // Env: TABLE_NAME, APP_REGION, optional DYNAMODB_ENDPOINT for DynamoDB Local.
+import { loadEnvConfig } from "@next/env";
 import {
   CreateTableCommand,
   DynamoDBClient,
   ListTablesCommand,
 } from "@aws-sdk/client-dynamodb";
+
+loadEnvConfig(process.cwd());
 
 async function main() {
   const endpoint = process.env.DYNAMODB_ENDPOINT;

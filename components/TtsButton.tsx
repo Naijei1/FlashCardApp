@@ -12,12 +12,12 @@ export default function TtsButton({
   lang: string;
   className?: string;
 }) {
-  const { supported, speak } = useSpeech();
-  if (!supported) return null;
+  const { speak } = useSpeech();
   return (
     <button
       type="button"
       aria-label={`Pronounce ${text}`}
+      title="Pronounce"
       onClick={(e) => {
         e.stopPropagation();
         speak(text, lang);

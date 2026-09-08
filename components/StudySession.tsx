@@ -63,6 +63,7 @@ export default function StudySession({
         </span>
         <div className="flex gap-1">
           <button
+            type="button"
             onClick={() => {
               setOrder((o) => shuffle(o));
               setIndex(0);
@@ -73,6 +74,7 @@ export default function StudySession({
             Shuffle
           </button>
           <button
+            type="button"
             onClick={() => {
               setOrder(initialOrder);
               setIndex(0);
@@ -87,8 +89,6 @@ export default function StudySession({
 
       {/* Tap anywhere on the card to flip; two fixed halves so nothing jumps. */}
       <div
-        role="button"
-        tabIndex={-1}
         onClick={() => setRevealed((r) => !r)}
         className="flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden rounded-2xl border border-border bg-surface"
       >
@@ -126,6 +126,7 @@ export default function StudySession({
 
       <div className="flex min-h-24 items-center gap-3 py-3">
         <button
+          type="button"
           onClick={() => go(-1)}
           disabled={index === 0}
           className="pressable min-h-16 flex-1 rounded-2xl border border-border bg-surface text-lg font-medium disabled:opacity-40"
@@ -133,6 +134,14 @@ export default function StudySession({
           ← Previous
         </button>
         <button
+          type="button"
+          onClick={() => setRevealed((current) => !current)}
+          className="pressable min-h-16 flex-1 rounded-2xl bg-accent px-2 font-medium text-accent-foreground"
+        >
+          {revealed ? "Hide" : "Reveal"}
+        </button>
+        <button
+          type="button"
           onClick={() => go(1)}
           disabled={index === order.length - 1}
           className="pressable min-h-16 flex-1 rounded-2xl border border-border bg-surface text-lg font-medium disabled:opacity-40"

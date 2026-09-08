@@ -1,18 +1,28 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AddCardForm from "@/components/AddCardForm";
+import CardPagination from "@/components/CardPagination";
 import { IconChevronRight } from "@/components/icons";
 import CardRow from "@/components/CardRow";
 import DeckSettings from "@/components/DeckSettings";
 import { getDeck, listCards, listDecks } from "@/lib/db";
 import { totalCounts } from "@/lib/due";
 
+const PAGE_SIZE = 50;
+
+function requestedPage(value: string | undefined): number {
+  const page = Number.parseInt(value ?? "1", 10);
+  return Number.isFinite(page) && page > 0 ? page : 1;
+}
+
 export default async function DeckPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ deckId: string }>;
+  searchParams: Promise<{ page?: string }>;
 }) {
-  const { deckId } = await params;
+  const [{ deckId }, { page: pageParam }] = await Promise.all([params, searchParams]);
   const [deck, cards, decks] = await Promise.all([
     getDeck(deckId),
     listCards(deckId),
@@ -21,6 +31,12 @@ export default async function DeckPage({
   if (!deck) notFound();
   const counts = totalCounts(cards, new Date());
   const sorted = [...cards].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const page = Math.min(requestedPage(pageParam), totalPages);
+  const pageStart = (page - 1) * PAGE_SIZE;
+  const shown = sorted.slice(pageStart, pageStart + PAGE_SIZE);
+  const shownFrom = shown.length > 0 ? pageStart + 1 : 0;
+  const shownTo = pageStart + shown.length;
 
   return (
     <div className="space-y-6 py-6">
@@ -87,13 +103,35 @@ export default async function DeckPage({
 
       <AddCardForm deckId={deck.id} />
 
-      <section className="space-y-2">
+      <section aria-labelledby="deck-cards-heading" className="space-y-2">
+        <div className="flex items-baseline justify-between gap-3 px-1">
+          <h2
+            id="deck-cards-heading"
+            className="text-sm font-medium uppercase tracking-wide text-muted"
+          >
+            Cards
+          </h2>
+          {shown.length > 0 && (
+            <span className="text-xs tabular-nums text-muted">
+              Showing {shownFrom}–{shownTo} of {sorted.length}
+            </span>
+          )}
+        </div>
         {sorted.length === 0 && (
           <p className="text-sm text-muted">No cards yet — add one above or import a CSV.</p>
         )}
-        {sorted.map((card) => (
-          <CardRow key={card.id} card={card} decks={decks} frontLang={deck.frontLanguage} />
-        ))}
+        <ul className="space-y-2">
+          {shown.map((card) => (
+            <li key={`${card.deckId}:${card.id}`}>
+              <CardRow card={card} decks={decks} frontLang={deck.frontLanguage} />
+            </li>
+          ))}
+        </ul>
+        <CardPagination
+          basePath={`/decks/${deck.id}`}
+          currentPage={page}
+          totalPages={totalPages}
+        />
       </section>
     </div>
   );

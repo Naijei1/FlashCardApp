@@ -8,6 +8,7 @@ import {
   toFsrsCard,
   toStored,
 } from "@/lib/fsrs";
+import { formatInterval } from "@/lib/interval-label";
 
 const NOW = new Date("2026-08-28T12:00:00Z");
 
@@ -77,5 +78,18 @@ describe("previewIntervals", () => {
     // Easy on a new card schedules days out; Again stays in minutes.
     expect(labels.easy).toMatch(/d|mo/);
     expect(labels.again).toMatch(/m$/);
+  });
+
+  it("matches the interval applied a millisecond later", () => {
+    let state = emptyCardState(NOW);
+    let reviewTime = NOW;
+    for (let i = 0; i < 4; i++) {
+      state = applyRating(state, Rating.Good, reviewTime).fsrs;
+      reviewTime = new Date(state.due);
+    }
+    const shown = previewIntervals(state, reviewTime).good;
+    const submittedAt = new Date(reviewTime.getTime() + 1);
+    const applied = applyRating(state, Rating.Good, submittedAt).fsrs;
+    expect(formatInterval(new Date(applied.due).getTime() - submittedAt.getTime())).toBe(shown);
   });
 });

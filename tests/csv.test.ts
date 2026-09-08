@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { detectHeader, parseCardCsv, parseCsv, toCsv } from "@/lib/csv";
+import {
+  detectHeader,
+  parseCardCsv,
+  parseCsv,
+  spreadsheetSafeField,
+  toCsv,
+} from "@/lib/csv";
 
 describe("parseCsv", () => {
   it("parses simple rows", () => {
@@ -46,6 +52,10 @@ describe("parseCsv", () => {
       ["c", "d"],
     ]);
   });
+
+  it("rejects an unterminated quoted field", () => {
+    expect(() => parseCsv('a,"b\nc,d')).toThrow("Unterminated quoted CSV field");
+  });
 });
 
 describe("detectHeader", () => {
@@ -63,6 +73,10 @@ describe("detectHeader", () => {
 
   it("does not treat notes,reverse alone as a header", () => {
     expect(detectHeader([["notes", "reverse"]])).toBe(false);
+  });
+
+  it("allows extra columns in a header", () => {
+    expect(detectHeader([["front", "back", "tags"]])).toBe(true);
   });
 });
 
@@ -85,6 +99,15 @@ describe("parseCardCsv", () => {
     expect(result.rows).toHaveLength(2);
   });
 
+  it("supports the optional reverse column without a header", () => {
+    const result = parseCardCsv("hello,你好,greeting,true\nteacher,老师,,false\n");
+    expect(result.hasHeader).toBe(false);
+    expect(result.rows).toEqual([
+      { front: "hello", back: "你好", notes: "greeting", reverse: true },
+      { front: "teacher", back: "老师", reverse: false },
+    ]);
+  });
+
   it("reports invalid rows with 1-based row numbers", () => {
     const result = parseCardCsv("front,back\n你好,hello\n,missing\n");
     expect(result.rows).toHaveLength(1);
@@ -93,13 +116,33 @@ describe("parseCardCsv", () => {
     ]);
   });
 
+  it("keeps original row numbers after blank records", () => {
+    const result = parseCardCsv("front,back\n\n你好,hello\n,missing\n");
+    expect(result.invalid[0]?.rowNumber).toBe(4);
+  });
+
   it("counts flipped duplicate pairs (both-directions file)", () => {
     const result = parseCardCsv("你好,hello\nhello,你好\n老师,teacher\n");
     expect(result.flippedDuplicates).toBe(2);
   });
+
+  it("ignores unknown header columns instead of importing the header", () => {
+    const result = parseCardCsv("front,back,tags\n\u4f60\u597d,hello,greeting\n");
+    expect(result.hasHeader).toBe(true);
+    expect(result.rows).toEqual([{ front: "\u4f60\u597d", back: "hello" }]);
+  });
 });
 
 describe("toCsv", () => {
+  it("neutralizes spreadsheet formulas without breaking CSV re-import trimming", () => {
+    expect(["=1+1", "+cmd", "-2", "@sum", "safe"].map(spreadsheetSafeField)).toEqual([
+      "\t=1+1",
+      "\t+cmd",
+      "\t-2",
+      "\t@sum",
+      "safe",
+    ]);
+  });
   it("quotes fields containing commas, quotes, and newlines", () => {
     expect(toCsv([["a,b", 'say "hi"', "line1\nline2"]])).toBe(
       '"a,b","say ""hi""","line1\nline2"\n'

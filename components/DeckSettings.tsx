@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Deck } from "@/lib/types";
 import { LANGUAGE_OPTIONS } from "@/lib/languages";
+import { responseError } from "@/lib/response-error";
 
 export default function DeckSettings({ deck }: { deck: Deck }) {
   const router = useRouter();
@@ -13,8 +14,18 @@ export default function DeckSettings({ deck }: { deck: Deck }) {
   const [backLanguage, setBackLanguage] = useState(deck.backLanguage ?? "");
   const [chineseSide, setChineseSide] = useState(deck.chineseSide ?? "");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  function reset() {
+    setName(deck.name);
+    setFrontLanguage(deck.frontLanguage ?? "");
+    setBackLanguage(deck.backLanguage ?? "");
+    setChineseSide(deck.chineseSide ?? "");
+    setError("");
+  }
 
   async function save() {
+    setError("");
     setBusy(true);
     const res = await fetch(`/api/decks/${deck.id}`, {
       method: "PATCH",
@@ -25,24 +36,28 @@ export default function DeckSettings({ deck }: { deck: Deck }) {
     if (res?.ok) {
       setOpen(false);
       router.refresh();
+    } else {
+      setError(await responseError(res, "Could not save the deck."));
     }
   }
 
   async function remove() {
     if (!confirm(`Delete deck "${deck.name}" and all of its cards?`)) return;
+    setError("");
     setBusy(true);
     const res = await fetch(`/api/decks/${deck.id}`, { method: "DELETE" }).catch(() => null);
     setBusy(false);
     if (res?.ok) {
-      router.push("/");
-      router.refresh();
+      router.replace("/");
+    } else {
+      setError(await responseError(res, "Could not delete the deck."));
     }
   }
 
   if (!open) {
     return (
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => { reset(); setOpen(true); }}
         className="rounded-lg border border-border px-3 py-2 text-sm text-muted hover:text-foreground"
       >
         Edit deck
@@ -112,7 +127,7 @@ export default function DeckSettings({ deck }: { deck: Deck }) {
           Save
         </button>
         <button
-          onClick={() => setOpen(false)}
+          onClick={() => { reset(); setOpen(false); }}
           className="rounded-lg border border-border px-4 py-2 text-sm text-muted"
         >
           Cancel
@@ -125,6 +140,7 @@ export default function DeckSettings({ deck }: { deck: Deck }) {
           Delete deck
         </button>
       </div>
+      {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
     </div>
   );
 }

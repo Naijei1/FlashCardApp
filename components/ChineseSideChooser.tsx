@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Deck } from "@/lib/types";
+import { responseError } from "@/lib/response-error";
 
 /** Asked once per deck when Write mode can't tell which side is Chinese. */
 export default function ChineseSideChooser({
@@ -15,8 +16,10 @@ export default function ChineseSideChooser({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   async function choose(side: "front" | "back") {
+    setError("");
     setBusy(true);
     const res = await fetch(`/api/decks/${deck.id}`, {
       method: "PATCH",
@@ -25,6 +28,7 @@ export default function ChineseSideChooser({
     }).catch(() => null);
     setBusy(false);
     if (res?.ok) router.refresh();
+    else setError(await responseError(res, "Could not save that choice."));
   }
 
   return (
@@ -50,6 +54,7 @@ export default function ChineseSideChooser({
           Back
         </button>
       </div>
+      {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
       <Link href={backHref} className="pressable mt-2 rounded-lg px-3 py-2 text-sm text-muted">
         ← Back
       </Link>

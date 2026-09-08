@@ -1,10 +1,11 @@
 import Link from "next/link";
 import NewDeckButton from "@/components/NewDeckButton";
-import { listDecks, scanAllCards } from "@/lib/db";
+import { listAllCards, listDecks } from "@/lib/db";
 import { countsByDeck, totalCounts } from "@/lib/due";
 
 export default async function HomePage() {
-  const [decks, cards] = await Promise.all([listDecks(), scanAllCards()]);
+  const decks = await listDecks();
+  const cards = await listAllCards(decks);
   const now = new Date();
   const totals = totalCounts(cards, now);
   const byDeck = countsByDeck(cards, now);
@@ -25,16 +26,21 @@ export default async function HomePage() {
             <div className="text-sm text-muted">new</div>
           </div>
         </div>
-        <Link
-          href="/review/all"
-          className={`mt-5 block w-full rounded-xl px-4 py-3 text-center text-lg font-medium ${
-            totals.due > 0
-              ? "bg-accent text-accent-foreground"
-              : "pointer-events-none border border-border text-muted"
-          }`}
-        >
-          {totals.due > 0 ? "Start Review" : "Nothing due"}
-        </Link>
+        {totals.due > 0 ? (
+          <Link
+            href="/review/all"
+            className="mt-5 block w-full rounded-xl bg-accent px-4 py-3 text-center text-lg font-medium text-accent-foreground"
+          >
+            Start Review
+          </Link>
+        ) : (
+          <span
+            aria-disabled="true"
+            className="mt-5 block w-full rounded-xl border border-border px-4 py-3 text-center text-lg font-medium text-muted"
+          >
+            Nothing due
+          </span>
+        )}
       </section>
 
       <section className="space-y-3">

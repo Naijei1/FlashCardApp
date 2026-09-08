@@ -1,6 +1,6 @@
 # Chinese Flashcards
 
-A personal, single-user flashcard web app with FSRS spaced repetition, browsef
+A personal, single-user flashcard web app with FSRS spaced repetition, browser
 text-to-speech for Mandarin/English, CSV import/export, and an installable
 iPhone PWA. Built with Next.js 15 (App Router), TypeScript, React, and
 Tailwind CSS; data lives in a single DynamoDB table.
@@ -26,23 +26,24 @@ Tailwind CSS; data lives in a single DynamoDB table.
 
 ## Local development
 
-Prereqs: Node 22+, Docker (for DynamoDB Local) *or* AWS credentials.
+Prereqs: Node 22, Docker (for DynamoDB Local) *or* AWS credentials.
 
 ```bash
 npm install
 cp .env.example .env.local          # then edit:
-#   APP_PASSWORD=1212
+#   APP_PASSWORD=replace-with-a-strong-password
 #   SESSION_SECRET=$(openssl rand -hex 32)
 #   TABLE_NAME=flashcards-dev
 #   APP_REGION=us-east-1
+#   APP_TIME_ZONE=America/New_York
 #   DYNAMODB_ENDPOINT=http://localhost:8000   # only when using DynamoDB Local
 
 # Option A: DynamoDB Local (no AWS account needed)
 docker run -d --name dynamodb-local -p 8000:8000 amazon/dynamodb-local
-DYNAMODB_ENDPOINT=http://localhost:8000 npx tsx scripts/create-table.ts
+npm run db:create
 
 # Option B: real AWS (uses your ~/.aws profile; omit DYNAMODB_ENDPOINT)
-npx tsx scripts/create-table.ts
+npm run db:create
 
 npm run dev
 ```
@@ -94,14 +95,19 @@ aws iam put-role-policy --role-name flashcards-amplify-compute \
     "Statement": [{
       "Effect": "Allow",
       "Action": [
-        "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem",
-        "dynamodb:Query", "dynamodb:Scan",
-        "dynamodb:BatchWriteItem", "dynamodb:TransactWriteItems"
+        "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:Query",
+        "dynamodb:BatchWriteItem"
       ],
       "Resource": "arn:aws:dynamodb:us-east-1:<ACCOUNT_ID>:table/flashcards"
     }]
   }'
 ```
+
+If the role already exists, re-run `put-role-policy` before deploying this
+version so its policy includes both `dynamodb:UpdateItem` and
+`dynamodb:ConditionCheckItem`.
 
 ### 3. Connect the repo
 
@@ -116,20 +122,24 @@ aws iam put-role-policy --role-name flashcards-amplify-compute \
 In the Amplify app:
 
 - **Hosting → Environment variables** — add:
-  - `APP_PASSWORD` — pick a strong password (not `1212`)
+  - `APP_PASSWORD` — pick a strong password of at least 12 characters
   - `SESSION_SECRET` — `openssl rand -hex 32`
   - `TABLE_NAME` — `flashcards`
   - `APP_REGION` — `us-east-1` (env var names starting with `AWS_` are
     reserved by Amplify, hence the custom name)
+  - `APP_TIME_ZONE` — your IANA timezone, for example `America/New_York`
 - **App settings → IAM roles → Compute role** — attach
   `flashcards-amplify-compute`.
 
 Then trigger a deploy (push to `main` or "Redeploy this version"). The app is
 served at `https://main.<app-id>.amplifyapp.com`.
 
-Note: `amplify.yml` writes those four env vars into `.env.production` during
-the build — Amplify does not expose console env vars to the Next.js server
-runtime otherwise.
+Note: `amplify.yml` validates this configuration and writes `.env.production`
+during the build — Amplify does not expose console env vars to the Next.js
+server runtime otherwise. Passwords and session secrets are hex-encoded in
+that private artifact to preserve punctuation and Unicode through dotenv
+loading; this is encoding, not encryption. Keep the artifact private, like
+any other file containing credentials.
 
 ### 5. Install on iPhone
 
@@ -145,11 +155,13 @@ Single DynamoDB table (`PK`/`SK`):
 | --------- | -------------- | ---------------- |
 | Deck      | `DECKS`        | `DECK#<uuid>`    |
 | Card      | `DECK#<deckId>`| `CARD#<uuid>`    |
-| ReviewLog | `LOGS`         | `<reviewISO>#<cardId>` |
+| Review log | `LOGS` | `<reviewISO>#<cardId>#<clientReviewId>` |
+| Review receipt | `REVIEW_REQUESTS` | `<clientReviewId>` |
+| Review stats | `META` | `STATS` |
 
 Cards store their FSRS state inline (`due`, `stability`, `difficulty`,
-`state`, …) as ISO strings. Due counts are computed by scanning cards —
-perfectly fine at single-user scale.
+`state`, …) as ISO strings. All-card views query deck partitions with bounded
+concurrency; the review-log count is maintained as an atomic aggregate.
 
 ## CSV format
 
@@ -160,6 +172,6 @@ front,back,notes,reverse
 ```
 
 The header row and the `notes`/`reverse` columns are optional; headerless
-files are treated as `front,back[,notes]`. Quoted fields may contain commas,
+files are treated as `front,back[,notes[,reverse]]`. Quoted fields may contain commas,
 quotes (`""`), and newlines. Export produces UTF-8 with a BOM so Excel opens
 Chinese text correctly.

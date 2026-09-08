@@ -2,6 +2,9 @@
   "name": "flashcards",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22 <23"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,11 +12,14 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:create": "tsx scripts/create-table.ts",
+    "env:production": "node scripts/write-production-env.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1121.0",
     "@aws-sdk/lib-dynamodb": "^3.1121.0",
+    "@next/env": "15.5.24",
     "jose": "^6.2.10",
     "next": "15.5.24",
     "react": "19.1.0",
@@ -29,7 +35,11 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.24",
     "tailwindcss": "^4",
+    "tsx": "^4.20.5",
     "typescript": "^5",
     "vitest": "^3.2.7"
+  },
+  "overrides": {
+    "postcss": "8.5.26"
   }
 }

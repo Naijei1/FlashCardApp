@@ -17,18 +17,34 @@ import {
   type ChineseSide,
   type DiffChar,
 } from "@/lib/write";
-import { getBreakUntil, startBreak } from "@/lib/study-break";
+import {
+  belongsInCurrentSession,
+  canAcceptRating,
+  firstReadyIndex,
+  nextQueuedDue,
+} from "@/lib/session-scheduling";
+import { formatCountdown, getBreakUntil, startBreak } from "@/lib/study-break";
 import BreakScreen from "./BreakScreen";
 import { IconCheck, IconX } from "./icons";
 import RatingBar from "./RatingBar";
-import { createReviewSync } from "./reviewSync";
+import { createReviewSync, type ReviewSyncState } from "./reviewSync";
 import TtsButton from "./TtsButton";
 import { useKeyboard } from "./useKeyboard";
 
-type QueueItem = { card: Card; intervals: IntervalPreview };
+export type WriteQueueItem = { card: Card; intervals: IntervalPreview };
+export type WriteSessionInitialData = {
+  queue: WriteQueueItem[];
+  totalDue: number;
+};
+type QueueItem = WriteQueueItem;
 
-const SESSION_HORIZON_MS = 15 * 60_000;
-const RATE_LOCKOUT_MS = 250;
+const INITIAL_SYNC_STATE: ReviewSyncState = {
+  pendingCount: 0,
+  failedCount: 0,
+  blockedCount: 0,
+  isSyncing: false,
+  persistenceAvailable: true,
+};
 
 type Result = {
   correct: boolean;
@@ -41,13 +57,17 @@ export default function WriteSession({
   deckSide,
   chineseLang,
   backHref,
+  initialData,
 }: {
   deckId: string;
   /** Deck-level fallback; each card's side is detected from its own text. */
   deckSide: ChineseSide | null;
   chineseLang: string;
   backHref: string;
+  initialData?: WriteSessionInitialData;
 }) {
+  // Client storage can contain a pending review or enforced break that the
+  // server cannot see. Gate the first card until that local check completes.
   const [queue, setQueue] = useState<QueueItem[] | null>(null);
   const [totalDue, setTotalDue] = useState(0);
   const [batchSize, setBatchSize] = useState(0);
@@ -56,38 +76,125 @@ export default function WriteSession({
   const [result, setResult] = useState<Result | null>(null);
   const [reviewed, setReviewed] = useState(0);
   const [loadError, setLoadError] = useState(false);
-  const [saveFailures, setSaveFailures] = useState(0);
+  const [syncState, setSyncState] = useState<ReviewSyncState>(INITIAL_SYNC_STATE);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const inputRef = useRef<HTMLInputElement>(null);
-  const advancedAtRef = useRef(0);
-  const sync = useMemo(() => createReviewSync(setSaveFailures), []);
+  const advancedAtRef = useRef<number | null>(null);
+  const loadAbortRef = useRef<AbortController | null>(null);
+  const syncPendingRef = useRef<number | null>(null);
+  const waitingToLoadRef = useRef(false);
+  const sync = useMemo(
+    () =>
+      createReviewSync((failedCount) =>
+        setSyncState((state) => ({ ...state, failedCount }))
+      ),
+    []
+  );
+  const breakScope = useMemo(() => ({ deckId, mode: "write" as const }), [deckId]);
+  const resolveSyncFailures = useCallback(() => {
+    sync.discardBlocked();
+    sync.retryFailed();
+  }, [sync]);
+
+  const applyQueueData = useCallback(
+    (data: WriteSessionInitialData) => {
+      const usable = data.queue.filter(
+        (item) => chineseSideForCard(item.card, deckSide) !== null
+      );
+      setNowMs(Date.now());
+      setQueue(usable);
+      setTotalDue(data.totalDue);
+      // The batch boundary comes from the server, not the write-compatible subset.
+      setBatchSize(data.queue.length);
+    },
+    [deckSide]
+  );
 
   const loadQueue = useCallback(() => {
+    loadAbortRef.current?.abort();
+    const syncSnapshot = sync.getState();
+    syncPendingRef.current = syncSnapshot.pendingCount;
+    if (syncSnapshot.pendingCount > 0) {
+      waitingToLoadRef.current = true;
+      setLoadError(false);
+      setQueue(null);
+      return;
+    }
+    waitingToLoadRef.current = false;
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
+    setLoadError(false);
     setQueue(null);
-    fetch(`/api/review/queue?deckId=${encodeURIComponent(deckId)}`)
+    fetch(`/api/review/queue?deckId=${encodeURIComponent(deckId)}&mode=write`, {
+      signal: controller.signal,
+    })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((data: { queue: QueueItem[]; totalDue: number }) => {
-        const usable = data.queue.filter(
-          (item) => chineseSideForCard(item.card, deckSide) !== null
-        );
-        setQueue(usable);
-        setTotalDue(data.totalDue);
-        setBatchSize(usable.length);
+        if (controller.signal.aborted) return;
+        applyQueueData(data);
       })
-      .catch(() => setLoadError(true));
-  }, [deckId, deckSide]);
+      .catch(() => {
+        if (!controller.signal.aborted) setLoadError(true);
+      });
+  }, [applyQueueData, deckId, sync]);
 
   useEffect(() => {
+    const update = (state: ReviewSyncState) => {
+      syncPendingRef.current = state.pendingCount;
+      setSyncState(state);
+    };
+    const snapshot = sync.getState();
+    syncPendingRef.current = snapshot.pendingCount;
+    const unsubscribe = sync.subscribe(update);
+    return () => {
+      unsubscribe();
+      sync.dispose();
+    };
+  }, [sync]);
+
+  useEffect(() => {
+    setBreakUntil(0);
+    setReviewed(0);
+    setResult(null);
+    setValue("");
+    setTotalDue(0);
+    setBatchSize(0);
+    advancedAtRef.current = null;
     // An unfinished break (even across a reload) blocks the next batch.
-    const until = getBreakUntil();
-    if (until > Date.now()) {
+    const until = getBreakUntil(breakScope);
+    if (until > 0) {
+      waitingToLoadRef.current = false;
       setBreakUntil(until);
       setQueue([]);
+    } else if ((syncPendingRef.current ?? sync.getState().pendingCount) > 0) {
+      // Do not refresh from canonical storage until locally restored reviews
+      // have drained, or already-rated cards can reappear.
+      waitingToLoadRef.current = true;
+      setQueue(null);
+    } else if (initialData) {
+      waitingToLoadRef.current = false;
+      applyQueueData(initialData);
     } else {
       loadQueue();
     }
-  }, [loadQueue]);
+    return () => loadAbortRef.current?.abort();
+  }, [applyQueueData, breakScope, initialData, loadQueue, sync]);
 
-  const current = queue?.[0];
+  useEffect(() => {
+    if (waitingToLoadRef.current && syncPendingRef.current === 0) loadQueue();
+  }, [loadQueue, syncState.pendingCount]);
+
+  const readyIndex = queue ? firstReadyIndex(queue, nowMs) : -1;
+  const nextDueAt = queue && readyIndex < 0 ? nextQueuedDue(queue, nowMs) : null;
+
+  useEffect(() => {
+    if (nextDueAt === null) return;
+    const delay = Math.max(25, Math.min(1000, nextDueAt - nowMs));
+    const id = window.setTimeout(() => setNowMs(Date.now()), delay);
+    return () => window.clearTimeout(id);
+  }, [nextDueAt, nowMs]);
+
+  const current = queue && readyIndex >= 0 ? queue[readyIndex] : undefined;
   const currentSide = current
     ? chineseSideForCard(current.card, deckSide)
     : null;
@@ -107,44 +214,56 @@ export default function WriteSession({
 
   const rate = useCallback(
     (rating: number) => {
-      if (!queue || queue.length === 0 || !result) return;
-      if (performance.now() - advancedAtRef.current < RATE_LOCKOUT_MS) return;
-      advancedAtRef.current = performance.now();
+      if (!queue || readyIndex < 0 || !result) return;
+      const advancedAt = performance.now();
+      if (!canAcceptRating(advancedAtRef.current, advancedAt)) return;
+      advancedAtRef.current = advancedAt;
       navigator.vibrate?.(10);
 
-      const item = queue[0];
+      const item = queue[readyIndex];
       sync.push({ cardId: item.card.id, deckId: item.card.deckId, rating });
 
       const now = new Date();
       const { fsrs } = applyRating(item.card.fsrs, rating as Grade, now);
-      const dueSoon = new Date(fsrs.due).getTime() <= now.getTime() + SESSION_HORIZON_MS;
+      const dueSoon = belongsInCurrentSession(fsrs.due, now.getTime());
+      const rest = [...queue.slice(0, readyIndex), ...queue.slice(readyIndex + 1)];
+      const next = dueSoon
+        ? [
+            ...rest,
+            {
+              card: { ...item.card, fsrs },
+              intervals: previewIntervals(fsrs, new Date(fsrs.due)),
+            },
+          ]
+        : rest;
 
       setReviewed((n) => n + 1);
       setResult(null);
       setValue("");
-      setQueue((q) => {
-        if (!q) return q;
-        const rest = q.slice(1);
-        const next = dueSoon
-          ? [...rest, { card: { ...item.card, fsrs }, intervals: previewIntervals(fsrs, new Date(fsrs.due)) }]
-          : rest;
-        if (next.length === 0 && totalDue > batchSize) {
-          // Batch finished with more cards waiting — enforce the pause.
-          setBreakUntil(startBreak());
-        }
-        return next;
-      });
+      setNowMs(now.getTime());
+      setQueue(next);
+      if (next.length === 0 && totalDue > batchSize) {
+        // Only start a break after every scheduled learning step in this batch.
+        setBreakUntil(startBreak(breakScope, now.getTime()));
+      }
       // Called from a tap/keypress, so refocusing keeps the keyboard up on iOS.
-      inputRef.current?.focus();
+      if (firstReadyIndex(next, now.getTime()) >= 0) inputRef.current?.focus();
     },
-    [queue, result, sync, totalDue, batchSize]
+    [batchSize, breakScope, queue, readyIndex, result, sync, totalDue]
   );
 
   const defaultRating = result ? (result.correct ? 3 : 1) : 3;
 
   function onInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     // Never treat the Enter that confirms a pinyin/IME candidate as a submit.
-    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (
+      event.defaultPrevented ||
+      event.repeat ||
+      event.nativeEvent.isComposing ||
+      event.keyCode === 229
+    ) {
+      return;
+    }
     if (!result) {
       if (event.key === "Enter" && value.trim()) {
         event.preventDefault();
@@ -164,13 +283,25 @@ export default function WriteSession({
   // Same shortcuts when focus is outside the input (the hook skips form fields).
   useKeyboard((event) => {
     if (!result) return;
-    if (event.key === "Enter") rate(defaultRating);
-    else if (["1", "2", "3", "4"].includes(event.key)) rate(Number(event.key));
+    if (event.key === "Enter") {
+      event.preventDefault();
+      rate(defaultRating);
+    } else if (["1", "2", "3", "4"].includes(event.key)) {
+      event.preventDefault();
+      rate(Number(event.key));
+    }
   });
 
   if (loadError) {
     return (
-      <Screen backHref={backHref} title="Something went wrong" body="Could not load the queue." />
+      <Screen
+        backHref={backHref}
+        title="Something went wrong"
+        body="Could not load the writing queue."
+        syncState={syncState}
+        onRetrySaves={resolveSyncFailures}
+        onRetry={loadQueue}
+      />
     );
   }
   if (breakUntil > 0 && (queue === null || queue.length === 0)) {
@@ -179,28 +310,78 @@ export default function WriteSession({
         until={breakUntil}
         reviewed={reviewed}
         waiting={reviewed > 0 ? Math.max(totalDue - batchSize, 0) : null}
+        syncState={syncState}
+        scope={breakScope}
         backHref={backHref}
+        onRetrySaves={resolveSyncFailures}
         onContinue={() => {
           setBreakUntil(0);
           setReviewed(0);
+          advancedAtRef.current = null;
           loadQueue();
         }}
       />
     );
   }
   if (queue === null) {
-    return <Screen backHref={backHref} title="" body="" />;
-  }
-  if (queue.length === 0 || !current || !prompt) {
     return (
       <Screen
         backHref={backHref}
-        title={reviewed > 0 ? "Session complete" : "Nothing due"}
+        title="Loading…"
+        body={
+          syncState.pendingCount > 0
+            ? "Finishing pending reviews before refreshing the queue."
+            : "Preparing your writing queue."
+        }
+        syncState={syncState}
+        onRetrySaves={resolveSyncFailures}
+      />
+    );
+  }
+  if (queue.length === 0) {
+    return (
+      <Screen
+        backHref={backHref}
+        title={
+          reviewed === 0
+            ? "Nothing due"
+            : syncState.failedCount > 0
+              ? "Reviews need attention"
+              : syncState.pendingCount > 0
+                ? "Saving reviews…"
+                : "Session complete"
+        }
         body={
           reviewed > 0
             ? `You wrote ${reviewed} card${reviewed === 1 ? "" : "s"}.`
-            : "No cards are due right now — come back later."
+            : "No writable cards are due right now — come back later."
         }
+        syncState={syncState}
+        onRetrySaves={resolveSyncFailures}
+      />
+    );
+  }
+
+  if (readyIndex < 0 && nextDueAt !== null) {
+    return (
+      <Screen
+        backHref={backHref}
+        title="Next card is still learning"
+        body={`Ready in ${formatCountdown(nextDueAt - nowMs)}. It will appear automatically when it is due.`}
+        syncState={syncState}
+        onRetrySaves={resolveSyncFailures}
+      />
+    );
+  }
+
+  if (!current || !prompt) {
+    return (
+      <Screen
+        backHref={backHref}
+        title="Nothing writable"
+        body="No cards in this batch have a Chinese answer to write."
+        syncState={syncState}
+        onRetrySaves={resolveSyncFailures}
       />
     );
   }
@@ -217,12 +398,11 @@ export default function WriteSession({
         <span className="w-16 text-right text-sm tabular-nums text-muted">{reviewed} done</span>
       </header>
 
-      {saveFailures > 0 && (
-        <p className="mb-2 rounded-lg bg-red-500/10 px-3 py-2 text-center text-xs text-red-500">
-          {saveFailures} review{saveFailures === 1 ? "" : "s"} failed to save — check your
-          connection.
-        </p>
-      )}
+      <SyncNotice
+        state={syncState}
+        onRetry={resolveSyncFailures}
+        compact
+      />
 
       <div className="flex flex-col rounded-2xl border border-border bg-surface px-5 py-6">
         <div className="text-center">
@@ -347,14 +527,85 @@ export default function WriteSession({
   );
 }
 
-function Screen({ backHref, title, body }: { backHref: string; title: string; body: string }) {
+function SyncNotice({
+  state,
+  onRetry,
+  compact = false,
+}: {
+  state: ReviewSyncState;
+  onRetry: () => void;
+  compact?: boolean;
+}) {
+  if (state.pendingCount === 0) return null;
+  return (
+    <div className={`flex flex-col items-center gap-2 ${compact ? "mb-2 text-xs" : "text-sm"}`}>
+      {state.pendingCount > 0 && (
+        <p
+          role={state.failedCount > 0 ? "alert" : undefined}
+          className={`rounded-lg px-3 py-2 text-center ${
+            state.failedCount > 0 ? "bg-red-500/10 text-red-500" : "text-muted"
+          }`}
+        >
+          {state.blockedCount > 0
+            ? `${state.blockedCount} review${state.blockedCount === 1 ? "" : "s"} cannot be saved because the card changed or was removed. Discard to continue.`
+            : state.failedCount > 0
+              ? `${state.failedCount} review${state.failedCount === 1 ? "" : "s"} still need to be saved.`
+            : `Saving ${state.pendingCount} review${state.pendingCount === 1 ? "" : "s"}…`}
+        </p>
+      )}
+      {state.failedCount > 0 && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="pressable rounded-lg border border-red-500/30 px-4 py-2 font-medium text-red-500"
+        >
+          {state.blockedCount > 0 ? "Discard unsavable and continue" : "Retry saving"}
+        </button>
+      )}
+      {!state.persistenceAvailable && (
+        <p role="alert" className="max-w-sm text-center text-amber-600 dark:text-amber-400">
+          This browser could not store pending reviews. Keep this page open until saving
+          finishes.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Screen({
+  backHref,
+  title,
+  body,
+  syncState,
+  onRetrySaves,
+  onRetry,
+}: {
+  backHref: string;
+  title: string;
+  body: string;
+  syncState: ReviewSyncState;
+  onRetrySaves: () => void;
+  onRetry?: () => void;
+}) {
   return (
     <div className="flex h-dvh flex-col items-center justify-center gap-3 px-6 pb-safe text-center">
       {title && <h1 className="text-xl font-semibold">{title}</h1>}
       {body && <p className="text-muted">{body}</p>}
+      <SyncNotice state={syncState} onRetry={onRetrySaves} />
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="pressable mt-2 min-h-12 rounded-xl bg-accent px-5 py-3 font-medium text-accent-foreground"
+        >
+          Try again
+        </button>
+      )}
       <Link
         href={backHref}
-        className="pressable mt-2 rounded-xl bg-accent px-5 py-3 font-medium text-accent-foreground"
+        className={`pressable rounded-xl px-5 py-3 font-medium ${
+          onRetry ? "text-muted" : "mt-2 bg-accent text-accent-foreground"
+        }`}
       >
         ← Back
       </Link>

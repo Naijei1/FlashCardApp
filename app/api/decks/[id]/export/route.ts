@@ -1,5 +1,5 @@
 import { notFound, requireAuth } from "@/lib/api";
-import { toCsv } from "@/lib/csv";
+import { spreadsheetSafeField, toCsv } from "@/lib/csv";
 import { getDeck, listCards } from "@/lib/db";
 
 type Context = { params: Promise<{ id: string }> };
@@ -13,7 +13,9 @@ export async function GET(_request: Request, { params }: Context) {
   const cards = await listCards(id);
   const csv = toCsv([
     ["front", "back", "notes"],
-    ...cards.map((c) => [c.front, c.back, c.notes ?? ""]),
+    ...cards.map((c) =>
+      [c.front, c.back, c.notes ?? ""].map(spreadsheetSafeField)
+    ),
   ]);
   const filename = `${deck.name.replace(/[^\p{L}\p{N}_-]+/gu, "_")}.csv`;
   // BOM helps Excel detect UTF-8 for Chinese text.

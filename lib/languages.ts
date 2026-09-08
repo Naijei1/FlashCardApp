@@ -14,3 +14,10 @@ export const LANGUAGE_OPTIONS = [
 
 export const DEFAULT_FRONT_LANG = "zh-CN";
 export const DEFAULT_BACK_LANG = "en-US";
+
+export function isSupportedLanguage(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    LANGUAGE_OPTIONS.some((option) => option.value === value)
+  );
+}
