@@ -60,6 +60,10 @@ export default function AddCardForm({ deckId }: { deckId: string }) {
           />
         </label>
       </div>
+      <p className="text-xs text-muted">
+        For a specific pronunciation, write it after the Chinese: 行 (háng).
+        Write Chinese practice asks for the characters; Write Pinyin uses the supplied reading when recognized.
+      </p>
       <label className="block text-sm text-muted">
         Notes <span className="font-normal">(optional)</span>
         <input

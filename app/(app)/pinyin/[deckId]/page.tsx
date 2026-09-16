@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import WriteSession from "@/components/WriteSession";
-import { getDeck, listCards } from "@/lib/db";
-import { buildPinyinQueueData } from "@/lib/pinyin-queue";
+import { getDeck } from "@/lib/db";
 import { chineseSideForDeck } from "@/lib/write";
 
 export default async function PinyinPage({
@@ -10,10 +9,7 @@ export default async function PinyinPage({
   params: Promise<{ deckId: string }>;
 }) {
   const { deckId } = await params;
-  const [deck, cards] = await Promise.all([
-    getDeck(deckId),
-    listCards(deckId, { consistent: true }),
-  ]);
+  const deck = await getDeck(deckId);
   if (!deck) notFound();
   const deckSide = chineseSideForDeck(deck);
   return (
@@ -23,7 +19,6 @@ export default async function PinyinPage({
       deckSide={deckSide}
       chineseLang="zh-CN"
       backHref={`/decks/${deckId}`}
-      initialData={buildPinyinQueueData(cards, deckSide)}
     />
   );
 }

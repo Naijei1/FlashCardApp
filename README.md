@@ -25,8 +25,11 @@ Tailwind CSS; data lives in a single DynamoDB table.
   for spelling practice. `ü`, `v`, and `u:` are equivalent; neutral tones can
   be omitted or written as `0`/`5`. Like Write Chinese, ratings update the
   original card's FSRS schedule and use 25-card batches with five-minute breaks.
-  Readings use dictionary tones; names and words with multiple pronunciations
-  may need the user's judgment. The dictionary runs only on the server.
+  Readings use dictionary tones. For a specific reading, put spaced Pinyin
+  after the Chinese, such as `行 (háng)` or `老师 (lao3 shi1)`; a complete
+  reading recognized for those characters takes precedence over the default.
+  Write Chinese excludes these romanization annotations from the expected
+  answer. The dictionary runs only on the server.
 - **Auth**: single password (`APP_PASSWORD`) checked server-side; 30-day
   HttpOnly session cookie signed with `SESSION_SECRET`.
 - **Keyboard shortcuts** (desktop): Space = reveal, 1–4 = Again/Hard/Good/Easy,

@@ -33,7 +33,7 @@ import { useKeyboard } from "./useKeyboard";
 import { checkPinyinAnswer, numberedPinyin, type PinyinReading } from "@/lib/pinyin";
 
 export type WriteQueueItem = { card: Card; intervals: IntervalPreview; pinyin?: PinyinReading };
-export type WriteSessionInitialData = {
+export type WriteSessionData = {
   queue: WriteQueueItem[];
   totalDue: number;
 };
@@ -59,7 +59,6 @@ export default function WriteSession({
   deckSide,
   chineseLang,
   backHref,
-  initialData,
 }: {
   mode?: "write" | "pinyin";
   deckId: string;
@@ -67,7 +66,6 @@ export default function WriteSession({
   deckSide: ChineseSide | null;
   chineseLang: string;
   backHref: string;
-  initialData?: WriteSessionInitialData;
 }) {
   // Client storage can contain a pending review or enforced break that the
   // server cannot see. Gate the first card until that local check completes.
@@ -101,7 +99,7 @@ export default function WriteSession({
   }, [sync]);
 
   const applyQueueData = useCallback(
-    (data: WriteSessionInitialData) => {
+    (data: WriteSessionData) => {
       const usable = data.queue.filter(
         (item) => mode === "pinyin"
           ? !!item.pinyin?.syllables.length
@@ -133,6 +131,7 @@ export default function WriteSession({
     setQueue(null);
     fetch(`/api/review/queue?deckId=${encodeURIComponent(deckId)}&mode=${mode}`, {
       signal: controller.signal,
+      cache: "no-store",
     })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((data: { queue: QueueItem[]; totalDue: number }) => {
@@ -166,6 +165,8 @@ export default function WriteSession({
     setTotalDue(0);
     setBatchSize(0);
     advancedAtRef.current = null;
+    // Always fetch a fresh queue after local saves drain. Navigation can reuse
+    // server-rendered pages containing cards that have already been reviewed.
     // An unfinished break (even across a reload) blocks the next batch.
     const until = getBreakUntil(breakScope);
     if (until > 0) {
@@ -177,14 +178,11 @@ export default function WriteSession({
       // have drained, or already-rated cards can reappear.
       waitingToLoadRef.current = true;
       setQueue(null);
-    } else if (initialData) {
-      waitingToLoadRef.current = false;
-      applyQueueData(initialData);
     } else {
       loadQueue();
     }
     return () => loadAbortRef.current?.abort();
-  }, [applyQueueData, breakScope, initialData, loadQueue, sync]);
+  }, [breakScope, loadQueue, sync]);
 
   useEffect(() => {
     if (waitingToLoadRef.current && syncPendingRef.current === 0) loadQueue();
@@ -245,9 +243,8 @@ export default function WriteSession({
       navigator.vibrate?.(10);
 
       const item = queue[readyIndex];
-      sync.push({ cardId: item.card.id, deckId: item.card.deckId, rating });
-
       const now = new Date();
+      sync.push({ cardId: item.card.id, deckId: item.card.deckId, rating, reviewedAt: now.toISOString() });
       const { fsrs } = applyRating(item.card.fsrs, rating as Grade, now);
       const dueSoon = belongsInCurrentSession(fsrs.due, now.getTime());
       const rest = [...queue.slice(0, readyIndex), ...queue.slice(readyIndex + 1)];
@@ -564,7 +561,7 @@ export default function WriteSession({
       {/* Bottom bar keeps one height in both phases. */}
       <div className="flex min-h-24 items-center gap-2 py-3">
         {result ? (
-          <RatingBar intervals={current.intervals} onRate={rate} defaultValue={defaultRating} />
+          <RatingBar fsrs={current.card.fsrs} onRate={rate} defaultValue={defaultRating} />
         ) : (
           <>
             <button

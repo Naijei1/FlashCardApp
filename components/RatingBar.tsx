@@ -1,6 +1,8 @@
 "use client";
 
-import type { IntervalPreview } from "@/lib/fsrs";
+import { useEffect, useState } from "react";
+import { previewIntervals } from "@/lib/fsrs";
+import type { StoredFsrs } from "@/lib/types";
 
 export const RATINGS = [
   {
@@ -30,15 +32,30 @@ export const RATINGS = [
 ];
 
 export default function RatingBar({
-  intervals,
+  fsrs,
   onRate,
   defaultValue,
 }: {
-  intervals: IntervalPreview;
+  fsrs: StoredFsrs;
   onRate: (rating: number) => void;
   /** Rating applied by Enter; gets a subtle ring so the shortcut is visible. */
   defaultValue?: number;
 }) {
+  const [, refresh] = useState(0);
+  useEffect(() => {
+    const update = () => refresh((value) => value + 1);
+    const timer = window.setInterval(update, 1000);
+    window.addEventListener("focus", update);
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", update);
+      document.removeEventListener("visibilitychange", update);
+    };
+  }, []);
+  // A queue can remain open for days. Preview from the time of this rating,
+  // not the time the batch was fetched or the previous learning step was due.
+  const intervals = previewIntervals(fsrs, new Date());
   return (
     <div className="grid w-full grid-cols-4 gap-2">
       {RATINGS.map((r) => (

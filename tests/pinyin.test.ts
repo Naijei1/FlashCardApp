@@ -14,6 +14,16 @@ function card(front: string, back: string, id = front): Card {
 }
 
 describe("automatic Pinyin readings", () => {
+  it.each(["行 (háng)", "行（hang2）", "行 háng"])("honors the author's alternate pronunciation in %s", (text) => {
+    expect(readingForCard(card(text, "line"), null)?.syllables).toEqual(["háng"]);
+    expect(readingForCard(card("line", text), null)?.syllables).toEqual(["háng"]);
+  });
+  it("validates a whole reading instead of treating English or partial annotations as Pinyin", () => {
+    expect(readingForCard(card("行 (line)", "line"), null)?.syllables).toEqual(["xíng"]);
+    expect(readingForCard(card("银行 (háng)", "bank"), null)?.syllables).toEqual(["yín", "háng"]);
+    expect(readingForCard(card("你好 (ni3hao3)", "hello"), null)?.syllables).toEqual(["nǐ", "hǎo"]);
+    expect(readingForCard(card("行 (ni3)", "line"), null)?.syllables).toEqual(["xíng"]);
+  });
   it("detects Chinese on either side, even when a deck contains reversed cards", () => {
     expect(readingForCard(card("你好", "hello"), "back")).toMatchObject({
       hanzi: "你好", meaning: "hello", syllables: ["nǐ", "hǎo"],

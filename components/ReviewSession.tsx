@@ -24,7 +24,7 @@ import TtsButton from "./TtsButton";
 import { useKeyboard } from "./useKeyboard";
 
 export type ReviewQueueItem = { card: Card; intervals: IntervalPreview };
-export type ReviewSessionInitialData = {
+export type ReviewSessionData = {
   queue: ReviewQueueItem[];
   totalDue: number;
 };
@@ -43,12 +43,10 @@ export default function ReviewSession({
   deckId,
   deckLangs,
   backHref,
-  initialData,
 }: {
   deckId: string;
   deckLangs: DeckLangs;
   backHref: string;
-  initialData?: ReviewSessionInitialData;
 }) {
   // Client storage can contain a pending review or enforced break that the
   // server cannot see. Gate the first card until that local check completes.
@@ -78,7 +76,7 @@ export default function ReviewSession({
     sync.retryFailed();
   }, [sync]);
 
-  const applyQueueData = useCallback((data: ReviewSessionInitialData) => {
+  const applyQueueData = useCallback((data: ReviewSessionData) => {
     setNowMs(Date.now());
     setQueue(data.queue);
     setTotalDue(data.totalDue);
@@ -102,6 +100,7 @@ export default function ReviewSession({
     setQueue(null);
     fetch(`/api/review/queue?deckId=${encodeURIComponent(deckId)}`, {
       signal: controller.signal,
+      cache: "no-store",
     })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((data: { queue: QueueItem[]; totalDue: number }) => {
@@ -134,6 +133,8 @@ export default function ReviewSession({
     setTotalDue(0);
     setBatchSize(0);
     advancedAtRef.current = null;
+    // Always fetch a fresh queue after local saves drain. Navigation can reuse
+    // server-rendered pages containing cards that have already been reviewed.
     // An unfinished break (even across a reload) blocks the next batch.
     const until = getBreakUntil(breakScope);
     if (until > 0) {
@@ -145,14 +146,11 @@ export default function ReviewSession({
       // bring already-rated cards back into the queue.
       waitingToLoadRef.current = true;
       setQueue(null);
-    } else if (initialData) {
-      waitingToLoadRef.current = false;
-      applyQueueData(initialData);
     } else {
       loadQueue();
     }
     return () => loadAbortRef.current?.abort();
-  }, [applyQueueData, breakScope, initialData, loadQueue, sync]);
+  }, [breakScope, loadQueue, sync]);
 
   useEffect(() => {
     if (waitingToLoadRef.current && syncPendingRef.current === 0) loadQueue();
@@ -168,11 +166,13 @@ export default function ReviewSession({
     return () => window.clearTimeout(id);
   }, [nextDueAt, nowMs]);
 
-  const reveal = useCallback(() => setRevealed(true), []);
+  const reveal = useCallback(() => {
+    if (readyIndex >= 0) setRevealed(true);
+  }, [readyIndex]);
 
   const rate = useCallback(
     (rating: number) => {
-      if (!queue || readyIndex < 0) return;
+      if (!queue || readyIndex < 0 || !revealed) return;
       const advancedAt = performance.now();
       if (!canAcceptRating(advancedAtRef.current, advancedAt)) return;
       advancedAtRef.current = advancedAt;
@@ -180,12 +180,12 @@ export default function ReviewSession({
 
       const current = queue[readyIndex];
       // Persist in the background; advance instantly.
-      sync.push({ cardId: current.card.id, deckId: current.card.deckId, rating });
+      const now = new Date();
+      sync.push({ cardId: current.card.id, deckId: current.card.deckId, rating, reviewedAt: now.toISOString() });
 
       // Compute the new state locally just for the session queue: re-enqueue
       // cards that come back within this session's horizon. The server's
       // recomputation stays canonical for storage.
-      const now = new Date();
       const { fsrs } = applyRating(current.card.fsrs, rating as Grade, now);
       const dueSoon = belongsInCurrentSession(fsrs.due, now.getTime());
       const rest = [...queue.slice(0, readyIndex), ...queue.slice(readyIndex + 1)];
@@ -208,7 +208,7 @@ export default function ReviewSession({
         setBreakUntil(startBreak(breakScope, now.getTime()));
       }
     },
-    [batchSize, breakScope, queue, readyIndex, sync, totalDue]
+    [batchSize, breakScope, queue, readyIndex, revealed, sync, totalDue]
   );
 
   useKeyboard((event) => {
@@ -308,7 +308,7 @@ export default function ReviewSession({
     );
   }
 
-  const { card, intervals } = queue[readyIndex];
+  const { card } = queue[readyIndex];
   const frontLang = deckLangs[card.deckId]?.front || DEFAULT_FRONT_LANG;
   const backLang = deckLangs[card.deckId]?.back || DEFAULT_BACK_LANG;
 
@@ -367,7 +367,7 @@ export default function ReviewSession({
       {/* Bottom bar keeps one height in both states — no layout shift. */}
       <div className="flex min-h-24 items-center py-3">
         {revealed ? (
-          <RatingBar intervals={intervals} onRate={rate} />
+          <RatingBar fsrs={card.fsrs} onRate={rate} />
         ) : (
           <button
             type="button"

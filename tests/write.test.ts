@@ -72,6 +72,15 @@ describe("chineseSideForCard", () => {
 });
 
 describe("toWritePrompt", () => {
+  it.each(["老师 (lǎo shī)", "老师（lao3 shi1）", "老师 [lǎo shī]", "老师 lǎo shī"])("does not require romanization when writing %s", (text) => {
+    expect(toWritePrompt(makeCard(text, "teacher"), "front").answer).toBe("老师");
+    expect(toWritePrompt(makeCard("teacher", text), "back").answer).toBe("老师");
+  });
+  it("preserves numeric and mixed-script Chinese answers", () => {
+    expect(toWritePrompt(makeCard("2026年", "year 2026"), "front").answer).toBe("2026年");
+    expect(toWritePrompt(makeCard("阿Q", "Ah Q"), "front").answer).toBe("阿Q");
+    expect(toWritePrompt(makeCard("你好（您好）", "hello"), "front").answer).toBe("你好（您好）");
+  });
   it("prompts with English, expects Chinese (Chinese on front)", () => {
     const p = toWritePrompt(makeCard("老师", "teacher", "n"), "front");
     expect(p).toEqual({ prompt: "teacher", answer: "老师", notes: "n" });

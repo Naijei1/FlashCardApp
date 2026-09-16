@@ -48,10 +48,30 @@ export type WritePrompt = {
   notes?: string;
 };
 
+/** Separate romanization/English annotations without discarding digits or mixed-script words. */
+export function chineseTextAndAnnotations(source: string): { text: string; annotations: string[] } {
+  if (!hasChinese(source)) return { text: source, annotations: [] };
+  const annotations: string[] = [];
+  let text = source.replace(/\(([^()]*)\)|（([^（）]*)）|\[([^\[\]]*)\]/gu, (whole, a, b, c) => {
+    const annotation: string = a ?? b ?? c;
+    if (hasChinese(annotation) || !/[a-z\u00c0-\u024f]/iu.test(annotation)) return whole;
+    annotations.push(annotation.trim());
+    return "";
+  });
+  // Common card format: 老师 lǎo shī. Keep embedded Latin text such as 阿Q.
+  text = text.replace(/\s+([a-z\u00c0-\u024f][a-z\u00c0-\u024f\u0300-\u036f0-5\s:'’\-]*)$/iu, (_, annotation: string) => {
+    annotations.push(annotation.trim());
+    return "";
+  });
+  return { text: text.trim(), annotations };
+}
+
 export function toWritePrompt(card: Card, chineseSide: ChineseSide): WritePrompt {
-  return chineseSide === "front"
-    ? { prompt: card.back, answer: card.front, notes: card.notes }
-    : { prompt: card.front, answer: card.back, notes: card.notes };
+  return {
+    prompt: chineseSide === "front" ? card.back : card.front,
+    answer: chineseTextAndAnnotations(card[chineseSide]).text,
+    notes: card.notes,
+  };
 }
 
 /** Trim and collapse whitespace; typing "老师" should match "老师 " or " 老 师". */
