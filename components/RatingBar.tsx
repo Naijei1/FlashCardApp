@@ -57,7 +57,9 @@ export default function RatingBar({
   // not the time the batch was fetched or the previous learning step was due.
   const intervals = previewIntervals(fsrs, new Date());
   return (
-    <div className="grid w-full grid-cols-4 gap-2">
+    <div className="w-full">
+      <p className="mb-2 text-center text-xs text-muted">Next review after this rating</p>
+      <div className="grid w-full grid-cols-4 gap-2">
       {RATINGS.map((r) => (
         <button
           key={r.value}
@@ -73,6 +75,7 @@ export default function RatingBar({
           </span>
         </button>
       ))}
+      </div>
     </div>
   );
 }

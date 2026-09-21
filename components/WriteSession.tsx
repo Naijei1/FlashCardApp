@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { rateCard } from "@/lib/practice";
 import type { Card } from "@/lib/types";
 import {
-  applyRating,
   previewIntervals,
   type Grade,
   type IntervalPreview,
@@ -75,6 +75,13 @@ export default function WriteSession({
   const [breakUntil, setBreakUntil] = useState(0);
   const [value, setValue] = useState("");
   const [checkTones, setCheckTones] = useState(true);
+  const [repeatMistakes, setRepeatMistakes] = useState(false);
+  const [copiesLeft, setCopiesLeft] = useState(0);
+  const [drillFailed, setDrillFailed] = useState(false);
+  const checkedRef = useRef(false);
+  useEffect(() => {
+    try { setRepeatMistakes(localStorage.getItem("flashcards.repeat-mistakes.v1") === "true"); } catch {}
+  }, []);
   const [result, setResult] = useState<Result | null>(null);
   const [reviewed, setReviewed] = useState(0);
   const [loadError, setLoadError] = useState(false);
@@ -162,6 +169,9 @@ export default function WriteSession({
     setReviewed(0);
     setResult(null);
     setValue("");
+    setCopiesLeft(0);
+    setDrillFailed(false);
+    checkedRef.current = false;
     setTotalDue(0);
     setBatchSize(0);
     advancedAtRef.current = null;
@@ -215,7 +225,8 @@ export default function WriteSession({
 
   const check = useCallback(
     (giveUp = false) => {
-      if (!prompt || result) return;
+      if (!prompt || result || checkedRef.current) return;
+      checkedRef.current = true;
       const typed = giveUp ? "" : value;
       const correct = mode === "pinyin"
         ? checkPinyinAnswer(typed, current?.pinyin?.syllables ?? [], checkTones)
@@ -229,14 +240,23 @@ export default function WriteSession({
             expected: [...prompt.answer].map((char) => ({ char, ok: correct })),
           }
         : diffChars(typed, prompt.answer);
+      if (repeatMistakes && !correct && !drillFailed) {
+        setDrillFailed(true);
+        setCopiesLeft(3);
+      } else if (drillFailed && correct) {
+        setCopiesLeft((left) => Math.max(0, left - 1));
+      }
       setResult({ correct, ...feedback });
     },
-    [checkTones, current?.pinyin, mode, prompt, result, value]
+    [checkTones, current?.pinyin, mode, prompt, result, value, repeatMistakes, drillFailed]
   );
 
   const rate = useCallback(
     (rating: number) => {
-      if (!queue || readyIndex < 0 || !result) return;
+      if (!queue || readyIndex < 0 || !result || copiesLeft > 0) return;
+      // The initial miss is the memory event. Copying the answer three times
+      // must not turn it into three successful spaced reviews.
+      if (drillFailed) rating = 1;
       const advancedAt = performance.now();
       if (!canAcceptRating(advancedAtRef.current, advancedAt)) return;
       advancedAtRef.current = advancedAt;
@@ -245,7 +265,7 @@ export default function WriteSession({
       const item = queue[readyIndex];
       const now = new Date();
       sync.push({ cardId: item.card.id, deckId: item.card.deckId, rating, reviewedAt: now.toISOString() });
-      const { fsrs } = applyRating(item.card.fsrs, rating as Grade, now);
+      const { fsrs, card: updatedCard } = rateCard(item.card, rating as Grade, now);
       const dueSoon = belongsInCurrentSession(fsrs.due, now.getTime());
       const rest = [...queue.slice(0, readyIndex), ...queue.slice(readyIndex + 1)];
       const next = dueSoon
@@ -253,7 +273,7 @@ export default function WriteSession({
             ...rest,
             {
               ...item,
-              card: { ...item.card, fsrs },
+              card: updatedCard,
               intervals: previewIntervals(fsrs, new Date(fsrs.due)),
             },
           ]
@@ -262,6 +282,9 @@ export default function WriteSession({
       setReviewed((n) => n + 1);
       setResult(null);
       setValue("");
+      setCopiesLeft(0);
+      setDrillFailed(false);
+      checkedRef.current = false;
       setNowMs(now.getTime());
       setQueue(next);
       if (next.length === 0 && totalDue > batchSize) {
@@ -271,10 +294,18 @@ export default function WriteSession({
       // Called from a tap/keypress, so refocusing keeps the keyboard up on iOS.
       if (firstReadyIndex(next, now.getTime()) >= 0) inputRef.current?.focus();
     },
-    [batchSize, breakScope, queue, readyIndex, result, sync, totalDue]
+    [batchSize, breakScope, queue, readyIndex, result, sync, totalDue, copiesLeft, drillFailed]
   );
 
-  const defaultRating = result ? (result.correct ? 3 : 1) : 3;
+  const defaultRating = drillFailed ? 1 : result ? (result.correct ? 3 : 1) : 3;
+  function continueWriting() {
+    if (copiesLeft > 0) {
+      checkedRef.current = false;
+      setResult(null);
+      setValue("");
+      inputRef.current?.focus();
+    } else rate(defaultRating);
+  }
 
   function onInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     // Never treat the Enter that confirms a pinyin/IME candidate as a submit.
@@ -295,7 +326,7 @@ export default function WriteSession({
     }
     if (event.key === "Enter") {
       event.preventDefault();
-      rate(defaultRating);
+      continueWriting();
     } else if (["1", "2", "3", "4"].includes(event.key)) {
       event.preventDefault();
       rate(Number(event.key));
@@ -307,7 +338,7 @@ export default function WriteSession({
     if (!result) return;
     if (event.key === "Enter") {
       event.preventDefault();
-      rate(defaultRating);
+      continueWriting();
     } else if (["1", "2", "3", "4"].includes(event.key)) {
       event.preventDefault();
       rate(Number(event.key));
@@ -428,6 +459,21 @@ export default function WriteSession({
         compact
       />
 
+      <label className="mb-3 flex items-center gap-2 text-sm text-muted">
+        <input type="checkbox" checked={repeatMistakes} disabled={drillFailed || !!result}
+          onChange={(event) => {
+            const enabled = event.target.checked;
+            setRepeatMistakes(enabled);
+            try { localStorage.setItem("flashcards.repeat-mistakes.v1", String(enabled)); } catch {}
+          }} />
+        Write missed words correctly 3 more times
+      </label>
+      {drillFailed && (
+        <p role="status" className="mb-3 text-center text-sm text-accent">
+          {copiesLeft > 0 ? `${3 - copiesLeft}/3 correct repetitions · ${copiesLeft} left`
+            : "3/3 complete. The original miss will be remembered for your next review."}
+        </p>
+      )}
       <div className="flex flex-col rounded-2xl border border-border bg-surface px-5 py-6">
         {mode === "pinyin" && (
           <h1 className="mb-3 text-center text-sm font-medium text-muted">Write Pinyin</h1>
@@ -560,7 +606,12 @@ export default function WriteSession({
 
       {/* Bottom bar keeps one height in both phases. */}
       <div className="flex min-h-24 items-center gap-2 py-3">
-        {result ? (
+        {result && (copiesLeft > 0 || drillFailed) ? (
+          <button type="button" onClick={continueWriting}
+            className="pressable min-h-16 w-full rounded-2xl bg-accent text-lg font-semibold text-accent-foreground">
+            {copiesLeft > 0 ? `Write again (${copiesLeft} left)` : `Continue · review in ${previewIntervals(current.card.fsrs, new Date()).again}`}
+          </button>
+        ) : result ? (
           <RatingBar fsrs={current.card.fsrs} onRate={rate} defaultValue={defaultRating} />
         ) : (
           <>

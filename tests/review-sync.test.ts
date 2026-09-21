@@ -80,7 +80,7 @@ describe("review background sync", () => {
       .mockImplementationOnce((_url: string, init: RequestInit) => new Promise((_, reject) => {
         init.signal?.addEventListener("abort", () => reject(new Error("request timed out")));
       }))
-      .mockResolvedValue({ ok: true, status: 200 });
+      .mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) });
     vi.stubGlobal("fetch", fetchMock);
     const { createReviewSync } = await import("@/components/reviewSync");
     const sync = createReviewSync(vi.fn());
@@ -103,7 +103,7 @@ describe("review background sync", () => {
 
   it("restores an offline review after reload with the same id and timestamp", async () => {
     const { navigatorState, storage } = installBrowser(undefined, false);
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) });
     vi.stubGlobal("fetch", fetchMock);
 
     const firstModule = await import("@/components/reviewSync");
@@ -138,7 +138,7 @@ describe("review background sync", () => {
     installBrowser();
     const requests: Array<{
       body: Record<string, unknown>;
-      resolve: (response: { ok: boolean; status: number }) => void;
+      resolve: (response: { ok: boolean; status: number; json?: () => Promise<{ ok: boolean }> }) => void;
     }> = [];
     vi.stubGlobal(
       "fetch",
@@ -146,7 +146,7 @@ describe("review background sync", () => {
         new Promise((resolve) => {
           requests.push({
             body: JSON.parse(init.body as string),
-            resolve: resolve as (response: { ok: boolean; status: number }) => void,
+            resolve: resolve as (response: { ok: boolean; status: number; json?: () => Promise<{ ok: boolean }> }) => void,
           });
         })
       )
@@ -180,13 +180,13 @@ describe("review background sync", () => {
       "review_card_a_01",
     ]);
 
-    requests[0].resolve({ ok: true, status: 200 });
+    requests[0].resolve({ ok: true, status: 200, json: async () => ({ ok: true }) });
     await vi.waitFor(() => expect(requests).toHaveLength(2));
     expect(requests[1].body.clientReviewId).toBe("review_card_a_02");
-    requests[1].resolve({ ok: true, status: 200 });
+    requests[1].resolve({ ok: true, status: 200, json: async () => ({ ok: true }) });
     await vi.waitFor(() => expect(requests).toHaveLength(3));
     expect(requests[2].body.clientReviewId).toBe("review_card_b_01");
-    requests[2].resolve({ ok: true, status: 200 });
+    requests[2].resolve({ ok: true, status: 200, json: async () => ({ ok: true }) });
     await vi.waitFor(() => expect(sync.getState().pendingCount).toBe(0));
   });
 
@@ -195,7 +195,7 @@ describe("review background sync", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ ok: false, status: 503 })
-      .mockResolvedValueOnce({ ok: true, status: 200 });
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true }) });
     vi.stubGlobal("fetch", fetchMock);
     const failures: number[] = [];
 
@@ -271,4 +271,21 @@ describe("review background sync", () => {
     expect(sync.getState().pendingCount).toBe(1);
     expect(reviewKeys(storage)).toEqual([otherKey]);
   });
+});
+
+it("retains a review when a proxy or login page responds with HTTP 200 instead of an acknowledgement", async () => {
+  installBrowser();
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => { throw new Error("HTML, not JSON"); } })
+    .mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) });
+  vi.stubGlobal("fetch", fetchMock);
+  const { createReviewSync } = await import("@/components/reviewSync");
+  const sync = createReviewSync(vi.fn());
+  sync.push({ cardId: "card", deckId: "deck", rating: 4 });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(sync.getState()).toMatchObject({ pendingCount: 1, failedCount: 1 });
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(sync.getState().pendingCount).toBe(0);
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(JSON.parse(fetchMock.mock.calls[1][1].body));
 });

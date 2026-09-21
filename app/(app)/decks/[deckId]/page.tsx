@@ -6,6 +6,8 @@ import { IconChevronRight } from "@/components/icons";
 import CardRow from "@/components/CardRow";
 import DeckSettings from "@/components/DeckSettings";
 import { getDeck, listCards, listDecks } from "@/lib/db";
+import { uniqueWords } from "@/lib/words";
+import { appTimeZone } from "@/lib/forecast";
 import { totalCounts } from "@/lib/due";
 
 const PAGE_SIZE = 50;
@@ -25,11 +27,18 @@ export default async function DeckPage({
   const [{ deckId }, { page: pageParam }] = await Promise.all([params, searchParams]);
   const [deck, cards, decks] = await Promise.all([
     getDeck(deckId),
-    listCards(deckId),
+    listCards(deckId, { consistent: true }),
     listDecks(),
   ]);
   if (!deck) notFound();
-  const counts = totalCounts(cards, new Date());
+  const now = new Date();
+  const counts = totalCounts(cards, now);
+  const words = uniqueWords(cards);
+  const upcoming = words.map((card) => new Date(card.fsrs.due))
+    .filter((due) => due > now).sort((a, b) => a.getTime() - b.getTime())[0];
+  const nextReview = upcoming ? new Intl.DateTimeFormat("en-US", {
+    timeZone: appTimeZone(), month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  }).format(upcoming) : null;
   const sorted = [...cards].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const page = Math.min(requestedPage(pageParam), totalPages);
@@ -44,12 +53,20 @@ export default async function DeckPage({
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-2xl font-bold">{deck.name}</h1>
           <p className="text-sm text-muted">
-            {counts.total} card{counts.total === 1 ? "" : "s"} · {counts.due} due ·{" "}
-            {counts.newCards} new
+            {counts.total} card{counts.total === 1 ? "" : "s"} · {counts.due} due words ·{" "}
+            {counts.newCards} new words
           </p>
         </div>
         <DeckSettings deck={deck} />
       </div>
+
+      {words.length > 0 && counts.newCards === 0 && (
+        <p className="rounded-xl border border-border bg-surface p-4 text-sm text-muted">
+          All {words.length} words in this deck have been studied.
+          {counts.due === 0 && nextReview ? ` Next scheduled review: ${nextReview}.` : ""}
+          {" "}Use Normal Review to practice anytime without changing your schedule.
+        </p>
+      )}
 
       <div className="space-y-2">
         <Link
@@ -60,12 +77,22 @@ export default async function DeckPage({
             <span className="block text-lg font-semibold">Spaced Repetition</span>
             <span className="block text-sm opacity-80">
               {counts.due > 0
-                ? `Review ${counts.due} due card${counts.due === 1 ? "" : "s"}`
+                ? `Review ${counts.due} due word${counts.due === 1 ? "" : "s"}`
                 : "Nothing due right now"}
             </span>
           </span>
           <IconChevronRight className="text-xl opacity-70" />
         </Link>
+        {counts.newCards > 0 && (
+          <Link href={`/review/${deck.id}?new=1`} prefetch={false}
+            className="pressable flex items-center justify-between rounded-2xl border border-accent/40 bg-surface px-5 py-4">
+            <span>
+              <span className="block text-lg font-semibold">Learn new words</span>
+              <span className="block text-sm text-muted">Start with {counts.newCards} unseen words in this deck</span>
+            </span>
+            <IconChevronRight className="text-xl text-muted" />
+          </Link>
+        )}
         <Link
           href={`/study/${deck.id}`}
           className="pressable flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4"

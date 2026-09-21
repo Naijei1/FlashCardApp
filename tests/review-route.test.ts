@@ -126,3 +126,15 @@ describe("POST /api/review", () => {
     expect(dbMocks.commitReview.mock.calls[1][0].expectedVersion).toBe(1);
   });
 });
+
+it("persists failure history with the scheduled card in the atomic review write", async () => {
+  const existing = card();
+  existing.practice = { failures: 4, successes: 8, correctStreak: 2, firstStudiedAt: existing.createdAt };
+  dbMocks.getCardForReview.mockResolvedValue({ card: existing, version: 3 });
+  dbMocks.commitReview.mockResolvedValue({ status: "committed" });
+  const response = await POST(request({ rating: 1 }));
+  expect(response.status).toBe(200);
+  expect(dbMocks.commitReview.mock.calls[0][0].card.practice).toEqual({
+    failures: 5, successes: 8, correctStreak: 0, firstStudiedAt: existing.createdAt,
+  });
+});

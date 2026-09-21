@@ -1,3 +1,4 @@
+import { uniqueWords } from "./words";
 import { State } from "ts-fsrs";
 import type { Card, DeckCounts } from "./types";
 
@@ -10,18 +11,18 @@ export function isNew(card: Card): boolean {
 }
 
 export function dueCards(cards: Card[], now: Date): Card[] {
-  return cards.filter((c) => isDue(c, now));
+  return uniqueWords(cards).filter((c) => isDue(c, now));
 }
 
 export function countsByDeck(cards: Card[], now: Date): Map<string, DeckCounts> {
   const map = new Map<string, DeckCounts>();
   for (const card of cards) {
-    let counts = map.get(card.deckId);
-    if (!counts) {
-      counts = { total: 0, due: 0, newCards: 0 };
-      map.set(card.deckId, counts);
-    }
+    const counts = map.get(card.deckId) ?? { total: 0, due: 0, newCards: 0 };
     counts.total += 1;
+    map.set(card.deckId, counts);
+  }
+  for (const card of uniqueWords(cards)) {
+    const counts = map.get(card.deckId)!;
     if (isDue(card, now)) counts.due += 1;
     if (isNew(card)) counts.newCards += 1;
   }
@@ -29,13 +30,9 @@ export function countsByDeck(cards: Card[], now: Date): Map<string, DeckCounts> 
 }
 
 export function totalCounts(cards: Card[], now: Date): DeckCounts {
-  const counts: DeckCounts = { total: 0, due: 0, newCards: 0 };
-  for (const card of cards) {
-    counts.total += 1;
-    if (isDue(card, now)) counts.due += 1;
-    if (isNew(card)) counts.newCards += 1;
-  }
-  return counts;
+  const words = uniqueWords(cards);
+  return { total: cards.length, due: words.filter((card) => isDue(card, now)).length,
+    newCards: words.filter(isNew).length };
 }
 
 /** Fisher-Yates shuffle; injectable random for deterministic tests. */
@@ -52,8 +49,8 @@ export function shuffle<T>(items: T[], random: () => number = Math.random): T[] 
 export const SESSION_LIMIT = 25;
 
 /**
- * Cards for one review session: the most overdue cards first (FSRS priority),
- * capped at `limit`, then shuffled so the batch order isn't predictable.
+ * Prioritize overdue/difficult words, reserve room for new vocabulary, and
+ * shuffle a bounded batch. Future cards are never pulled in early.
  */
 export function buildQueue(
   cards: Card[],
@@ -61,8 +58,21 @@ export function buildQueue(
   random: () => number = Math.random,
   limit: number = SESSION_LIMIT
 ): Card[] {
-  const batch = dueCards(cards, now)
-    .sort((a, b) => new Date(a.fsrs.due).getTime() - new Date(b.fsrs.due).getTime())
-    .slice(0, limit);
+  const ordered = dueCards(cards, now)
+    .sort((a, b) => {
+      // Reviewed words take priority over an old import of unseen vocabulary.
+      if (isNew(a) !== isNew(b)) return isNew(a) ? 1 : -1;
+      const priority = (card: Card) =>
+        (now.getTime() - Date.parse(card.fsrs.due)) / 86_400_000 +
+        Math.min(card.practice?.failures ?? card.fsrs.lapses, 5) -
+        Math.min(card.practice?.correctStreak ?? 0, 5) / 2;
+      return priority(b) - priority(a);
+    });
+  const unseen = ordered.filter(isNew);
+  const reviews = ordered.filter((card) => !isNew(card));
+  // Reserve room for about a day's new vocabulary even with a review backlog.
+  const newSlots = Math.min(11, unseen.length, limit);
+  const selectedReviews = reviews.slice(0, limit - newSlots);
+  const batch = [...selectedReviews, ...unseen.slice(0, limit - selectedReviews.length)];
   return shuffle(batch, random);
 }

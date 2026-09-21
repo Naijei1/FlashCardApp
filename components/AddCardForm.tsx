@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { responseError } from "@/lib/response-error";
 
 export default function AddCardForm({ deckId }: { deckId: string }) {
@@ -12,9 +12,14 @@ export default function AddCardForm({ deckId }: { deckId: string }) {
   const [reverse, setReverse] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const submitting = useRef(false);
+  const composing = useRef(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    // A state update alone cannot block two submits in the same event turn.
+    if (submitting.current || composing.current || !front.trim() || !back.trim()) return;
+    submitting.current = true;
     setError("");
     setBusy(true);
     const res = await fetch("/api/cards", {
@@ -22,6 +27,7 @@ export default function AddCardForm({ deckId }: { deckId: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ deckId, front, back, notes, reverse }),
     }).catch(() => null);
+    submitting.current = false;
     setBusy(false);
     if (res?.ok) {
       setFront("");
@@ -38,7 +44,18 @@ export default function AddCardForm({ deckId }: { deckId: string }) {
     "w-full rounded-lg border border-border bg-surface px-3 py-2.5 outline-none focus:border-accent";
 
   return (
-    <form onSubmit={submit} className="space-y-3 rounded-2xl border border-border bg-surface p-4">
+    <form
+      onSubmit={submit}
+      onCompositionStart={() => { composing.current = true; }}
+      onCompositionEnd={() => { composing.current = false; }}
+      onKeyDown={(event) => {
+        // Safari may report keyCode 229 after isComposing has become false.
+        if (event.key === "Enter" && (composing.current || event.nativeEvent.isComposing || event.keyCode === 229)) {
+          event.preventDefault();
+        }
+      }}
+      className="space-y-3 rounded-2xl border border-border bg-surface p-4"
+    >
       <h3 className="text-sm font-medium uppercase tracking-wide text-muted">Add card</h3>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="text-sm text-muted">

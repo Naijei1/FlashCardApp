@@ -33,6 +33,7 @@ export type Card = {
   createdAt: string;
   updatedAt: string;
   fsrs: StoredFsrs;
+  practice?: { failures: number; successes: number; correctStreak: number; firstStudiedAt?: string };
 };
 
 export type DeckCounts = {

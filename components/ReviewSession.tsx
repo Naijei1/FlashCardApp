@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { rateCard } from "@/lib/practice";
 import type { Card } from "@/lib/types";
 import {
-  applyRating,
   previewIntervals,
   type Grade,
   type IntervalPreview,
@@ -43,10 +43,12 @@ export default function ReviewSession({
   deckId,
   deckLangs,
   backHref,
+  newOnly = false,
 }: {
   deckId: string;
   deckLangs: DeckLangs;
   backHref: string;
+  newOnly?: boolean;
 }) {
   // Client storage can contain a pending review or enforced break that the
   // server cannot see. Gate the first card until that local check completes.
@@ -98,7 +100,7 @@ export default function ReviewSession({
     loadAbortRef.current = controller;
     setLoadError(false);
     setQueue(null);
-    fetch(`/api/review/queue?deckId=${encodeURIComponent(deckId)}`, {
+    fetch(`/api/review/queue?deckId=${encodeURIComponent(deckId)}${newOnly ? "&new=1" : ""}`, {
       signal: controller.signal,
       cache: "no-store",
     })
@@ -110,7 +112,7 @@ export default function ReviewSession({
       .catch(() => {
         if (!controller.signal.aborted) setLoadError(true);
       });
-  }, [applyQueueData, deckId, sync]);
+  }, [applyQueueData, deckId, sync, newOnly]);
 
   useEffect(() => {
     const update = (state: ReviewSyncState) => {
@@ -186,14 +188,14 @@ export default function ReviewSession({
       // Compute the new state locally just for the session queue: re-enqueue
       // cards that come back within this session's horizon. The server's
       // recomputation stays canonical for storage.
-      const { fsrs } = applyRating(current.card.fsrs, rating as Grade, now);
+      const { fsrs, card: updatedCard } = rateCard(current.card, rating as Grade, now);
       const dueSoon = belongsInCurrentSession(fsrs.due, now.getTime());
       const rest = [...queue.slice(0, readyIndex), ...queue.slice(readyIndex + 1)];
       const next = dueSoon
         ? [
             ...rest,
             {
-              card: { ...current.card, fsrs },
+              card: updatedCard,
               intervals: previewIntervals(fsrs, new Date(fsrs.due)),
             },
           ]
@@ -288,7 +290,7 @@ export default function ReviewSession({
         body={
           reviewed > 0
             ? `You reviewed ${reviewed} card${reviewed === 1 ? "" : "s"}.`
-            : "No cards are due right now — come back later."
+            : newOnly ? "No unseen words are due in this deck. Use Spaced Repetition for words you have already started." : "No cards are due right now — come back later."
         }
         syncState={syncState}
         onRetrySaves={resolveSyncFailures}

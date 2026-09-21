@@ -386,7 +386,11 @@ class ReviewQueue {
         keepalive: true,
         signal: controller.signal,
       });
-      if (res.ok) return { ok: true };
+      if (res.ok) {
+        // A login redirect or proxy HTML page is not a persisted review.
+        const receipt = await res.json().catch(() => null);
+        return receipt?.ok === true ? { ok: true } : { ok: false, retryable: true };
+      }
       return {
         ok: false,
         // Authentication can recover after a login, and transient server errors

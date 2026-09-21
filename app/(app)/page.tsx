@@ -1,4 +1,5 @@
 import Link from "next/link";
+import WeeklyGoal from "@/components/WeeklyGoal";
 import NewDeckButton from "@/components/NewDeckButton";
 import { listAllCards, listDecks } from "@/lib/db";
 import { countsByDeck, totalCounts } from "@/lib/due";
@@ -19,11 +20,11 @@ export default async function HomePage() {
         <div className="mt-3 flex items-end gap-6">
           <div>
             <div className="text-4xl font-bold text-accent">{totals.due}</div>
-            <div className="text-sm text-muted">due</div>
+            <div className="text-sm text-muted">due words</div>
           </div>
           <div>
             <div className="text-4xl font-bold">{totals.newCards}</div>
-            <div className="text-sm text-muted">new</div>
+            <div className="text-sm text-muted">new words</div>
           </div>
         </div>
         {totals.due > 0 ? (
@@ -43,6 +44,8 @@ export default async function HomePage() {
         )}
       </section>
 
+      <WeeklyGoal />
+
       <section className="space-y-3">
         <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Decks</h2>
         {decks.length === 0 && (
@@ -59,7 +62,7 @@ export default async function HomePage() {
               <div>
                 <div className="font-medium">{deck.name}</div>
                 <div className="text-sm text-muted">
-                  {counts.total} card{counts.total === 1 ? "" : "s"} · {counts.due} due
+                  {counts.total} card{counts.total === 1 ? "" : "s"} · {counts.due} due words
                 </div>
               </div>
               {counts.due > 0 && (

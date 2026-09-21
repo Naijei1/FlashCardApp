@@ -9,11 +9,26 @@ Tailwind CSS; data lives in a single DynamoDB table.
 
 - **Two study modes**: casual flipping (never touches scheduling) and FSRS
   spaced repetition (`ts-fsrs`, FSRS-6) with Again/Hard/Good/Easy buttons that
-  show the next interval.
+  show the next interval. Good/Easy graduate a word to a day-scale interval;
+  Retry/Hard retain short learning steps. FSRS uses prior failures and successes
+  to adjust future intervals, and due queues prioritize difficult words while
+  reserving room for new vocabulary. Decks with unseen words also offer a
+  **Learn new words** shortcut. Decks with no unseen words show when the next
+  scheduled review is due; Normal Review is available anytime.
 - **Decks**: create, rename, delete, per-deck front/back speech languages,
   card counts and due counts.
-- **Cards**: front/back/notes, optional independent reverse card, move
+- **Cards**: front/back/notes, optional reverse card, move
   between decks, browse/search.
+- **One word per review queue**: exact duplicates and reversed front/back pairs
+  within a deck use the most recently reviewed copy's schedule. Stored cards and
+  their history remain intact; different meanings and decks stay separate.
+- **Writing corrections**: toggle “Write missed words correctly 3 more times”
+  in Write Chinese or Write Pinyin. A miss requires three additional correct
+  entries, then records one failed recall; the correction copies do not inflate
+  review counts or successful recall streaks. The toggle is saved on the device.
+- **Weekly goal**: 77 new words per week (about 11 a day), alongside due reviews.
+  Tracks newly introduced words from this version onward, using Eastern
+  Monday–Sunday weeks. Introduction counts are not a guarantee of mastery.
 - **CSV import/export**: RFC-4180 (quoted commas, multi-line fields, UTF-8,
   BOM), header optional, invalid-row preview, reverse-card option with
   flipped-duplicate warning.

@@ -10,6 +10,7 @@ import WriteSession from "@/components/WriteSession";
 import { applyRating, emptyCardState, previewIntervals, Rating } from "@/lib/fsrs";
 import { buildReviewQueueData } from "@/lib/review-queue";
 import { buildPinyinQueueData } from "@/lib/pinyin-queue";
+import { rateCard } from "@/lib/practice";
 import { formatInterval } from "@/lib/interval-label";
 import type { Card } from "@/lib/types";
 
@@ -23,6 +24,7 @@ const now = new Date("2026-09-16T12:00:00Z");
 let root: Root;
 let container: HTMLDivElement;
 let card: Card;
+let siblings: Card[];
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
@@ -30,18 +32,19 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
   vi.setSystemTime(now);
   localStorage.clear();
+  siblings = [];
   card = { id: "card", deckId: "deck", front: "你好", back: "hello", createdAt: now.toISOString(), updatedAt: now.toISOString(), fsrs: emptyCardState(now) };
   const deck = { id: "deck", name: "Chinese", frontLanguage: "zh-CN" };
   db.getDeck.mockResolvedValue(deck);
   db.listDecks.mockResolvedValue([deck]);
-  db.listCards.mockImplementation(async () => [card]);
+  db.listCards.mockImplementation(async () => [card, ...siblings]);
   fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === "/api/review") {
       const body = JSON.parse(init!.body as string);
-      card = { ...card, fsrs: applyRating(card.fsrs, body.rating, new Date(body.reviewedAt)).fsrs };
-      return { ok: true, status: 200 };
+      card = rateCard(card, body.rating, new Date(body.reviewedAt)).card;
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
     }
-    const data = url.includes("mode=pinyin") ? buildPinyinQueueData([card], "front", new Date()) : buildReviewQueueData([card], new Date());
+    const data = url.includes("mode=pinyin") ? buildPinyinQueueData([card, ...siblings], "front", new Date()) : buildReviewQueueData([card, ...siblings], new Date());
     return { ok: true, json: async () => data };
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -127,4 +130,64 @@ it("parks a Retry card until due and ignores reveal shortcuts during the wait", 
   await act(async () => vi.advanceTimersByTimeAsync(1_000));
   expect(container.textContent).toContain("Show answer");
   expect(card.fsrs.reps).toBe(1);
+});
+
+it.each(["write", "pinyin"] as const)("requires three correct corrections for a miss in %s and records just one failure", async (mode) => {
+  await render(createElement(WriteSession, { deckId: "deck", deckSide: "front", chineseLang: "zh-CN", backHref: "/", mode }));
+  const toggle = [...container.querySelectorAll("label")].find((label) => label.textContent?.includes("3 more times"))!.querySelector("input")!;
+  await act(async () => toggle.click());
+  expect(localStorage.getItem("flashcards.repeat-mistakes.v1")).toBe("true");
+  await typeAnswer("wrong");
+  await click("Check answer");
+  expect(container.textContent).toContain("0/3 correct repetitions");
+  const posts = () => fetchMock.mock.calls.filter(([url]) => url === "/api/review");
+  expect(posts()).toHaveLength(0);
+  await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "4" })));
+  expect(posts()).toHaveLength(0);
+  // A second error does not count as one of the required correct copies.
+  await click("Write again");
+  await typeAnswer("wrong");
+  await click("Check answer");
+  expect(container.textContent).toContain("0/3 correct repetitions");
+  for (let index = 1; index <= 3; index++) {
+    await click("Write again");
+    await typeAnswer(mode === "write" ? "你好" : "ni3 hao3");
+    await click("Check answer");
+    expect(container.textContent).toContain(`${index}/3`);
+    expect(posts()).toHaveLength(0);
+  }
+  await click("Continue");
+  expect(posts()).toHaveLength(1);
+  expect(JSON.parse(posts()[0][1]!.body as string).rating).toBe(1);
+  expect(card.practice).toMatchObject({ failures: 1, successes: 0, correctStreak: 0 });
+  expect(card.fsrs.reps).toBe(1);
+  expect(container.textContent).toContain("Next card is still learning");
+});
+
+it("leaves a correct first answer free to move on when the drill is enabled", async () => {
+  localStorage.setItem("flashcards.repeat-mistakes.v1", "true");
+  await render(createElement(WriteSession, { deckId: "deck", deckSide: "front", chineseLang: "zh-CN", backHref: "/" }));
+  await typeAnswer("你好");
+  await click("Check answer");
+  await click("Good");
+  expect(container.textContent).toContain("Session complete");
+  expect(card.practice?.correctStreak).toBe(1);
+});
+
+it.each(["review", "write", "pinyin"] as const)("does not loop duplicate/reverse words after Good in %s, including after reopening", async (mode) => {
+  siblings = [{ ...card, id: "copy" }, { ...card, id: "reverse", front: card.back, back: card.front }];
+  const element = mode === "review"
+    ? createElement(ReviewSession, { deckId: "deck", deckLangs: {}, backHref: "/" })
+    : createElement(WriteSession, { deckId: "deck", deckSide: "front", chineseLang: "zh-CN", backHref: "/", mode });
+  await render(element);
+  expect(container.textContent).toContain("1 left");
+  if (mode === "review") await click("Show answer");
+  else { await typeAnswer(mode === "write" ? "你好" : "ni3 hao3"); await click("Check answer"); }
+  await click("Good");
+  expect(container.textContent).toContain("Session complete");
+  expect(Date.parse(card.fsrs.due) - now.getTime()).toBeGreaterThanOrEqual(86_400_000);
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await render(element);
+  expect(container.textContent).toContain("Nothing due");
 });

@@ -8,7 +8,8 @@ import {
   reviewReceiptsMatch,
   type ReviewReceipt,
 } from "@/lib/db";
-import { applyRating, Rating, type Grade } from "@/lib/fsrs";
+import { rateCard } from "@/lib/practice";
+import { Rating, type Grade } from "@/lib/fsrs";
 
 const GRADES: number[] = [Rating.Again, Rating.Hard, Rating.Good, Rating.Easy];
 const CLIENT_REVIEW_ID = /^[A-Za-z0-9_-]{12,100}$/;
@@ -77,16 +78,11 @@ export async function POST(request: Request) {
     const effectiveReviewTime = new Date(
       Math.max(clientReviewTime, previousReview + 1)
     );
-    const { fsrs, log } = applyRating(
-      found.card.fsrs,
+    const { card: updatedCard, log } = rateCard(
+      found.card,
       rating as Grade,
       effectiveReviewTime
     );
-    const updatedCard = {
-      ...found.card,
-      fsrs,
-      updatedAt: effectiveReviewTime.toISOString(),
-    };
     const result = await commitReview({
       ...requested,
       card: updatedCard,

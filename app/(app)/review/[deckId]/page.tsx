@@ -4,10 +4,13 @@ import { listDecks } from "@/lib/db";
 
 export default async function ReviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ deckId: string }>;
+  searchParams?: Promise<{ new?: string }>;
 }) {
   const { deckId } = await params;
+  const newOnly = (await searchParams)?.new === "1";
   const decks = await listDecks();
   const deckLangs = Object.fromEntries(
     decks.map((d) => [d.id, { front: d.frontLanguage, back: d.backLanguage }])
@@ -18,6 +21,7 @@ export default async function ReviewPage({
   return (
     <ReviewSession
       deckId={deckId}
+      newOnly={newOnly}
       deckLangs={deckLangs}
       backHref={backHref}
     />

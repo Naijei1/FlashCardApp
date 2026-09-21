@@ -15,7 +15,7 @@ import { formatInterval } from "./interval-label";
 // randomized workload distribution. Fuzzing is timestamp-seeded, so a label
 // previewed milliseconds before submission can otherwise differ by days from
 // the interval that is actually stored.
-const scheduler = fsrs(generatorParameters({ enable_fuzz: false }));
+const scheduler = fsrs(generatorParameters({ enable_fuzz: false, learning_steps: ["1m"], relearning_steps: ["1m"] }));
 
 export { Rating, State };
 export type { Grade };

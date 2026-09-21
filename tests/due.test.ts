@@ -9,7 +9,7 @@ function makeCard(overrides: Partial<Card> & { fsrs?: StoredFsrs } = {}): Card {
   return {
     id: overrides.id ?? "card-1",
     deckId: overrides.deckId ?? "deck-1",
-    front: "你好",
+    front: overrides.id ?? "你好",
     back: "hello",
     createdAt: NOW.toISOString(),
     updatedAt: NOW.toISOString(),

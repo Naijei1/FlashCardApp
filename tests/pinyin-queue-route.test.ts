@@ -55,3 +55,15 @@ describe("Pinyin queue API", () => {
     expect(data.queue.every((item: object) => !("pinyin" in item))).toBe(true);
   });
 });
+
+it("lets a deck start unseen words directly without reviving unreviewed copies of known words", async () => {
+  const { applyRating, Rating } = await import("@/lib/fsrs");
+  const cards = await mocks.listCards();
+  const known = { ...cards[0], id: "known", fsrs: applyRating(cards[0].fsrs, Rating.Good, new Date()).fsrs };
+  mocks.listCards.mockResolvedValue([known, cards[0], cards[1]]);
+  const res = await GET(new Request("https://example.com/api/review/queue?deckId=deck&new=1"));
+  const data = await res.json();
+  expect(data.totalDue).toBe(1);
+  expect(data.queue[0].card.id).toBe("b");
+  expect(res.headers.get("cache-control")).toContain("no-store");
+});

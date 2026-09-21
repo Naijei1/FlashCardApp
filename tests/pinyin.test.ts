@@ -62,7 +62,7 @@ describe("automatic Pinyin readings", () => {
   });
 
   it("filters before batching, keeps due counts accurate, and leaves card data untouched", () => {
-    const chinese = Array.from({ length: 30 }, (_, index) => card("你好", "hello", String(index)));
+    const chinese = Array.from({ length: 30 }, (_, index) => card("你好", `meaning ${index}`, String(index)));
     const future = card("老师", "teacher", "future");
     future.fsrs.due = "2026-09-09T12:00:00.000Z";
     const cards = [card("hello", "world"), future, ...chinese];

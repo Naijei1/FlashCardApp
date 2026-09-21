@@ -2,6 +2,7 @@ import { countReviewLogs, listAllCards, listDecks } from "@/lib/db";
 import { countsByDeck, totalCounts } from "@/lib/due";
 import { formatInterval } from "@/lib/interval-label";
 import { appTimeZone, buildReviewForecast } from "@/lib/forecast";
+import { uniqueWords } from "@/lib/words";
 import { State } from "ts-fsrs";
 
 const STATE_LABELS: Record<number, string> = {
@@ -13,7 +14,7 @@ const STATE_LABELS: Record<number, string> = {
 
 export default async function StatsPage() {
   const [decks, reviewCount] = await Promise.all([listDecks(), countReviewLogs()]);
-  const cards = await listAllCards(decks);
+  const cards = uniqueWords(await listAllCards(decks));
   const now = new Date();
   const totals = totalCounts(cards, now);
   const byDeck = countsByDeck(cards, now);
@@ -42,7 +43,7 @@ export default async function StatsPage() {
       <h1 className="text-2xl font-bold">Stats</h1>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Total cards" value={totals.total} />
+        <Stat label="Total words" value={totals.total} />
         <Stat label="Due now" value={totals.due} />
         <Stat label="Due next 7 days" value={in7Days} />
         <Stat label="Reviews logged" value={reviewCount} />
@@ -50,7 +51,7 @@ export default async function StatsPage() {
 
       <section className="rounded-2xl border border-border bg-surface p-4">
         <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
-          Cards by state
+          Words by state
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {Object.entries(STATE_LABELS).map(([state, label]) => (
@@ -121,7 +122,7 @@ export default async function StatsPage() {
               <div key={deck.id} className="flex justify-between border-b border-border pb-2 last:border-0">
                 <span>{deck.name}</span>
                 <span className="text-muted">
-                  {counts.total} cards · {counts.due} due · {counts.newCards} new
+                  {counts.total} words · {counts.due} due · {counts.newCards} new
                 </span>
               </div>
             );
