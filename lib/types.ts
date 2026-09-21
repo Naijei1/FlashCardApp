@@ -12,6 +12,7 @@ export type Deck = {
 
 /** FSRS card state, JSON-safe (dates as ISO strings). */
 export type StoredFsrs = {
+  retentionTarget?: number;
   due: string;
   stability: number;
   difficulty: number;
@@ -24,6 +25,8 @@ export type StoredFsrs = {
   last_review?: string;
 };
 
+export type ReviewMode = "review" | "write" | "pinyin";
+
 export type Card = {
   id: string;
   deckId: string;
@@ -33,6 +36,8 @@ export type Card = {
   createdAt: string;
   updatedAt: string;
   fsrs: StoredFsrs;
+  hard?: boolean;
+  modes?: Partial<Record<"write" | "pinyin", { fsrs: StoredFsrs; practice?: Card["practice"] }>>;
   practice?: { failures: number; successes: number; correctStreak: number; firstStudiedAt?: string };
 };
 

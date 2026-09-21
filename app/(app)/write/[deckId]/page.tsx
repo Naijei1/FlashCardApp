@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import ChineseSideChooser from "@/components/ChineseSideChooser";
 import WriteSession from "@/components/WriteSession";
-import { getDeck, listCards } from "@/lib/db";
+import { studyDeck as getDeck, studyCards as listCards } from "@/lib/hard-words";
 import { chineseSideForCard, chineseSideForDeck, isChineseLang } from "@/lib/write";
 
 export default async function WritePage({
@@ -12,7 +12,7 @@ export default async function WritePage({
   const { deckId } = await params;
   const [deck, cards] = await Promise.all([
     getDeck(deckId),
-    listCards(deckId, { consistent: true }),
+    listCards(deckId),
   ]);
   if (!deck) notFound();
   const backHref = `/decks/${deckId}`;
@@ -21,7 +21,7 @@ export default async function WritePage({
   // directions); the deck-level setting is only needed for ambiguous cards.
   const deckSide = chineseSideForDeck(deck);
   const hasAmbiguousCards = cards.some((c) => chineseSideForCard(c, null) === null);
-  if (!deckSide && hasAmbiguousCards) {
+  if (deckId !== "hard-words" && !deckSide && hasAmbiguousCards) {
     return <ChineseSideChooser deck={deck} backHref={backHref} />;
   }
 

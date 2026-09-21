@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import WriteSession from "@/components/WriteSession";
-import { getDeck } from "@/lib/db";
+import { studyDeck as getDeck } from "@/lib/hard-words";
 import { chineseSideForDeck } from "@/lib/write";
 
 export default async function PinyinPage({

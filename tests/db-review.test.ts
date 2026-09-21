@@ -124,6 +124,7 @@ describe("atomic review persistence", () => {
     expect(writes[2].Put.Item).toEqual({
       PK: "REVIEW_REQUESTS",
       SK: "review_id_123456",
+      mode: "review",
       clientReviewId: "review_id_123456",
       cardId: "card-1",
       deckId: "deck-1",
@@ -166,7 +167,7 @@ describe("atomic review persistence", () => {
       log,
     });
 
-    expect(result).toEqual({ status: "duplicate", receipt });
+    expect(result).toEqual({ status: "duplicate", receipt: { ...receipt, mode: "review" } });
     expect(awsMocks.send.mock.calls[2][0].input.ConsistentRead).toBe(true);
   });
 
@@ -296,4 +297,15 @@ describe("create-only card batches", () => {
     expect(retry[1].Put.Item.SK).toBe("CARD#card-2");
     expect(retry[1].Put.ConditionExpression).toBe("attribute_not_exists(#pk)");
   });
+});
+
+it("marks a difficult word without replacing schedules and invalidates stale review writes", async () => {
+  awsMocks.send.mockResolvedValue({});
+  const db = await loadDb();
+  await db.setCardHard("deck-1", "card-1", true);
+  const update = awsMocks.send.mock.calls[0][0].input;
+  expect(update.UpdateExpression).toBe("SET #hard = :hard ADD #version :one");
+  expect(update.ConditionExpression).toBe("attribute_exists(PK)");
+  expect(update.ExpressionAttributeNames["#version"]).toBe("reviewVersion");
+  expect(update.ExpressionAttributeValues[":hard"]).toBe(true);
 });

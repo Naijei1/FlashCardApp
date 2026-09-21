@@ -18,6 +18,7 @@ vi.mock("@/lib/db", () => ({
     left.clientReviewId === right.clientReviewId &&
     left.cardId === right.cardId &&
     left.deckId === right.deckId &&
+    (left.mode ?? "review") === (right.mode ?? "review") &&
     left.rating === right.rating &&
     left.reviewedAt === right.reviewedAt,
 }));
@@ -137,4 +138,23 @@ it("persists failure history with the scheduled card in the atomic review write"
   expect(dbMocks.commitReview.mock.calls[0][0].card.practice).toEqual({
     failures: 5, successes: 8, correctStreak: 0, firstStudiedAt: existing.createdAt,
   });
+});
+
+it.each(["write", "pinyin"] as const)("persists %s separately and leaves recognition untouched", async (mode) => {
+  const original = card();
+  dbMocks.getCardForReview.mockResolvedValue({ card: original, version: 0 });
+  dbMocks.commitReview.mockResolvedValue({ status: "committed" });
+  expect((await POST(request({ mode }))).status).toBe(200);
+  const saved = dbMocks.commitReview.mock.calls[0][0];
+  expect(saved.mode).toBe(mode);
+  expect(saved.card.fsrs).toEqual(original.fsrs);
+  expect(saved.card.modes[mode].fsrs.reps).toBe(1);
+});
+it("rejects a duplicate request ID reused for a different mode", async () => {
+  dbMocks.getReviewReceipt.mockResolvedValue({ clientReviewId: CLIENT_REVIEW_ID, cardId: "card-1", deckId: "deck-1", rating: 3, reviewedAt: REVIEWED_AT, mode: "write" });
+  expect((await POST(request({ mode: "pinyin" }))).status).toBe(409);
+});
+it("rejects unknown modes before reading or writing", async () => {
+  expect((await POST(request({ mode: "unknown" }))).status).toBe(400);
+  expect(dbMocks.commitReview).not.toHaveBeenCalled();
 });

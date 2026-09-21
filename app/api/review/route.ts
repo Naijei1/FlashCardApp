@@ -8,7 +8,8 @@ import {
   reviewReceiptsMatch,
   type ReviewReceipt,
 } from "@/lib/db";
-import { rateCard } from "@/lib/practice";
+import { cardForMode, rateMode } from "@/lib/modes";
+import type { ReviewMode } from "@/lib/types";
 import { Rating, type Grade } from "@/lib/fsrs";
 
 const GRADES: number[] = [Rating.Again, Rating.Hard, Rating.Good, Rating.Easy];
@@ -28,6 +29,8 @@ export async function POST(request: Request) {
   const deckId = typeof body?.deckId === "string" ? body.deckId : "";
   const clientReviewId =
     typeof body?.clientReviewId === "string" ? body.clientReviewId : "";
+  const mode: ReviewMode = body?.mode ?? "review";
+  if (!["review", "write", "pinyin"].includes(mode)) return badRequest("unsupported mode");
   const rating = Number(body?.rating);
   const reviewedAt =
     typeof body?.reviewedAt === "string" && Number.isFinite(Date.parse(body.reviewedAt))
@@ -51,6 +54,7 @@ export async function POST(request: Request) {
     deckId,
     rating,
     reviewedAt,
+    mode,
   };
   const existing = await getReviewReceipt(clientReviewId);
   if (existing) {
@@ -65,8 +69,9 @@ export async function POST(request: Request) {
 
     // A durable offline queue can arrive after another device has reviewed the
     // same card. Never pass FSRS a timestamp older than the canonical state.
-    const parsedPreviousReview = found.card.fsrs.last_review
-      ? Date.parse(found.card.fsrs.last_review)
+    const modeCard = cardForMode(found.card, mode);
+    const parsedPreviousReview = modeCard.fsrs.last_review
+      ? Date.parse(modeCard.fsrs.last_review)
       : Number.NaN;
     const previousReview = Number.isFinite(parsedPreviousReview)
       ? parsedPreviousReview
@@ -78,8 +83,9 @@ export async function POST(request: Request) {
     const effectiveReviewTime = new Date(
       Math.max(clientReviewTime, previousReview + 1)
     );
-    const { card: updatedCard, log } = rateCard(
+    const { card: updatedCard, log } = rateMode(
       found.card,
+      mode,
       rating as Grade,
       effectiveReviewTime
     );

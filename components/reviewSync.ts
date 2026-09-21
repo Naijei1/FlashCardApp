@@ -13,6 +13,7 @@ const MAX_CONCURRENT_CARDS = 1;
 const MAX_RETRY_DELAY_MS = 5 * 60_000;
 
 export type PendingReview = {
+  mode?: "review" | "write" | "pinyin";
   cardId: string;
   deckId: string;
   rating: number;
@@ -65,6 +66,7 @@ function normalizeQueuedReview(value: unknown): QueuedReview | null {
     return null;
   }
   return {
+    mode: item.mode ?? "review",
     cardId: item.cardId,
     deckId: item.deckId,
     rating: item.rating,
@@ -151,6 +153,7 @@ class ReviewQueue {
       : new Date().toISOString();
     const offline = !isOnline();
     const queued: QueuedReview = {
+      mode: review.mode ?? "review",
       cardId: review.cardId,
       deckId: review.deckId,
       rating: review.rating,
@@ -377,6 +380,7 @@ class ReviewQueue {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          mode: review.mode ?? "review",
           cardId: review.cardId,
           deckId: review.deckId,
           rating: review.rating,

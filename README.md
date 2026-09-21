@@ -201,3 +201,22 @@ The header row and the `notes`/`reverse` columns are optional; headerless
 files are treated as `front,back[,notes[,reverse]]`. Quoted fields may contain commas,
 quotes (`""`), and newlines. Export produces UTF-8 with a BOM so Excel opens
 Chinese text correctly.
+
+### Independent skill schedules and Hard Words
+
+Spaced Repetition, Write Chinese, and Write Pinyin keep independent FSRS state,
+failure counts, and correct streaks. Existing unlabelled review history remains in
+Spaced Repetition; writing and pinyin start unseen until practiced in that mode.
+Mode is persisted in offline submissions and idempotency receipts.
+
+FSRS targets 95% desired retention (previously 90%). This intentionally increases
+review frequency; it is a target, not a promise of recall. Existing long-term
+schedules are recalculated on read from their last review and stability, moving
+due dates earlier only. This does not add reviews or reset learning history.
+Reference: https://docs.ankiweb.net/deck-options.html#desired-retention
+
+Use **Mark as hard** during any study mode or in the card list. **Hard Words** on
+the home screen is a filtered deck with normal review, writing, and pinyin modes.
+Words stay in their original lessons and use the same schedule for the selected
+skill. Reverse duplicates are marked together; removing a marker keeps the card
+and all study history. The weekly target counts each word once across skills.

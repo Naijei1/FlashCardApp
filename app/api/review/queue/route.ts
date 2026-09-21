@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { badRequest, notFound, requireAuth } from "@/lib/api";
-import { getDeck, listAllCards, listCards } from "@/lib/db";
+import { listAllCards } from "@/lib/db";
+import { studyDeck, studyCards } from "@/lib/hard-words";
 import { buildReviewQueueData } from "@/lib/review-queue";
+import { cardForMode } from "@/lib/modes";
 import { uniqueWords } from "@/lib/words";
 import { isNew } from "@/lib/due";
 import type { Card } from "@/lib/types";
@@ -28,20 +30,21 @@ export async function GET(request: Request) {
     cards = await listAllCards(undefined, { consistent: true });
   } else {
     const [deck, deckCards] = await Promise.all([
-      getDeck(deckId),
-      listCards(deckId, { consistent: true }),
+      studyDeck(deckId),
+      studyCards(deckId),
     ]);
     if (!deck) return notFound("deck not found");
     const deckSide = chineseSideForDeck(deck);
     if (mode === "pinyin") {
       const { buildPinyinQueueData } = await import("@/lib/pinyin-queue");
-      return queueResponse(buildPinyinQueueData(deckCards, deckSide));
+      return queueResponse(buildPinyinQueueData(deckCards.map((card) => cardForMode(card, mode)), deckSide));
     }
     cards =
       mode === "write"
         ? deckCards.filter((card) => chineseSideForCard(card, deckSide) !== null)
         : deckCards;
   }
+  cards = cards.map((card) => cardForMode(card, mode));
   if (newOnly) cards = uniqueWords(cards).filter(isNew);
   return queueResponse(buildReviewQueueData(cards));
 }

@@ -15,13 +15,14 @@ import { formatInterval } from "./interval-label";
 // randomized workload distribution. Fuzzing is timestamp-seeded, so a label
 // previewed milliseconds before submission can otherwise differ by days from
 // the interval that is actually stored.
-const scheduler = fsrs(generatorParameters({ enable_fuzz: false, learning_steps: ["1m"], relearning_steps: ["1m"] }));
+const scheduler = fsrs(generatorParameters({ request_retention: 0.95, enable_fuzz: false, learning_steps: ["1m"], relearning_steps: ["1m"] }));
 
 export { Rating, State };
 export type { Grade };
 
 export function toStored(card: FsrsCard): StoredFsrs {
   return {
+    retentionTarget: 0.95,
     due: card.due.toISOString(),
     stability: card.stability,
     difficulty: card.difficulty,
@@ -84,4 +85,15 @@ export function applyRating(
 ): { fsrs: StoredFsrs; log: ReviewLog } {
   const { card, log } = scheduler.next(toFsrsCard(stored), now, rating);
   return { fsrs: toStored(card), log };
+}
+
+/** Recompute legacy long-term due dates at 95%, without adding a review or erasing history. */
+export function currentRetentionSchedule(stored: StoredFsrs): StoredFsrs {
+  if (stored.retentionTarget === 0.95 || stored.state !== State.Review ||
+      !stored.last_review || stored.stability <= 0) return stored;
+  const last = Date.parse(stored.last_review);
+  if (!Number.isFinite(last)) return stored;
+  const days = scheduler.next_interval(stored.stability, stored.elapsed_days);
+  const due = new Date(Math.min(Date.parse(stored.due), last + days * 86_400_000)).toISOString();
+  return { ...stored, due, scheduled_days: Math.max(0, Math.round((Date.parse(due) - last) / 86_400_000)), retentionTarget: 0.95 };
 }

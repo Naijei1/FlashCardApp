@@ -1,4 +1,5 @@
 "use client";
+import HardWordButton from "./HardWordButton";
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -264,7 +265,7 @@ export default function WriteSession({
 
       const item = queue[readyIndex];
       const now = new Date();
-      sync.push({ cardId: item.card.id, deckId: item.card.deckId, rating, reviewedAt: now.toISOString() });
+      sync.push({ mode, cardId: item.card.id, deckId: item.card.deckId, rating, reviewedAt: now.toISOString() });
       const { fsrs, card: updatedCard } = rateCard(item.card, rating as Grade, now);
       const dueSoon = belongsInCurrentSession(fsrs.due, now.getTime());
       const rest = [...queue.slice(0, readyIndex), ...queue.slice(readyIndex + 1)];
@@ -294,7 +295,7 @@ export default function WriteSession({
       // Called from a tap/keypress, so refocusing keeps the keyboard up on iOS.
       if (firstReadyIndex(next, now.getTime()) >= 0) inputRef.current?.focus();
     },
-    [batchSize, breakScope, queue, readyIndex, result, sync, totalDue, copiesLeft, drillFailed]
+    [batchSize, breakScope, queue, readyIndex, result, sync, totalDue, copiesLeft, drillFailed, mode]
   );
 
   const defaultRating = drillFailed ? 1 : result ? (result.correct ? 3 : 1) : 3;
@@ -459,6 +460,9 @@ export default function WriteSession({
         compact
       />
 
+      <HardWordButton key={`${current.card.deckId}:${current.card.id}`} card={current.card}
+        onChange={(hard) => setQueue((items) => items?.map((item) => item.card.id === current.card.id && item.card.deckId === current.card.deckId
+          ? { ...item, card: { ...item.card, hard } } : item) ?? null)} />
       <label className="mb-3 flex items-center gap-2 text-sm text-muted">
         <input type="checkbox" checked={repeatMistakes} disabled={drillFailed || !!result}
           onChange={(event) => {

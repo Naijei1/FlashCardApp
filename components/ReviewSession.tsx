@@ -1,4 +1,5 @@
 "use client";
+import HardWordButton from "./HardWordButton";
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -332,6 +333,9 @@ export default function ReviewSession({
         compact
       />
 
+      <HardWordButton key={`${card.deckId}:${card.id}`} card={card}
+        onChange={(hard) => setQueue((items) => items?.map((item) => item.card.id === card.id && item.card.deckId === card.deckId
+          ? { ...item, card: { ...item.card, hard } } : item) ?? null)} />
       {/* Tap anywhere on the card to reveal; two fixed halves so nothing jumps. */}
       <div
         onClick={reveal}

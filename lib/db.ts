@@ -1,3 +1,4 @@
+import { currentRetentionSchedule } from "./fsrs";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
@@ -9,7 +10,7 @@ import {
   BatchWriteCommand,
   TransactWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
-import type { Card, Deck } from "./types";
+import type { Card, Deck, ReviewMode } from "./types";
 import type { ReviewLog } from "ts-fsrs";
 
 // On Amplify Hosting the SSR compute role supplies credentials via the default
@@ -107,6 +108,11 @@ function toCard(item: Item): Card {
     deckId: (PK as string).slice("DECK#".length),
     id: (SK as string).slice("CARD#".length),
   };
+  card.fsrs = currentRetentionSchedule(card.fsrs);
+  for (const mode of ["write", "pinyin"] as const) {
+    const state = card.modes?.[mode];
+    if (state) card.modes = { ...card.modes, [mode]: { ...state, fsrs: currentRetentionSchedule(state.fsrs) } };
+  }
   cardReviewVersions.set(
     card,
     typeof reviewVersion === "number" && Number.isSafeInteger(reviewVersion)
@@ -611,6 +617,7 @@ export async function putReviewLog(cardId: string, log: ReviewLog): Promise<void
 }
 
 export type ReviewReceipt = {
+  mode?: ReviewMode;
   clientReviewId: string;
   cardId: string;
   deckId: string;
@@ -647,6 +654,7 @@ function toReviewReceipt(item: Item | undefined): ReviewReceipt | null {
     deckId: item.deckId,
     rating: item.rating,
     reviewedAt: item.reviewedAt,
+    mode: (item.mode as ReviewMode) ?? "review",
   };
 }
 
@@ -655,6 +663,7 @@ export function reviewReceiptsMatch(a: ReviewReceipt, b: ReviewReceipt): boolean
     a.clientReviewId === b.clientReviewId &&
     a.cardId === b.cardId &&
     a.deckId === b.deckId &&
+    (a.mode ?? "review") === (b.mode ?? "review") &&
     a.rating === b.rating &&
     a.reviewedAt === b.reviewedAt
   );
@@ -712,6 +721,7 @@ export async function commitReview(
     deckId: review.deckId,
     rating: review.rating,
     reviewedAt: review.reviewedAt,
+    mode: review.mode ?? "review",
   };
 
   try {
@@ -819,4 +829,15 @@ export async function countReviewLogs(): Promise<number> {
     )
   );
   return typeof res.Item?.reviewCount === "number" ? res.Item.reviewCount : 0;
+}
+
+/** A marker update participates in the review lock, preserving concurrent reviews. */
+export async function setCardHard(deckId: string, id: string, hard: boolean) {
+  await db.send(new UpdateCommand({
+    TableName: tableName(), Key: cardKey(deckId, id),
+    UpdateExpression: "SET #hard = :hard ADD #version :one",
+    ConditionExpression: "attribute_exists(PK)",
+    ExpressionAttributeNames: { "#hard": "hard", "#version": "reviewVersion" },
+    ExpressionAttributeValues: { ":hard": hard, ":one": 1 },
+  }));
 }

@@ -289,3 +289,19 @@ it("retains a review when a proxy or login page responds with HTTP 200 instead o
   expect(sync.getState().pendingCount).toBe(0);
   expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(JSON.parse(fetchMock.mock.calls[1][1].body));
 });
+
+it("preserves a writing-mode review across an offline reload", async () => {
+  const { storage } = installBrowser(undefined, false);
+  const { createReviewSync } = await import("@/components/reviewSync");
+  createReviewSync(vi.fn()).push({ cardId: "a", deckId: "d", rating: 1, mode: "pinyin" });
+  await Promise.resolve();
+  expect(JSON.parse(storage.getItem(reviewKeys(storage)[0])!).mode).toBe("pinyin");
+  vi.resetModules();
+  installBrowser(storage, true);
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+  vi.stubGlobal("fetch", fetchMock);
+  const restored = await import("@/components/reviewSync");
+  restored.createReviewSync(vi.fn()).getState();
+  await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body).mode).toBe("pinyin");
+});

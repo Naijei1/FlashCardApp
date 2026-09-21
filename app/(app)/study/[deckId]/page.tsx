@@ -1,3 +1,4 @@
+import { studyCards } from "@/lib/hard-words";
 import { notFound } from "next/navigation";
 import StudySession from "@/components/StudySession";
 import { listAllCards, listCards, listDecks } from "@/lib/db";
@@ -25,6 +26,7 @@ export default async function StudyPage({
     decks.map((d) => [d.id, { front: d.frontLanguage, back: d.backLanguage }])
   );
 
+  if (deckId === "hard-words") return <StudySession cards={await studyCards(deckId)} deckLangs={deckLangs} backHref="/decks/hard-words" />;
   if (deckId === "all") {
     return <StudySession cards={cards} deckLangs={deckLangs} backHref="/" />;
   }

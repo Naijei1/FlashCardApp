@@ -16,7 +16,7 @@ export default async function ReviewPage({
     decks.map((d) => [d.id, { front: d.frontLanguage, back: d.backLanguage }])
   );
 
-  if (deckId !== "all" && !decks.some((deck) => deck.id === deckId)) notFound();
+  if (deckId !== "all" && deckId !== "hard-words" && !decks.some((deck) => deck.id === deckId)) notFound();
   const backHref = deckId === "all" ? "/" : `/decks/${deckId}`;
   return (
     <ReviewSession

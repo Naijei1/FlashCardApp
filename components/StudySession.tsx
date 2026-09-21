@@ -1,4 +1,6 @@
 "use client";
+import { wordKey } from "@/lib/words";
+import HardWordButton from "./HardWordButton";
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -25,7 +27,9 @@ export default function StudySession({
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
 
-  const card = cards[order[index]];
+  const [marked, setMarked] = useState<Record<string, boolean>>({});
+  const selected = cards[order[index]];
+  const card = selected ? { ...selected, hard: marked[wordKey(selected)] ?? selected.hard } : selected;
 
   function go(delta: number) {
     setIndex((i) => Math.min(Math.max(i + delta, 0), order.length - 1));
@@ -54,6 +58,7 @@ export default function StudySession({
 
   return (
     <div className="study-surface mx-auto flex h-dvh w-full max-w-2xl flex-col px-4 pb-safe">
+      <HardWordButton key={`${card.deckId}:${card.id}`} card={card} onChange={(hard) => setMarked((current) => ({ ...current, [wordKey(card)]: hard }))} />
       <header className="flex items-center justify-between py-2">
         <Link href={backHref} className="pressable rounded-lg px-3 py-2 text-muted">
           ← Back

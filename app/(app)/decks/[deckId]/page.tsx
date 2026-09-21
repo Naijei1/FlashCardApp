@@ -1,3 +1,7 @@
+import { chineseSideForCard, chineseSideForDeck } from "@/lib/write";
+import { readingForCard } from "@/lib/pinyin-queue";
+import { cardForMode } from "@/lib/modes";
+import { studyCards, studyDeck, HARD_DECK } from "@/lib/hard-words";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AddCardForm from "@/components/AddCardForm";
@@ -5,7 +9,7 @@ import CardPagination from "@/components/CardPagination";
 import { IconChevronRight } from "@/components/icons";
 import CardRow from "@/components/CardRow";
 import DeckSettings from "@/components/DeckSettings";
-import { getDeck, listCards, listDecks } from "@/lib/db";
+import { listDecks } from "@/lib/db";
 import { uniqueWords } from "@/lib/words";
 import { appTimeZone } from "@/lib/forecast";
 import { totalCounts } from "@/lib/due";
@@ -26,13 +30,16 @@ export default async function DeckPage({
 }) {
   const [{ deckId }, { page: pageParam }] = await Promise.all([params, searchParams]);
   const [deck, cards, decks] = await Promise.all([
-    getDeck(deckId),
-    listCards(deckId, { consistent: true }),
+    studyDeck(deckId),
+    studyCards(deckId),
     listDecks(),
   ]);
   if (!deck) notFound();
   const now = new Date();
   const counts = totalCounts(cards, now);
+  const side = chineseSideForDeck(deck);
+  const writeCounts = totalCounts(cards.filter((c) => chineseSideForCard(c, side) !== null).map((c) => cardForMode(c, "write")), now);
+  const pinyinCounts = totalCounts(cards.filter((c) => readingForCard(c, side) !== null).map((c) => cardForMode(c, "pinyin")), now);
   const words = uniqueWords(cards);
   const upcoming = words.map((card) => new Date(card.fsrs.due))
     .filter((due) => due > now).sort((a, b) => a.getTime() - b.getTime())[0];
@@ -57,17 +64,18 @@ export default async function DeckPage({
             {counts.newCards} new words
           </p>
         </div>
-        <DeckSettings deck={deck} />
+        {deckId !== HARD_DECK && <DeckSettings deck={deck} />}
       </div>
 
       {words.length > 0 && counts.newCards === 0 && (
         <p className="rounded-xl border border-border bg-surface p-4 text-sm text-muted">
-          All {words.length} words in this deck have been studied.
+          All {words.length} words have been studied in Spaced Repetition. Writing and pinyin have separate schedules.
           {counts.due === 0 && nextReview ? ` Next scheduled review: ${nextReview}.` : ""}
           {" "}Use Normal Review to practice anytime without changing your schedule.
         </p>
       )}
 
+      <p className="text-sm text-muted">Each mode has its own queue and review history. Schedules target 95% recall; missed words return sooner.</p>
       <div className="space-y-2">
         <Link
           href={`/review/${deck.id}`}
@@ -112,7 +120,7 @@ export default async function DeckPage({
           <span>
             <span className="block text-lg font-semibold">Write Chinese</span>
             <span className="block text-sm text-muted">
-              See English and type the Chinese answer
+              {writeCounts.due} due · {writeCounts.newCards} new in Chinese writing
             </span>
           </span>
           <IconChevronRight className="text-xl text-muted" />
@@ -124,23 +132,23 @@ export default async function DeckPage({
           <span>
             <span className="block text-lg font-semibold">Write Pinyin</span>
             <span className="block text-sm text-muted">
-              Read Chinese characters and type their pronunciation
+              {pinyinCounts.due} due · {pinyinCounts.newCards} new in pinyin
             </span>
           </span>
           <IconChevronRight className="text-xl text-muted" />
         </Link>
       </div>
 
-      <div className="flex gap-4 px-1 text-sm">
+      {deckId !== HARD_DECK && <div className="flex gap-4 px-1 text-sm">
         <Link href={`/import?deck=${deck.id}`} className="text-accent">
           Import CSV
         </Link>
         <a href={`/api/decks/${deck.id}/export`} className="text-accent">
           Export CSV
         </a>
-      </div>
+      </div>}
 
-      <AddCardForm deckId={deck.id} />
+      {deckId !== HARD_DECK && <AddCardForm deckId={deck.id} />}
 
       <section aria-labelledby="deck-cards-heading" className="space-y-2">
         <div className="flex items-baseline justify-between gap-3 px-1">
@@ -157,7 +165,7 @@ export default async function DeckPage({
           )}
         </div>
         {sorted.length === 0 && (
-          <p className="text-sm text-muted">No cards yet — add one above or import a CSV.</p>
+          <p className="text-sm text-muted">{deckId === HARD_DECK ? "No hard words yet. Use Mark as hard while studying or in a lesson’s card list." : "No cards yet — add one above or import a CSV."}</p>
         )}
         <ul className="space-y-2">
           {shown.map((card) => (

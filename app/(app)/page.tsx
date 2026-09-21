@@ -16,7 +16,7 @@ export default async function HomePage() {
       <h1 className="text-2xl font-bold">Chinese Flashcards</h1>
 
       <section className="rounded-2xl border border-border bg-surface p-5">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Today</h2>
+        <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Spaced Repetition today</h2>
         <div className="mt-3 flex items-end gap-6">
           <div>
             <div className="text-4xl font-bold text-accent">{totals.due}</div>
@@ -45,6 +45,10 @@ export default async function HomePage() {
       </section>
 
       <WeeklyGoal />
+      <Link href="/decks/hard-words" className="block rounded-2xl border border-accent p-4">
+        <span className="font-semibold">★ Hard Words</span>
+        <span className="block text-sm text-muted">Words you mark for extra practice, kept in their original lessons.</span>
+      </Link>
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Decks</h2>

@@ -67,3 +67,28 @@ it("lets a deck start unseen words directly without reviving unreviewed copies o
   expect(data.queue[0].card.id).toBe("b");
   expect(res.headers.get("cache-control")).toContain("no-store");
 });
+
+it("serves independent queues after successful recognition and writing reviews", async () => {
+  const { rateMode } = await import("@/lib/modes");
+  const [initial] = await mocks.listCards();
+  let card = rateMode(initial, "review", 3, new Date()).card;
+  mocks.listCards.mockImplementation(async () => [card]);
+  const queue = async (mode: string) => (await GET(new Request(`https://example.com/api/review/queue?deckId=deck&mode=${mode}`))).json();
+  expect((await queue("review")).totalDue).toBe(0);
+  expect((await queue("write")).totalDue).toBe(1);
+  expect((await queue("pinyin")).totalDue).toBe(1);
+  card = rateMode(card, "write", 3, new Date()).card;
+  expect((await queue("write")).totalDue).toBe(0);
+  expect((await queue("pinyin")).totalDue).toBe(1);
+  expect(card.fsrs.reps).toBe(1);
+});
+it("serves marked words through every special-deck queue with original card IDs", async () => {
+  const cards = await mocks.listCards();
+  mocks.listAllCards.mockResolvedValue([{ ...cards[0], hard: true }, cards[1]]);
+  for (const mode of ["review", "write", "pinyin"]) {
+    const res = await GET(new Request(`https://example.com/api/review/queue?deckId=hard-words&mode=${mode}`));
+    const data = await res.json();
+    expect(data.queue).toHaveLength(1);
+    expect(data.queue[0].card).toMatchObject({ id: "a", deckId: "deck", hard: true });
+  }
+});

@@ -1,4 +1,5 @@
 "use client";
+import HardWordButton from "./HardWordButton";
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -220,6 +221,7 @@ export default function CardRow({
         </div>
         {card.notes && <div className="truncate text-sm text-muted">{card.notes}</div>}
       </div>
+      <HardWordButton key={`${card.deckId}:${card.id}`} card={card} />
       <time dateTime={card.fsrs.due} className="shrink-0 text-xs text-muted">
         {dueLabel(card)}
       </time>
