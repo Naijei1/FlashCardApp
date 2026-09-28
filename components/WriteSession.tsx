@@ -486,6 +486,11 @@ export default function WriteSession({
           <span lang={mode === "pinyin" ? chineseLang : undefined} className="selectable text-3xl font-medium break-words sm:text-4xl">
             {prompt.prompt}
           </span>
+          {mode === "write" && current.pinyin && (
+            <p lang="zh-Latn-pinyin" className="selectable mt-3 text-xl text-muted">
+              {current.pinyin.syllables.join(" ")}
+            </p>
+          )}
         </div>
 
         <label className="mt-6 block text-sm text-muted" htmlFor="write-input">

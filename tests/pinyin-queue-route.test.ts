@@ -92,3 +92,13 @@ it("serves marked words through every special-deck queue with original card IDs"
     expect(data.queue[0].card).toMatchObject({ id: "a", deckId: "deck", hard: true });
   }
 });
+
+it("includes tone-marked pinyin beside the meaning for Chinese writing", async () => {
+  const cards = await mocks.listCards();
+  mocks.listCards.mockResolvedValue([{ ...cards[0], front: "line", back: "行 (háng)" }]);
+  const response = await GET(new Request("https://example.com/api/review/queue?deckId=deck&mode=write"));
+  const data = await response.json();
+  expect(data.queue).toHaveLength(1);
+  expect(data.queue[0].pinyin).toMatchObject({ hanzi: "行", meaning: "line", syllables: ["háng"] });
+  expect(data.queue[0].card.fsrs.reps).toBe(0);
+});
