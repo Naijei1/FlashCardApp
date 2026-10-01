@@ -41,7 +41,7 @@ export function chineseSideForCard(
 }
 
 export type WritePrompt = {
-  /** Shown to the user (the non-Chinese side). */
+  /** Shown to the user (the Pinyin reading). */
   prompt: string;
   /** Expected typed answer (the Chinese side). */
   answer: string;
@@ -66,9 +66,9 @@ export function chineseTextAndAnnotations(source: string): { text: string; annot
   return { text: text.trim(), annotations };
 }
 
-export function toWritePrompt(card: Card, chineseSide: ChineseSide): WritePrompt {
+export function toWritePrompt(card: Card, chineseSide: ChineseSide, syllables: string[]): WritePrompt {
   return {
-    prompt: chineseSide === "front" ? card.back : card.front,
+    prompt: syllables.join(" "),
     answer: chineseTextAndAnnotations(card[chineseSide]).text,
     notes: card.notes,
   };

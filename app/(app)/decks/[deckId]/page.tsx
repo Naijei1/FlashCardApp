@@ -1,4 +1,4 @@
-import { chineseSideForCard, chineseSideForDeck } from "@/lib/write";
+import { chineseSideForDeck } from "@/lib/write";
 import { readingForCard } from "@/lib/pinyin-queue";
 import { cardForMode } from "@/lib/modes";
 import { studyCards, studyDeck, HARD_DECK } from "@/lib/hard-words";
@@ -38,7 +38,7 @@ export default async function DeckPage({
   const now = new Date();
   const counts = totalCounts(cards, now);
   const side = chineseSideForDeck(deck);
-  const writeCounts = totalCounts(cards.filter((c) => chineseSideForCard(c, side) !== null).map((c) => cardForMode(c, "write")), now);
+  const writeCounts = totalCounts(cards.filter((c) => readingForCard(c, side) !== null).map((c) => cardForMode(c, "write")), now);
   const pinyinCounts = totalCounts(cards.filter((c) => readingForCard(c, side) !== null).map((c) => cardForMode(c, "pinyin")), now);
   const words = uniqueWords(cards);
   const upcoming = words.map((card) => new Date(card.fsrs.due))
@@ -69,7 +69,7 @@ export default async function DeckPage({
 
       {words.length > 0 && counts.newCards === 0 && (
         <p className="rounded-xl border border-border bg-surface p-4 text-sm text-muted">
-          All {words.length} words have been studied in Spaced Repetition. Writing and pinyin have separate schedules.
+          All {words.length} words have been studied in Spaced Repetition. Writing Chinese and writing pinyin have separate schedules.
           {counts.due === 0 && nextReview ? ` Next scheduled review: ${nextReview}.` : ""}
           {" "}Use Normal Review to practice anytime without changing your schedule.
         </p>
@@ -120,7 +120,7 @@ export default async function DeckPage({
           <span>
             <span className="block text-lg font-semibold">Write Chinese</span>
             <span className="block text-sm text-muted">
-              {writeCounts.due} due · {writeCounts.newCards} new in Chinese writing
+              Pinyin → Chinese · {writeCounts.due} due · {writeCounts.newCards} new
             </span>
           </span>
           <IconChevronRight className="text-xl text-muted" />

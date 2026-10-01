@@ -9,7 +9,7 @@ import ReviewSession from "@/components/ReviewSession";
 import WriteSession from "@/components/WriteSession";
 import { emptyCardState, previewIntervals, Rating } from "@/lib/fsrs";
 import { buildReviewQueueData } from "@/lib/review-queue";
-import { buildPinyinQueueData } from "@/lib/pinyin-queue";
+import { buildPinyinQueueData, readingForCard } from "@/lib/pinyin-queue";
 import { cardForMode, rateMode } from "@/lib/modes";
 import { formatInterval } from "@/lib/interval-label";
 import type { Card, ReviewMode } from "@/lib/types";
@@ -50,7 +50,10 @@ beforeEach(() => {
     }
     const mode = (new URL(url, "https://example.com").searchParams.get("mode") ?? "review") as ReviewMode;
     const cards = [card, ...siblings].map((c) => cardForMode(c, mode));
-    const data = mode === "pinyin" ? buildPinyinQueueData(cards, "front", new Date()) : buildReviewQueueData(cards, new Date());
+    const data = mode === "pinyin" || mode === "write"
+      ? buildPinyinQueueData(cards, "front", new Date())
+      : buildReviewQueueData(cards, new Date());
+    if (mode === "review") data.queue = data.queue.map((item) => ({ ...item, pinyin: readingForCard(item.card, "front") ?? undefined }));
     return { ok: true, json: async () => data };
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -121,6 +124,31 @@ it.each(["write", "pinyin"] as const)("grades the supplied answer on an annotate
   card.back = "line";
   await render(createElement(WriteSession, { deckId: "deck", deckSide: "front", chineseLang: "zh-CN", backHref: "/", mode }));
   await typeAnswer(mode === "write" ? "行" : "hang2");
+  await click("Check answer");
+  expect(container.textContent).toContain("Correct");
+});
+
+it("shows Chinese to Pinyin in spaced repetition, with English on request", async () => {
+  card.front = "hello";
+  card.back = "你好";
+  await render(createElement(ReviewSession, { deckId: "deck", deckLangs: {}, backHref: "/" }));
+  expect(container.textContent).toContain("你好");
+  expect(container.textContent).not.toContain("hello");
+  await click("Show English");
+  expect(container.textContent).toContain("hello");
+  await click("Show answer");
+  expect(container.textContent).toContain("nǐ hǎo");
+});
+
+it("prompts for written Chinese using Pinyin, with optional English", async () => {
+  card.front = "hello";
+  card.back = "你好";
+  await render(createElement(WriteSession, { deckId: "deck", deckSide: "front", chineseLang: "zh-CN", backHref: "/" }));
+  expect(container.textContent).toContain("nǐ hǎo");
+  expect(container.textContent).not.toContain("hello");
+  await click("Show English");
+  expect(container.textContent).toContain("hello");
+  await typeAnswer("你好");
   await click("Check answer");
   expect(container.textContent).toContain("Correct");
 });

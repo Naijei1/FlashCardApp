@@ -23,8 +23,9 @@ import RatingBar from "./RatingBar";
 import { createReviewSync, type ReviewSyncState } from "./reviewSync";
 import TtsButton from "./TtsButton";
 import { useKeyboard } from "./useKeyboard";
+import type { PinyinReading } from "@/lib/pinyin";
 
-export type ReviewQueueItem = { card: Card; intervals: IntervalPreview };
+export type ReviewQueueItem = { card: Card; intervals: IntervalPreview; pinyin?: PinyinReading };
 export type ReviewSessionData = {
   queue: ReviewQueueItem[];
   totalDue: number;
@@ -58,6 +59,7 @@ export default function ReviewSession({
   const [batchSize, setBatchSize] = useState(0);
   const [breakUntil, setBreakUntil] = useState(0);
   const [revealed, setRevealed] = useState(false);
+  const [showEnglish, setShowEnglish] = useState(false);
   const [reviewed, setReviewed] = useState(0);
   const [loadError, setLoadError] = useState(false);
   const [syncState, setSyncState] = useState<ReviewSyncState>(INITIAL_SYNC_STATE);
@@ -133,6 +135,7 @@ export default function ReviewSession({
     setBreakUntil(0);
     setReviewed(0);
     setRevealed(false);
+    setShowEnglish(false);
     setTotalDue(0);
     setBatchSize(0);
     advancedAtRef.current = null;
@@ -204,6 +207,7 @@ export default function ReviewSession({
 
       setReviewed((n) => n + 1);
       setRevealed(false);
+      setShowEnglish(false);
       setNowMs(now.getTime());
       setQueue(next);
       if (next.length === 0 && totalDue > batchSize) {
@@ -311,7 +315,7 @@ export default function ReviewSession({
     );
   }
 
-  const { card } = queue[readyIndex];
+  const { card, pinyin } = queue[readyIndex];
   const frontLang = deckLangs[card.deckId]?.front || DEFAULT_FRONT_LANG;
   const backLang = deckLangs[card.deckId]?.back || DEFAULT_BACK_LANG;
 
@@ -341,26 +345,37 @@ export default function ReviewSession({
         onClick={reveal}
         className="flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden rounded-2xl border border-border bg-surface"
       >
-        <div className="flex min-h-0 flex-1 basis-1/2 items-center justify-center gap-2 overflow-y-auto px-6 py-4 text-center">
-          <span
-            lang={frontLang}
-            className="selectable text-5xl leading-tight break-words sm:text-6xl"
-          >
-            {card.front}
-          </span>
-          <TtsButton text={card.front} lang={frontLang} />
+        <div className="flex min-h-0 flex-1 basis-1/2 flex-col items-center justify-center gap-3 overflow-y-auto px-6 py-4 text-center">
+          <div className="flex items-center gap-2">
+            <span
+              lang={pinyin ? "zh-CN" : frontLang}
+              className="selectable text-5xl leading-tight break-words sm:text-6xl"
+            >
+              {pinyin?.hanzi ?? card.front}
+            </span>
+            <TtsButton text={pinyin?.hanzi ?? card.front} lang={pinyin ? "zh-CN" : frontLang} />
+          </div>
+          {pinyin && (
+            <div className="flex flex-col items-center gap-2">
+              <button type="button" onClick={(event) => { event.stopPropagation(); setShowEnglish((visible) => !visible); }}
+                className="pressable rounded-lg px-3 py-2 text-sm text-muted underline">
+                {showEnglish ? "Hide English" : "Show English"}
+              </button>
+              {showEnglish && <p className="selectable text-base text-muted">{pinyin.meaning}</p>}
+            </div>
+          )}
         </div>
         <div className="flex min-h-0 flex-1 basis-1/2 flex-col items-center justify-center gap-3 overflow-y-auto border-t border-border px-6 py-4 text-center">
           {revealed ? (
             <div key={card.id} className="reveal-in flex flex-col items-center gap-3">
               <div className="flex items-center gap-2">
                 <span
-                  lang={backLang}
+                  lang={pinyin ? "zh-Latn-pinyin" : backLang}
                   className="selectable text-3xl break-words text-foreground/90"
                 >
-                  {card.back}
+                  {pinyin ? pinyin.syllables.join(" ") : card.back}
                 </span>
-                <TtsButton text={card.back} lang={backLang} />
+                {!pinyin && <TtsButton text={card.back} lang={backLang} />}
               </div>
               {card.notes && <p className="selectable text-base text-muted">{card.notes}</p>}
             </div>

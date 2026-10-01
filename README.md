@@ -15,6 +15,11 @@ Tailwind CSS; data lives in a single DynamoDB table.
   reserving room for new vocabulary. Decks with unseen words also offer a
   **Learn new words** shortcut. Decks with no unseen words show when the next
   scheduled review is due; Normal Review is available anytime.
+- **Review direction**: spaced repetition shows Chinese first and reveals its
+  Pinyin reading. English is available through **Show English**. Write Chinese
+  shows Pinyin and asks for typed Chinese, with the English meaning available on
+  request. Cards without a usable Chinese reading keep their original direction
+  in spaced repetition and are skipped in Write Chinese.
 - **Decks**: create, rename, delete, per-deck front/back speech languages,
   card counts and due counts.
 - **Cards**: front/back/notes, optional reverse card, move
@@ -38,8 +43,8 @@ Tailwind CSS; data lives in a single DynamoDB table.
   generates Mandarin readings using `pinyin-pro`, including traditional text.
   Type tone marks (`nǐ hǎo`) or numbers (`ni3 hao3`), or turn off **Check tones**
   for spelling practice. `ü`, `v`, and `u:` are equivalent; neutral tones can
-  be omitted or written as `0`/`5`. Like Write Chinese, ratings update the
-  original card's FSRS schedule and use 25-card batches with five-minute breaks.
+  be omitted or written as `0`/`5`. Each writing mode has its own FSRS schedule
+  and uses 25-card batches with five-minute breaks.
   Readings use dictionary tones. For a specific reading, put spaced Pinyin
   after the Chinese, such as `行 (háng)` or `老师 (lao3 shi1)`; a complete
   reading recognized for those characters takes precedence over the default.

@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
-import ChineseSideChooser from "@/components/ChineseSideChooser";
 import WriteSession from "@/components/WriteSession";
-import { studyDeck as getDeck, studyCards as listCards } from "@/lib/hard-words";
-import { chineseSideForCard, chineseSideForDeck, isChineseLang } from "@/lib/write";
+import { studyDeck as getDeck } from "@/lib/hard-words";
+import { chineseSideForDeck, isChineseLang } from "@/lib/write";
 
 export default async function WritePage({
   params,
@@ -10,20 +9,11 @@ export default async function WritePage({
   params: Promise<{ deckId: string }>;
 }) {
   const { deckId } = await params;
-  const [deck, cards] = await Promise.all([
-    getDeck(deckId),
-    listCards(deckId),
-  ]);
+  const deck = await getDeck(deckId);
   if (!deck) notFound();
   const backHref = `/decks/${deckId}`;
 
-  // Each card's side is detected from its own text (decks often hold both
-  // directions); the deck-level setting is only needed for ambiguous cards.
   const deckSide = chineseSideForDeck(deck);
-  const hasAmbiguousCards = cards.some((c) => chineseSideForCard(c, null) === null);
-  if (deckId !== "hard-words" && !deckSide && hasAmbiguousCards) {
-    return <ChineseSideChooser deck={deck} backHref={backHref} />;
-  }
 
   const chineseLang = isChineseLang(deck.frontLanguage)
     ? deck.frontLanguage!

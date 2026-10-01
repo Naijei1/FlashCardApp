@@ -75,6 +75,7 @@ export default function WriteSession({
   const [batchSize, setBatchSize] = useState(0);
   const [breakUntil, setBreakUntil] = useState(0);
   const [value, setValue] = useState("");
+  const [showEnglish, setShowEnglish] = useState(false);
   const [checkTones, setCheckTones] = useState(true);
   const [repeatMistakes, setRepeatMistakes] = useState(false);
   const [copiesLeft, setCopiesLeft] = useState(0);
@@ -111,7 +112,7 @@ export default function WriteSession({
       const usable = data.queue.filter(
         (item) => mode === "pinyin"
           ? !!item.pinyin?.syllables.length
-          : chineseSideForCard(item.card, deckSide) !== null
+          : !!item.pinyin?.syllables.length && chineseSideForCard(item.card, deckSide) !== null
       );
       setNowMs(Date.now());
       setQueue(usable);
@@ -170,6 +171,7 @@ export default function WriteSession({
     setReviewed(0);
     setResult(null);
     setValue("");
+    setShowEnglish(false);
     setCopiesLeft(0);
     setDrillFailed(false);
     checkedRef.current = false;
@@ -221,7 +223,9 @@ export default function WriteSession({
           notes: current.card.notes,
         }
       : null
-    : current && currentSide ? toWritePrompt(current.card, currentSide) : null,
+    : current && currentSide && current.pinyin
+      ? toWritePrompt(current.card, currentSide, current.pinyin.syllables)
+      : null,
   [current, currentSide, mode]);
 
   const check = useCallback(
@@ -283,6 +287,7 @@ export default function WriteSession({
       setReviewed((n) => n + 1);
       setResult(null);
       setValue("");
+      setShowEnglish(false);
       setCopiesLeft(0);
       setDrillFailed(false);
       checkedRef.current = false;
@@ -410,7 +415,7 @@ export default function WriteSession({
             ? `You wrote ${reviewed} card${reviewed === 1 ? "" : "s"}.`
             : mode === "pinyin"
               ? "No cards with recognizable Chinese characters are due. Add Chinese to either side of a card, or come back later."
-              : "No writable cards are due right now — come back later."
+              : "No cards with a Pinyin reading are due right now — come back later."
         }
         syncState={syncState}
         onRetrySaves={resolveSyncFailures}
@@ -483,13 +488,17 @@ export default function WriteSession({
           <h1 className="mb-3 text-center text-sm font-medium text-muted">Write Pinyin</h1>
         )}
         <div className="text-center">
-          <span lang={mode === "pinyin" ? chineseLang : undefined} className="selectable text-3xl font-medium break-words sm:text-4xl">
+          <span lang={mode === "pinyin" ? chineseLang : "zh-Latn-pinyin"} className="selectable text-3xl font-medium break-words sm:text-4xl">
             {prompt.prompt}
           </span>
           {mode === "write" && current.pinyin && (
-            <p lang="zh-Latn-pinyin" className="selectable mt-3 text-xl text-muted">
-              {current.pinyin.syllables.join(" ")}
-            </p>
+            <div className="mt-3 flex flex-col items-center gap-2">
+              <button type="button" onClick={() => setShowEnglish((visible) => !visible)}
+                className="pressable rounded-lg px-3 py-2 text-sm text-muted underline">
+                {showEnglish ? "Hide English" : "Show English"}
+              </button>
+              {showEnglish && <p className="selectable text-base text-muted">{current.pinyin.meaning}</p>}
+            </div>
           )}
         </div>
 
@@ -602,6 +611,9 @@ export default function WriteSession({
                     If a word has another valid reading, choose your own rating.
                   </p>
                 </>
+              )}
+              {mode === "write" && current.pinyin && !showEnglish && (
+                <p className="selectable text-base text-muted">{current.pinyin.meaning}</p>
               )}
               {prompt.notes && (
                 <p className="selectable text-sm text-muted">{prompt.notes}</p>

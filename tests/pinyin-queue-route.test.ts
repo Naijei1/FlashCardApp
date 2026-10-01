@@ -48,11 +48,14 @@ describe("Pinyin queue API", () => {
     expect((await GET(new Request("https://example.com/api/review/queue?deckId=deck&mode=pinyin"))).status).toBe(404);
   });
 
-  it("keeps the ordinary review queue unchanged", async () => {
+  it("adds Chinese readings to the ordinary review queue", async () => {
     const res = await GET(new Request("https://example.com/api/review/queue?deckId=deck"));
     const data = await res.json();
     expect(data.totalDue).toBe(2);
-    expect(data.queue.every((item: object) => !("pinyin" in item))).toBe(true);
+    expect(data.queue.find((item: { card: { id: string } }) => item.card.id === "a").pinyin).toMatchObject({
+      hanzi: "你好", meaning: "hello", syllables: ["nǐ", "hǎo"],
+    });
+    expect(data.queue.find((item: { card: { id: string } }) => item.card.id === "b").pinyin).toBeUndefined();
   });
 });
 
