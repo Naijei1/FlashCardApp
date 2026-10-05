@@ -94,6 +94,12 @@ describe("learning-first order", () => {
     const cards = [makeCard({ id: "old", fsrs: overdue }), makeCard({ id: "step", fsrs: learning })];
     expect(buildQueue(cards, NOW, { limit: 1 }).map((card) => card.id)).toEqual(["step"]);
   });
+
+  it("shows cards returning from a learning step first in the batch", () => {
+    const learning = applyRating(emptyCardState(NOW), Rating.Good, new Date(NOW.getTime() - 3_600_000), "write").fsrs;
+    const cards = [...Array.from({ length: 10 }, (_, i) => makeCard({ id: `n${i}` })), makeCard({ id: "step", fsrs: learning })];
+    for (const seed of [0, 0.5, 0.99]) expect(buildQueue(cards, NOW, { random: () => seed })[0].id).toBe("step");
+  });
 });
 
 describe("buildQueue", () => {
