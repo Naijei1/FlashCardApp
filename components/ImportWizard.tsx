@@ -90,8 +90,6 @@ export default function ImportWizard({
     }
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-border bg-surface px-3 py-2.5 outline-none focus:border-accent";
 
   if (decks.length === 0) {
     return (
@@ -126,7 +124,7 @@ export default function ImportWizard({
 
       {parsed && (
         <>
-          <div className="rounded-2xl border border-border bg-surface p-4 text-sm">
+          <div className="card p-5 text-sm">
             <p>
               <strong>{fileName}</strong>: {parsed.rows.length} valid row
               {parsed.rows.length === 1 ? "" : "s"}
@@ -186,7 +184,7 @@ export default function ImportWizard({
             <select
               value={deckId}
               onChange={(e) => setDeckId(e.target.value)}
-              className={inputClass + " mt-1"}
+              className="input mt-1"
             >
               {decks.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -210,7 +208,7 @@ export default function ImportWizard({
             type="button"
             onClick={doImport}
             disabled={busy || parsed.rows.length === 0}
-            className="w-full rounded-xl bg-accent px-4 py-3 text-lg font-medium text-accent-foreground disabled:opacity-50"
+            className="btn btn-primary btn-lg w-full"
           >
             {busy
               ? "Importing…"

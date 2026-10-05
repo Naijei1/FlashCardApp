@@ -1,8 +1,12 @@
 import Link from "next/link";
-import WeeklyGoal from "@/components/WeeklyGoal";
+import ModeLink from "@/components/ModeLink";
 import NewDeckButton from "@/components/NewDeckButton";
+import WeeklyGoal from "@/components/WeeklyGoal";
 import { listAllCards, listDecks } from "@/lib/db";
 import { countsByDeck, totalCounts } from "@/lib/due";
+import { plural } from "@/lib/plural";
+import { hardWords } from "@/lib/study-sets";
+import { uniqueWords } from "@/lib/words";
 
 export default async function HomePage() {
   const decks = await listDecks();
@@ -10,73 +14,67 @@ export default async function HomePage() {
   const now = new Date();
   const totals = totalCounts(cards, now);
   const byDeck = countsByDeck(cards, now);
+  const hardCount = uniqueWords(hardWords(cards)).length;
+  const canStudy = totals.due + totals.newCards > 0;
 
   return (
     <div className="space-y-8 py-6">
-      <h1 className="text-2xl font-bold">Chinese Flashcards</h1>
+      <header>
+        <p className="eyebrow">学中文</p>
+        <h1 className="mt-1 text-3xl font-bold tracking-tight">Chinese Flashcards</h1>
+      </header>
 
-      <section className="rounded-2xl border border-border bg-surface p-5">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Spaced Repetition today</h2>
-        <div className="mt-3 flex items-end gap-6">
-          <div>
-            <div className="text-4xl font-bold text-accent">{totals.due}</div>
-            <div className="text-sm text-muted">due words</div>
-          </div>
-          <div>
-            <div className="text-4xl font-bold">{totals.newCards}</div>
-            <div className="text-sm text-muted">new words</div>
+      <section className="card overflow-hidden">
+        <div className="p-5 sm:p-6">
+          <h2 className="eyebrow">Today</h2>
+          <div className="mt-3 flex items-end gap-8">
+            <div>
+              <div className="text-5xl font-bold tracking-tight text-accent tabular-nums">{totals.due}</div>
+              <div className="mt-1 text-sm text-muted">reviews due</div>
+            </div>
+            <div>
+              <div className="text-5xl font-bold tracking-tight tabular-nums">{totals.newCards}</div>
+              <div className="mt-1 text-sm text-muted">new words</div>
+            </div>
           </div>
         </div>
-        {totals.due > 0 ? (
-          <Link
-            href="/review/all"
-            className="mt-5 block w-full rounded-xl bg-accent px-4 py-3 text-center text-lg font-medium text-accent-foreground"
-          >
-            Start Review
-          </Link>
-        ) : (
-          <span
-            aria-disabled="true"
-            className="mt-5 block w-full rounded-xl border border-border px-4 py-3 text-center text-lg font-medium text-muted"
-          >
-            Nothing due
-          </span>
-        )}
+        <div className="flex flex-col gap-2 border-t border-border bg-surface-muted/50 p-4 sm:flex-row">
+          {canStudy ? (
+            <Link href="/review/all" className="btn btn-primary btn-lg flex-1">Start Review</Link>
+          ) : (
+            <span aria-disabled="true" className="btn btn-secondary btn-lg flex-1 text-muted">Nothing due</span>
+          )}
+          <Link href="/decks/all" className="btn btn-secondary btn-lg flex-1 text-base">All study modes</Link>
+        </div>
+      </section>
+
+      <section aria-labelledby="collections-heading" className="space-y-3">
+        <h2 id="collections-heading" className="eyebrow">Study everything</h2>
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          <ModeLink href="/decks/all" title="All Cards"
+            detail={`Every mode across ${plural(decks.length, "deck")}`} badge={totals.due} />
+          <ModeLink href="/decks/hard-words" title="★ Hard Words"
+            detail={hardCount > 0 ? `${plural(hardCount, "marked word")}` : "Mark tricky words while studying"} />
+        </div>
       </section>
 
       <WeeklyGoal />
-      <Link href="/decks/hard-words" className="block rounded-2xl border border-accent p-4">
-        <span className="font-semibold">★ Hard Words</span>
-        <span className="block text-sm text-muted">Words you mark for extra practice, kept in their original lessons.</span>
-      </Link>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Decks</h2>
+      <section aria-labelledby="decks-heading" className="space-y-3">
+        <h2 id="decks-heading" className="eyebrow">Decks</h2>
         {decks.length === 0 && (
-          <p className="text-sm text-muted">No decks yet — create one to get started.</p>
+          <p className="card p-4 text-sm text-muted">No decks yet — create one to get started.</p>
         )}
-        {decks.map((deck) => {
-          const counts = byDeck.get(deck.id) ?? { total: 0, due: 0, newCards: 0 };
-          return (
-            <Link
-              key={deck.id}
-              href={`/decks/${deck.id}`}
-              className="flex items-center justify-between rounded-2xl border border-border bg-surface p-4 hover:border-accent"
-            >
-              <div>
-                <div className="font-medium">{deck.name}</div>
-                <div className="text-sm text-muted">
-                  {counts.total} card{counts.total === 1 ? "" : "s"} · {counts.due} due words
-                </div>
-              </div>
-              {counts.due > 0 && (
-                <span className="rounded-full bg-accent/15 px-3 py-1 text-sm font-medium text-accent">
-                  {counts.due}
-                </span>
-              )}
-            </Link>
-          );
-        })}
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          {decks.map((deck) => {
+            const counts = byDeck.get(deck.id) ?? { total: 0, due: 0, newCards: 0 };
+            return (
+              <ModeLink key={deck.id} href={`/decks/${deck.id}`} title={deck.name}
+                detail={`${plural(counts.total, "card")} · ${counts.due} due · ${counts.newCards} new`}
+                badge={counts.due} />
+            );
+          })}
+        </div>
         <NewDeckButton />
       </section>
     </div>

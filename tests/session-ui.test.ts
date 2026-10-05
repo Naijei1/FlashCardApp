@@ -8,8 +8,7 @@ import PinyinPage from "@/app/(app)/pinyin/[deckId]/page";
 import ReviewSession from "@/components/ReviewSession";
 import WriteSession from "@/components/WriteSession";
 import { emptyCardState, previewIntervals, Rating } from "@/lib/fsrs";
-import { buildReviewQueueData } from "@/lib/review-queue";
-import { buildPinyinQueueData, readingForCard } from "@/lib/pinyin-queue";
+import { buildStudyQueue } from "@/lib/pinyin-queue";
 import { cardForMode, rateMode } from "@/lib/modes";
 import { formatInterval } from "@/lib/interval-label";
 import type { Card, ReviewMode } from "@/lib/types";
@@ -50,10 +49,7 @@ beforeEach(() => {
     }
     const mode = (new URL(url, "https://example.com").searchParams.get("mode") ?? "review") as ReviewMode;
     const cards = [card, ...siblings].map((c) => cardForMode(c, mode));
-    const data = mode === "pinyin" || mode === "write"
-      ? buildPinyinQueueData(cards, "front", new Date())
-      : buildReviewQueueData(cards, new Date());
-    if (mode === "review") data.queue = data.queue.map((item) => ({ ...item, pinyin: readingForCard(item.card, "front") ?? undefined }));
+    const data = buildStudyQueue(cards, { mode, sideFor: () => "front", now: new Date() });
     return { ok: true, json: async () => data };
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -97,7 +93,7 @@ it.each(["review", "write", "pinyin"] as const)("refreshes interval labels after
   vi.setSystemTime(new Date(cardForMode(card, mode).fsrs.due));
   const element = mode === "review"
     ? createElement(ReviewSession, { deckId: "deck", deckLangs: {}, backHref: "/" })
-    : createElement(WriteSession, { deckId: "deck", deckSide: "front", chineseLang: "zh-CN", backHref: "/", mode: mode as "write" | "pinyin" });
+    : createElement(WriteSession, { deckId: "deck", chineseLang: "zh-CN", backHref: "/", mode: mode as "write" | "pinyin" });
   await render(element);
   vi.setSystemTime(new Date(now.getTime() + 3 * 86_400_000));
   await act(async () => window.dispatchEvent(new Event("focus")));
@@ -122,7 +118,7 @@ async function typeAnswer(value: string) {
 it.each(["write", "pinyin"] as const)("grades the supplied answer on an annotated new card in %s", async (mode) => {
   card.front = "行 (háng)";
   card.back = "line";
-  await render(createElement(WriteSession, { deckId: "deck", deckSide: "front", chineseLang: "zh-CN", backHref: "/", mode }));
+  await render(createElement(WriteSession, { deckId: "deck", chineseLang: "zh-CN", backHref: "/", mode }));
   await typeAnswer(mode === "write" ? "行" : "hang2");
   await click("Check answer");
   expect(container.textContent).toContain("Correct");
@@ -143,7 +139,7 @@ it("shows Chinese to Pinyin in spaced repetition, with English on request", asyn
 it("prompts for written Chinese using Pinyin, with optional English", async () => {
   card.front = "hello";
   card.back = "你好";
-  await render(createElement(WriteSession, { deckId: "deck", deckSide: "front", chineseLang: "zh-CN", backHref: "/" }));
+  await render(createElement(WriteSession, { deckId: "deck", chineseLang: "zh-CN", backHref: "/" }));
   expect(container.textContent).toContain("nǐ hǎo");
   expect(container.textContent).not.toContain("hello");
   await click("Show English");
@@ -167,7 +163,7 @@ it("parks a Retry card until due and ignores reveal shortcuts during the wait", 
 });
 
 it.each(["write", "pinyin"] as const)("requires three correct corrections for a miss in %s and records just one failure", async (mode) => {
-  await render(createElement(WriteSession, { deckId: "deck", deckSide: "front", chineseLang: "zh-CN", backHref: "/", mode }));
+  await render(createElement(WriteSession, { deckId: "deck", chineseLang: "zh-CN", backHref: "/", mode }));
   const toggle = [...container.querySelectorAll("label")].find((label) => label.textContent?.includes("3 more times"))!.querySelector("input")!;
   await act(async () => toggle.click());
   expect(localStorage.getItem("flashcards.repeat-mistakes.v1")).toBe("true");
@@ -201,7 +197,7 @@ it.each(["write", "pinyin"] as const)("requires three correct corrections for a 
 
 it("leaves a correct first answer free to move on when the drill is enabled", async () => {
   localStorage.setItem("flashcards.repeat-mistakes.v1", "true");
-  await render(createElement(WriteSession, { deckId: "deck", deckSide: "front", chineseLang: "zh-CN", backHref: "/" }));
+  await render(createElement(WriteSession, { deckId: "deck", chineseLang: "zh-CN", backHref: "/" }));
   await typeAnswer("你好");
   await click("Check answer");
   await click("Good");
@@ -213,7 +209,7 @@ it.each(["review", "write", "pinyin"] as const)("does not loop duplicate/reverse
   siblings = [{ ...card, id: "copy" }, { ...card, id: "reverse", front: card.back, back: card.front }];
   const element = mode === "review"
     ? createElement(ReviewSession, { deckId: "deck", deckLangs: {}, backHref: "/" })
-    : createElement(WriteSession, { deckId: "deck", deckSide: "front", chineseLang: "zh-CN", backHref: "/", mode });
+    : createElement(WriteSession, { deckId: "deck", chineseLang: "zh-CN", backHref: "/", mode });
   await render(element);
   expect(container.textContent).toContain("1 left");
   if (mode === "review") await click("Show answer");
@@ -239,4 +235,18 @@ it("keeps a hard marker when a Retry word returns and allows removing it", async
   await click("★ In Hard Words");
   expect(card.hard).toBe(false);
   expect(card.fsrs.reps).toBe(1);
+});
+
+it("keeps the Chinese prompt and pinyin answer when a Retry card returns", async () => {
+  card.front = "hello";
+  card.back = "你好";
+  await render(createElement(ReviewSession, { deckId: "deck", deckLangs: {}, backHref: "/" }));
+  await click("Show answer");
+  await click("Retry");
+  await act(async () => vi.advanceTimersByTimeAsync(59_000));
+  await act(async () => vi.advanceTimersByTimeAsync(1_000));
+  expect(container.textContent).toContain("你好");
+  expect(container.textContent).not.toContain("hello");
+  await click("Show answer");
+  expect(container.textContent).toContain("nǐ hǎo");
 });

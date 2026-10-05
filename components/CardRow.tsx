@@ -74,7 +74,7 @@ export default function CardRow({
     if (busy || !front.trim() || !back.trim()) return;
     setBusy(true);
     setSaveError("");
-    const res = await fetch(`/api/cards/${card.id}`, {
+    const res = await fetch(`/api/cards/${encodeURIComponent(card.id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -113,7 +113,7 @@ export default function CardRow({
     if (!confirm(`Delete card "${card.front}"?`)) return;
     setBusy(true);
     setSaveError("");
-    const res = await fetch(`/api/cards/${card.id}?deckId=${card.deckId}`, {
+    const res = await fetch(`/api/cards/${encodeURIComponent(card.id)}?deckId=${encodeURIComponent(card.deckId)}`, {
       method: "DELETE",
     }).catch(() => null);
     setBusy(false);
@@ -124,8 +124,6 @@ export default function CardRow({
     }
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-border bg-surface px-3 py-2 outline-none focus:border-accent";
 
   if (editing) {
     return (
@@ -136,20 +134,20 @@ export default function CardRow({
           event.preventDefault();
           void save();
         }}
-        className="space-y-2 rounded-xl border border-accent/50 bg-surface p-3"
+        className="card space-y-2 border-accent/50 p-3"
       >
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <input
             aria-label="Card front"
             value={front}
             onChange={(e) => setFront(e.target.value)}
-            className={inputClass}
+            className="input"
           />
           <input
             aria-label="Card back"
             value={back}
             onChange={(e) => setBack(e.target.value)}
-            className={inputClass}
+            className="input"
           />
         </div>
         <input
@@ -157,7 +155,7 @@ export default function CardRow({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Notes"
-          className={inputClass}
+          className="input"
         />
         {saveError && (
           <p role="alert" className="text-sm text-red-500">
@@ -170,7 +168,7 @@ export default function CardRow({
             <select
               value={moveTo}
               onChange={(e) => setMoveTo(e.target.value)}
-              className={inputClass + " mt-1"}
+              className="input mt-1"
             >
               {decks.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -184,7 +182,7 @@ export default function CardRow({
           <button
             type="submit"
             disabled={busy || !front.trim() || !back.trim()}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
+            className="btn btn-primary"
           >
             Save
           </button>
@@ -192,7 +190,7 @@ export default function CardRow({
             type="button"
             onClick={cancelEditing}
             disabled={busy}
-            className="rounded-lg border border-border px-4 py-2 text-sm text-muted"
+            className="btn btn-secondary"
           >
             Cancel
           </button>
@@ -200,7 +198,7 @@ export default function CardRow({
             type="button"
             onClick={remove}
             disabled={busy}
-            className="ml-auto rounded-lg border border-red-500/40 px-4 py-2 text-sm text-red-500"
+            className="btn btn-danger ml-auto"
           >
             Delete
           </button>
@@ -210,10 +208,10 @@ export default function CardRow({
   }
 
   return (
-    <article className="flex items-center gap-2 rounded-xl border border-border bg-surface p-3">
+    <article className="card flex items-center gap-2 py-2.5 pr-1.5 pl-4">
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="truncate text-lg">{card.front}</span>
+          <span className="truncate text-lg font-medium">{card.front}</span>
           <span aria-hidden="true" className="text-muted">
             →
           </span>
@@ -221,8 +219,10 @@ export default function CardRow({
         </div>
         {card.notes && <div className="truncate text-sm text-muted">{card.notes}</div>}
       </div>
-      <HardWordButton key={`${card.deckId}:${card.id}`} card={card} />
-      <time dateTime={card.fsrs.due} className="shrink-0 text-xs text-muted">
+      <HardWordButton key={`${card.deckId}:${card.id}:${!!card.hard}`} card={card} />
+      <time dateTime={card.fsrs.due} className={`shrink-0 rounded-full px-2 py-0.5 text-xs tabular-nums ${
+        dueLabel(card) === "due" ? "bg-accent/10 font-medium text-accent" : "text-muted"
+      }`}>
         {dueLabel(card)}
       </time>
       <TtsButton text={card.front} lang={frontLang || DEFAULT_FRONT_LANG} />
@@ -230,7 +230,7 @@ export default function CardRow({
         type="button"
         onClick={startEditing}
         aria-label={`Edit ${card.front}`}
-        className="pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg text-muted hover:bg-border/40 hover:text-foreground"
+        className="pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg text-muted hover:bg-surface-muted hover:text-foreground"
       >
         <IconPencil strokeWidth={1.8} />
       </button>

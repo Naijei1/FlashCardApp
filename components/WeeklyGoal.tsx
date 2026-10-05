@@ -16,15 +16,26 @@ export default function WeeklyGoal() {
     window.addEventListener("focus", update);
     return () => { controller.abort(); window.removeEventListener("focus", update); };
   }, []);
+  const week = progress?.week ?? 0;
   return (
-    <section className="rounded-2xl border border-border bg-surface p-5">
-      <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Weekly vocabulary goal</h2>
-      <p className="mt-2 text-2xl font-semibold">{progress ? `${progress.week} / ${WEEKLY_WORD_GOAL}` : WEEKLY_WORD_GOAL} new words this week</p>
-      <p className="mt-2 text-sm text-muted">
-        Aim for {DAILY_WORD_GOAL} new words a day, plus your due reviews.
-        {progress ? ` Today: ${progress.today} / ${DAILY_WORD_GOAL}.` : ""}
+    <section className="card p-5 sm:p-6">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="eyebrow">Weekly vocabulary goal</h2>
+        {progress && <span className="text-xs text-muted">Today {progress.today} / {DAILY_WORD_GOAL}</span>}
+      </div>
+      <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">
+        {progress ? `${week} / ${WEEKLY_WORD_GOAL}` : WEEKLY_WORD_GOAL}
+        <span className="ml-1.5 text-base font-normal text-muted">new words this week</span>
       </p>
-      <p className="mt-2 text-xs text-muted">Counts words first studied since this tracker was added, Monday–Sunday (Eastern). Learning a word takes later recall, not just introducing it.</p>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-border/70" role="progressbar"
+        aria-label="Weekly new words" aria-valuemin={0} aria-valuemax={WEEKLY_WORD_GOAL} aria-valuenow={week}>
+        <div className="h-full rounded-full bg-accent transition-[width] duration-500"
+          style={{ width: `${Math.min(100, (week / WEEKLY_WORD_GOAL) * 100)}%` }} />
+      </div>
+      <p className="mt-3 text-xs text-muted">
+        Aim for {DAILY_WORD_GOAL} new words a day, plus your due reviews. Counts words first studied
+        Monday–Sunday (Eastern); learning a word takes later recall, not just introducing it.
+      </p>
     </section>
   );
 }

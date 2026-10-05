@@ -1,6 +1,8 @@
-import CardRow from "@/components/CardRow";
+import CardList from "@/components/CardList";
 import CardPagination from "@/components/CardPagination";
+import { IconSearch } from "@/components/icons";
 import { listAllCards, listDecks } from "@/lib/db";
+import { plural } from "@/lib/plural";
 
 const PAGE_SIZE = 50;
 
@@ -17,8 +19,6 @@ export default async function BrowsePage({
   const { q = "", page: pageParam } = await searchParams;
   const decks = await listDecks();
   const cards = await listAllCards(decks);
-  const deckName = new Map(decks.map((d) => [d.id, d.name]));
-  const deckFrontLang = new Map(decks.map((d) => [d.id, d.frontLanguage]));
 
   const trimmedQuery = q.trim();
   const query = trimmedQuery.toLowerCase();
@@ -35,16 +35,15 @@ export default async function BrowsePage({
   const page = Math.min(requestedPage(pageParam), totalPages);
   const pageStart = (page - 1) * PAGE_SIZE;
   const shown = sorted.slice(pageStart, pageStart + PAGE_SIZE);
-  const shownFrom = shown.length > 0 ? pageStart + 1 : 0;
-  const shownTo = pageStart + shown.length;
 
   return (
-    <div className="space-y-4 py-6">
-      <h1 className="text-2xl font-bold">Browse</h1>
-      <form role="search" method="GET" action="/browse">
+    <div className="space-y-5 py-6">
+      <h1 className="text-3xl font-bold tracking-tight">Browse</h1>
+      <form role="search" method="GET" action="/browse" className="relative">
         <label htmlFor="card-search" className="sr-only">
           Search cards
         </label>
+        <IconSearch className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-muted" />
         <input
           id="card-search"
           type="search"
@@ -52,28 +51,19 @@ export default async function BrowsePage({
           defaultValue={q}
           aria-describedby="search-summary"
           placeholder="Search front, back, or notes…"
-          className="w-full rounded-xl border border-border bg-surface px-4 py-3 outline-none focus:border-accent"
+          className="input py-3 pl-10"
         />
       </form>
       <p id="search-summary" className="text-sm text-muted">
-        {matches.length} card{matches.length === 1 ? "" : "s"}
-        {matches.length > 0 ? ` · showing ${shownFrom}–${shownTo}` : ""}
+        {plural(matches.length, "card")}
+        {shown.length > 0 ? ` · showing ${pageStart + 1}–${pageStart + shown.length}` : ""}
       </p>
       <section aria-labelledby="card-results-heading">
         <h2 id="card-results-heading" className="sr-only">
           Card results
         </h2>
-        {shown.length === 0 && <p className="text-sm text-muted">No cards found.</p>}
-        <ul className="space-y-2">
-          {shown.map((card) => (
-            <li key={`${card.deckId}:${card.id}`}>
-              <div className="mb-0.5 px-1 text-xs text-muted">
-                {deckName.get(card.deckId) ?? "Unknown deck"}
-              </div>
-              <CardRow card={card} decks={decks} frontLang={deckFrontLang.get(card.deckId)} />
-            </li>
-          ))}
-        </ul>
+        {shown.length === 0 && <p className="card p-4 text-sm text-muted">No cards found.</p>}
+        <CardList cards={shown} decks={decks} showDeckNames />
       </section>
       <CardPagination
         basePath="/browse"

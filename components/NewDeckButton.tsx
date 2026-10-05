@@ -35,7 +35,7 @@ export default function NewDeckButton() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="w-full rounded-xl border border-dashed border-border px-4 py-3 text-muted hover:border-accent hover:text-accent"
+        className="btn w-full border border-dashed border-border py-3 text-muted hover:border-accent hover:text-accent"
       >
         + New Deck
       </button>
@@ -52,20 +52,20 @@ export default function NewDeckButton() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Deck name, e.g. Chinese Lesson 1"
-            className="w-full rounded-xl border border-border bg-surface px-4 py-3 outline-none focus:border-accent"
+            className="input py-3"
           />
         </label>
         <button
           type="submit"
           disabled={busy || !name.trim()}
-          className="rounded-xl bg-accent px-4 py-3 font-medium text-accent-foreground disabled:opacity-50"
+          className="btn btn-primary"
         >
           {busy ? "Creating…" : "Create"}
         </button>
         <button
           type="button"
           onClick={() => { setOpen(false); setName(""); setError(""); }}
-          className="rounded-xl border border-border px-4 py-3 text-muted"
+          className="btn btn-secondary"
         >
           Cancel
         </button>

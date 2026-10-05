@@ -3,10 +3,10 @@ import LogoutButton from "@/components/LogoutButton";
 export default function SettingsPage() {
   return (
     <div className="space-y-6 py-6">
-      <h1 className="text-2xl font-bold">Settings</h1>
+      <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
 
-      <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 text-sm text-muted">
-        <h2 className="text-sm font-medium uppercase tracking-wide">Tips</h2>
+      <section className="space-y-3 card p-5 text-sm text-muted">
+        <h2 className="eyebrow">Tips</h2>
         <p>
           <strong className="text-foreground">iPhone:</strong> open this site in Safari, tap
           Share → Add to Home Screen to install it as an app. The installed app has its own

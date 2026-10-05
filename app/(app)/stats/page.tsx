@@ -40,7 +40,7 @@ export default async function StatsPage() {
 
   return (
     <div className="space-y-6 py-6">
-      <h1 className="text-2xl font-bold">Stats</h1>
+      <h1 className="text-3xl font-bold tracking-tight">Stats</h1>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Total words" value={totals.total} />
@@ -49,8 +49,8 @@ export default async function StatsPage() {
         <Stat label="Reviews logged" value={reviewCount} />
       </section>
 
-      <section className="rounded-2xl border border-border bg-surface p-4">
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
+      <section className="card p-5">
+        <h2 className="eyebrow mb-3">
           Words by state
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -63,8 +63,8 @@ export default async function StatsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-surface p-4">
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
+      <section className="card p-5">
+        <h2 className="eyebrow mb-3">
           Review forecast — next 7 days
         </h2>
         <div className="space-y-1.5">
@@ -83,8 +83,8 @@ export default async function StatsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-surface p-4">
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
+      <section className="card p-5">
+        <h2 className="eyebrow mb-3">
           Next reviews
         </h2>
         {upcoming.length === 0 ? (
@@ -95,7 +95,7 @@ export default async function StatsPage() {
           <div className="space-y-2 text-sm">
             {upcoming.map((card) => (
               <div
-                key={card.id}
+                key={`${card.deckId}:${card.id}`}
                 className="flex items-baseline justify-between gap-3 border-b border-border pb-2 last:border-0 last:pb-0"
               >
                 <span className="min-w-0 truncate">
@@ -111,8 +111,8 @@ export default async function StatsPage() {
         )}
       </section>
 
-      <section className="rounded-2xl border border-border bg-surface p-4">
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
+      <section className="card p-5">
+        <h2 className="eyebrow mb-3">
           Per deck
         </h2>
         <div className="space-y-2 text-sm">
@@ -136,7 +136,7 @@ export default async function StatsPage() {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-4">
+    <div className="card p-5">
       <div className="text-3xl font-bold">{value}</div>
       <div className="text-sm text-muted">{label}</div>
     </div>

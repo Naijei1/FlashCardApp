@@ -1,12 +1,12 @@
 "use client";
-import { wordKey } from "@/lib/words";
-import HardWordButton from "./HardWordButton";
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { Card } from "@/lib/types";
 import { shuffle } from "@/lib/due";
 import { DEFAULT_BACK_LANG, DEFAULT_FRONT_LANG } from "@/lib/languages";
+import type { Card } from "@/lib/types";
+import { wordKey } from "@/lib/words";
+import HardWordButton from "./HardWordButton";
 import TtsButton from "./TtsButton";
 import { useKeyboard } from "./useKeyboard";
 
@@ -26,13 +26,16 @@ export default function StudySession({
   const [order, setOrder] = useState(initialOrder);
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
-
   const [marked, setMarked] = useState<Record<string, boolean>>({});
-  const selected = cards[order[index]];
-  const card = selected ? { ...selected, hard: marked[wordKey(selected)] ?? selected.hard } : selected;
 
   function go(delta: number) {
     setIndex((i) => Math.min(Math.max(i + delta, 0), order.length - 1));
+    setRevealed(false);
+  }
+
+  function reorder(next: number[]) {
+    setOrder(next);
+    setIndex(0);
     setRevealed(false);
   }
 
@@ -47,76 +50,55 @@ export default function StudySession({
     }
   });
 
-  if (cards.length === 0) {
+  const selected = cards[order[index]];
+  if (!selected) {
     return (
-      <Empty backHref={backHref} title="No cards to study" body="Add some cards first." />
+      <div className="mx-auto flex h-dvh max-w-md flex-col items-center justify-center gap-3 px-6 pb-safe text-center">
+        <h1 className="text-2xl font-semibold tracking-tight">No cards to study</h1>
+        <p className="text-muted">Add some cards first.</p>
+        <Link href={backHref} className="btn btn-primary mt-2">← Back</Link>
+      </div>
     );
   }
 
+  const card = { ...selected, hard: marked[wordKey(selected)] ?? selected.hard };
   const frontLang = deckLangs[card.deckId]?.front || DEFAULT_FRONT_LANG;
   const backLang = deckLangs[card.deckId]?.back || DEFAULT_BACK_LANG;
+  const progress = order.length > 0 ? (index + 1) / order.length : 0;
 
   return (
     <div className="study-surface mx-auto flex h-dvh w-full max-w-2xl flex-col px-4 pb-safe">
-      <HardWordButton key={`${card.deckId}:${card.id}`} card={card} onChange={(hard) => setMarked((current) => ({ ...current, [wordKey(card)]: hard }))} />
-      <header className="flex items-center justify-between py-2">
-        <Link href={backHref} className="pressable rounded-lg px-3 py-2 text-muted">
-          ← Back
-        </Link>
-        <span className="text-sm tabular-nums text-muted">
-          {index + 1} / {order.length}
-        </span>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              setOrder((o) => shuffle(o));
-              setIndex(0);
-              setRevealed(false);
-            }}
-            className="pressable rounded-lg px-3 py-2 text-sm text-muted hover:text-foreground"
-          >
-            Shuffle
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setOrder(initialOrder);
-              setIndex(0);
-              setRevealed(false);
-            }}
-            className="pressable rounded-lg px-3 py-2 text-sm text-muted hover:text-foreground"
-          >
-            Restart
-          </button>
+      <header className="flex items-center gap-3 py-3">
+        <Link href={backHref} className="btn btn-ghost -ml-2 shrink-0 px-3">← Back</Link>
+        <div className="min-w-0 flex-1">
+          <div className="flex justify-between text-xs tabular-nums text-muted">
+            <span>{index + 1} / {order.length}</span>
+            <span className="flex gap-3">
+              <button type="button" onClick={() => reorder(shuffle(order))} className="hover:text-foreground">Shuffle</button>
+              <button type="button" onClick={() => reorder(initialOrder)} className="hover:text-foreground">Restart</button>
+            </span>
+          </div>
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-border/70" aria-hidden="true">
+            <div className="h-full rounded-full bg-accent transition-[width] duration-300" style={{ width: `${progress * 100}%` }} />
+          </div>
         </div>
+        <HardWordButton key={`${card.deckId}:${card.id}`} card={card}
+          onChange={(hard) => setMarked((current) => ({ ...current, [wordKey(card)]: hard }))} />
       </header>
 
       {/* Tap anywhere on the card to flip; two fixed halves so nothing jumps. */}
-      <div
-        onClick={() => setRevealed((r) => !r)}
-        className="flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden rounded-2xl border border-border bg-surface"
-      >
-        <div className="flex min-h-0 flex-1 basis-1/2 items-center justify-center gap-2 overflow-y-auto px-6 py-4 text-center">
-          <span
-            lang={frontLang}
-            className="selectable text-5xl leading-tight break-words sm:text-6xl"
-          >
+      <div onClick={() => setRevealed((r) => !r)} className="flashcard flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 basis-1/2 items-center justify-center gap-2 overflow-y-auto px-6 py-6 text-center">
+          <span lang={frontLang} className="selectable text-5xl leading-tight font-medium break-words sm:text-6xl">
             {card.front}
           </span>
           <TtsButton text={card.front} lang={frontLang} />
         </div>
-        <div className="flex min-h-0 flex-1 basis-1/2 flex-col items-center justify-center gap-3 overflow-y-auto border-t border-border px-6 py-4 text-center">
+        <div className="flex min-h-0 flex-1 basis-1/2 flex-col items-center justify-center gap-3 overflow-y-auto border-t border-dashed border-border px-6 py-6 text-center">
           {revealed ? (
-            <div
-              key={`${card.id}-${index}`}
-              className="reveal-in flex flex-col items-center gap-3"
-            >
+            <div key={`${card.id}-${index}`} className="reveal-in flex flex-col items-center gap-3">
               <div className="flex items-center gap-2">
-                <span
-                  lang={backLang}
-                  className="selectable text-3xl break-words text-foreground/90"
-                >
+                <span lang={backLang} className="selectable text-3xl break-words text-foreground/90">
                   {card.back}
                 </span>
                 <TtsButton text={card.back} lang={backLang} />
@@ -129,46 +111,17 @@ export default function StudySession({
         </div>
       </div>
 
-      <div className="flex min-h-24 items-center gap-3 py-3">
-        <button
-          type="button"
-          onClick={() => go(-1)}
-          disabled={index === 0}
-          className="pressable min-h-16 flex-1 rounded-2xl border border-border bg-surface text-lg font-medium disabled:opacity-40"
-        >
-          ← Previous
+      <div className="flex min-h-28 items-center gap-2 py-3">
+        <button type="button" onClick={() => go(-1)} disabled={index === 0} className="btn btn-secondary btn-lg flex-1">
+          ← Prev
         </button>
-        <button
-          type="button"
-          onClick={() => setRevealed((current) => !current)}
-          className="pressable min-h-16 flex-1 rounded-2xl bg-accent px-2 font-medium text-accent-foreground"
-        >
+        <button type="button" onClick={() => setRevealed((current) => !current)} className="btn btn-primary btn-lg flex-1">
           {revealed ? "Hide" : "Reveal"}
         </button>
-        <button
-          type="button"
-          onClick={() => go(1)}
-          disabled={index === order.length - 1}
-          className="pressable min-h-16 flex-1 rounded-2xl border border-border bg-surface text-lg font-medium disabled:opacity-40"
-        >
+        <button type="button" onClick={() => go(1)} disabled={index === order.length - 1} className="btn btn-secondary btn-lg flex-1">
           Next →
         </button>
       </div>
-    </div>
-  );
-}
-
-function Empty({ backHref, title, body }: { backHref: string; title: string; body: string }) {
-  return (
-    <div className="flex h-dvh flex-col items-center justify-center gap-3 px-6 pb-safe text-center">
-      <h1 className="text-xl font-semibold">{title}</h1>
-      <p className="text-muted">{body}</p>
-      <Link
-        href={backHref}
-        className="pressable mt-2 rounded-xl bg-accent px-5 py-3 font-medium text-accent-foreground"
-      >
-        ← Back
-      </Link>
     </div>
   );
 }

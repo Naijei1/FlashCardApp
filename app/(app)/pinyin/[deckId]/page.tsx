@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import WriteSession from "@/components/WriteSession";
-import { studyDeck as getDeck } from "@/lib/hard-words";
-import { chineseSideForDeck } from "@/lib/write";
+import { getStudyDeck } from "@/lib/study-sets";
 
 export default async function PinyinPage({
   params,
@@ -9,16 +8,6 @@ export default async function PinyinPage({
   params: Promise<{ deckId: string }>;
 }) {
   const { deckId } = await params;
-  const deck = await getDeck(deckId);
-  if (!deck) notFound();
-  const deckSide = chineseSideForDeck(deck);
-  return (
-    <WriteSession
-      mode="pinyin"
-      deckId={deckId}
-      deckSide={deckSide}
-      chineseLang="zh-CN"
-      backHref={`/decks/${deckId}`}
-    />
-  );
+  if (!(await getStudyDeck(deckId))) notFound();
+  return <WriteSession mode="pinyin" deckId={deckId} chineseLang="zh-CN" backHref={`/decks/${deckId}`} />;
 }

@@ -30,9 +30,9 @@ export default function CardPagination({
   if (totalPages <= 1) return null;
 
   const linkClass =
-    "pressable rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium";
+    "btn btn-secondary";
   const disabledClass =
-    "rounded-lg border border-border px-4 py-2 text-sm text-muted opacity-50";
+    "btn btn-secondary pointer-events-none opacity-40";
 
   return (
     <nav aria-label="Card pages" className="flex items-center justify-between gap-3 pt-2">

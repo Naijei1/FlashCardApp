@@ -47,14 +47,14 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
-            className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-lg outline-none focus:border-accent"
+            className="input py-3 text-lg"
           />
         </label>
         {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
         <button
           type="submit"
           disabled={busy || !password}
-          className="w-full rounded-xl bg-accent px-4 py-3 text-lg font-medium text-accent-foreground disabled:opacity-50"
+          className="btn btn-primary btn-lg w-full"
         >
           {busy ? "Unlocking…" : "Unlock"}
         </button>

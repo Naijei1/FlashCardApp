@@ -40,8 +40,6 @@ export default function AddCardForm({ deckId }: { deckId: string }) {
     }
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-border bg-surface px-3 py-2.5 outline-none focus:border-accent";
 
   return (
     <form
@@ -54,9 +52,9 @@ export default function AddCardForm({ deckId }: { deckId: string }) {
           event.preventDefault();
         }
       }}
-      className="space-y-3 rounded-2xl border border-border bg-surface p-4"
+      className="space-y-3 card p-5"
     >
-      <h3 className="text-sm font-medium uppercase tracking-wide text-muted">Add card</h3>
+      <h3 className="eyebrow">Add card</h3>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="text-sm text-muted">
           Front
@@ -64,7 +62,7 @@ export default function AddCardForm({ deckId }: { deckId: string }) {
             value={front}
             onChange={(e) => setFront(e.target.value)}
             placeholder="e.g. 你好"
-            className={inputClass + " mt-1 text-foreground"}
+            className="input mt-1"
           />
         </label>
         <label className="text-sm text-muted">
@@ -73,7 +71,7 @@ export default function AddCardForm({ deckId }: { deckId: string }) {
             value={back}
             onChange={(e) => setBack(e.target.value)}
             placeholder="e.g. hello"
-            className={inputClass + " mt-1 text-foreground"}
+            className="input mt-1"
           />
         </label>
       </div>
@@ -86,7 +84,7 @@ export default function AddCardForm({ deckId }: { deckId: string }) {
         <input
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          className={inputClass + " mt-1 text-foreground"}
+          className="input mt-1"
         />
       </label>
       {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
@@ -103,7 +101,7 @@ export default function AddCardForm({ deckId }: { deckId: string }) {
         <button
           type="submit"
           disabled={busy || !front.trim() || !back.trim()}
-          className="rounded-lg bg-accent px-5 py-2.5 font-medium text-accent-foreground disabled:opacity-50"
+          className="btn btn-primary px-5"
         >
           {busy ? "Adding…" : "Add"}
         </button>

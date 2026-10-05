@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import WriteSession from "@/components/WriteSession";
-import { studyDeck as getDeck } from "@/lib/hard-words";
-import { chineseSideForDeck, isChineseLang } from "@/lib/write";
+import { getStudyDeck } from "@/lib/study-sets";
+import { isChineseLang } from "@/lib/write";
 
 export default async function WritePage({
   params,
@@ -9,24 +9,8 @@ export default async function WritePage({
   params: Promise<{ deckId: string }>;
 }) {
   const { deckId } = await params;
-  const deck = await getDeck(deckId);
+  const deck = await getStudyDeck(deckId);
   if (!deck) notFound();
-  const backHref = `/decks/${deckId}`;
-
-  const deckSide = chineseSideForDeck(deck);
-
-  const chineseLang = isChineseLang(deck.frontLanguage)
-    ? deck.frontLanguage!
-    : isChineseLang(deck.backLanguage)
-      ? deck.backLanguage!
-      : "zh-CN";
-
-  return (
-    <WriteSession
-      deckId={deckId}
-      deckSide={deckSide}
-      chineseLang={chineseLang}
-      backHref={backHref}
-    />
-  );
+  const chineseLang = [deck.frontLanguage, deck.backLanguage].find(isChineseLang) ?? "zh-CN";
+  return <WriteSession deckId={deckId} chineseLang={chineseLang} backHref={`/decks/${deckId}`} />;
 }

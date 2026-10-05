@@ -58,21 +58,19 @@ export default function DeckSettings({ deck }: { deck: Deck }) {
     return (
       <button
         onClick={() => { reset(); setOpen(true); }}
-        className="rounded-lg border border-border px-3 py-2 text-sm text-muted hover:text-foreground"
+        className="btn btn-secondary"
       >
         Edit deck
       </button>
     );
   }
 
-  const selectClass =
-    "w-full rounded-lg border border-border bg-surface px-3 py-2 outline-none focus:border-accent";
 
   return (
-    <div className="w-full space-y-3 rounded-2xl border border-border bg-surface p-4">
+    <div className="w-full space-y-3 card p-5">
       <label className="block text-sm">
         <span className="text-muted">Deck name</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} className={selectClass + " mt-1"} />
+        <input value={name} onChange={(e) => setName(e.target.value)} className="input mt-1" />
       </label>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block text-sm">
@@ -80,7 +78,7 @@ export default function DeckSettings({ deck }: { deck: Deck }) {
           <select
             value={frontLanguage}
             onChange={(e) => setFrontLanguage(e.target.value)}
-            className={selectClass + " mt-1"}
+            className="input mt-1"
           >
             {LANGUAGE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -94,7 +92,7 @@ export default function DeckSettings({ deck }: { deck: Deck }) {
           <select
             value={backLanguage}
             onChange={(e) => setBackLanguage(e.target.value)}
-            className={selectClass + " mt-1"}
+            className="input mt-1"
           >
             {LANGUAGE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -111,7 +109,7 @@ export default function DeckSettings({ deck }: { deck: Deck }) {
         <select
           value={chineseSide}
           onChange={(e) => setChineseSide(e.target.value)}
-          className={selectClass + " mt-1"}
+          className="input mt-1"
         >
           <option value="">Auto (from languages)</option>
           <option value="front">Front</option>
@@ -122,20 +120,20 @@ export default function DeckSettings({ deck }: { deck: Deck }) {
         <button
           onClick={save}
           disabled={busy || !name.trim()}
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
+          className="btn btn-primary"
         >
           Save
         </button>
         <button
           onClick={() => { reset(); setOpen(false); }}
-          className="rounded-lg border border-border px-4 py-2 text-sm text-muted"
+          className="btn btn-secondary"
         >
           Cancel
         </button>
         <button
           onClick={remove}
           disabled={busy}
-          className="ml-auto rounded-lg border border-red-500/40 px-4 py-2 text-sm text-red-500"
+          className="btn btn-danger ml-auto"
         >
           Delete deck
         </button>

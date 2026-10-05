@@ -22,7 +22,7 @@ export default function AppError({
       <button
         type="button"
         onClick={reset}
-        className="rounded-xl bg-accent px-5 py-3 font-medium text-accent-foreground"
+        className="btn btn-primary"
       >
         Try again
       </button>

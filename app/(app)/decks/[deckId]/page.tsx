@@ -1,18 +1,20 @@
-import { chineseSideForDeck } from "@/lib/write";
-import { readingForCard } from "@/lib/pinyin-queue";
-import { cardForMode } from "@/lib/modes";
-import { studyCards, studyDeck, HARD_DECK } from "@/lib/hard-words";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AddCardForm from "@/components/AddCardForm";
+import CardList from "@/components/CardList";
 import CardPagination from "@/components/CardPagination";
-import { IconChevronRight } from "@/components/icons";
-import CardRow from "@/components/CardRow";
 import DeckSettings from "@/components/DeckSettings";
+import ModeLink from "@/components/ModeLink";
 import { listDecks } from "@/lib/db";
-import { uniqueWords } from "@/lib/words";
-import { appTimeZone } from "@/lib/forecast";
 import { totalCounts } from "@/lib/due";
+import { appTimeZone } from "@/lib/forecast";
+import { cardForMode } from "@/lib/modes";
+import { studyDetails } from "@/lib/pinyin-queue";
+import { plural } from "@/lib/plural";
+import { DAILY_WORD_GOAL } from "@/lib/practice";
+import { ALL_DECK, HARD_DECK, isVirtualDeck, loadStudySet } from "@/lib/study-sets";
+import type { ReviewMode } from "@/lib/types";
+import { uniqueWords } from "@/lib/words";
 
 const PAGE_SIZE = 50;
 
@@ -20,6 +22,11 @@ function requestedPage(value: string | undefined): number {
   const page = Number.parseInt(value ?? "1", 10);
   return Number.isFinite(page) && page > 0 ? page : 1;
 }
+
+const EYEBROW: Record<string, string> = {
+  [ALL_DECK]: "Global study · every deck",
+  [HARD_DECK]: "Filtered deck",
+};
 
 export default async function DeckPage({
   params,
@@ -29,156 +36,106 @@ export default async function DeckPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const [{ deckId }, { page: pageParam }] = await Promise.all([params, searchParams]);
-  const [deck, cards, decks] = await Promise.all([
-    studyDeck(deckId),
-    studyCards(deckId),
-    listDecks(),
-  ]);
-  if (!deck) notFound();
+  const [set, decks] = await Promise.all([loadStudySet(deckId), listDecks()]);
+  if (!set) notFound();
+  const { deck, cards, sideFor } = set;
+  const virtual = isVirtualDeck(deckId);
   const now = new Date();
+  const skillCounts = (mode: ReviewMode) => totalCounts(
+    cards.map((card) => cardForMode(card, mode)).filter((card) => studyDetails(card, mode, sideFor(card))),
+    now
+  );
   const counts = totalCounts(cards, now);
-  const side = chineseSideForDeck(deck);
-  const writeCounts = totalCounts(cards.filter((c) => readingForCard(c, side) !== null).map((c) => cardForMode(c, "write")), now);
-  const pinyinCounts = totalCounts(cards.filter((c) => readingForCard(c, side) !== null).map((c) => cardForMode(c, "pinyin")), now);
+  const writeCounts = skillCounts("write");
+  const pinyinCounts = skillCounts("pinyin");
   const words = uniqueWords(cards);
   const upcoming = words.map((card) => new Date(card.fsrs.due))
     .filter((due) => due > now).sort((a, b) => a.getTime() - b.getTime())[0];
   const nextReview = upcoming ? new Intl.DateTimeFormat("en-US", {
     timeZone: appTimeZone(), month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short",
   }).format(upcoming) : null;
+
   const sorted = [...cards].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const page = Math.min(requestedPage(pageParam), totalPages);
   const pageStart = (page - 1) * PAGE_SIZE;
   const shown = sorted.slice(pageStart, pageStart + PAGE_SIZE);
-  const shownFrom = shown.length > 0 ? pageStart + 1 : 0;
-  const shownTo = pageStart + shown.length;
+  const status = (due: number, fresh: number) =>
+    [due > 0 ? `${due} due` : "Nothing due", fresh > 0 ? `${fresh} new` : ""].filter(Boolean).join(" · ");
 
   return (
-    <div className="space-y-6 py-6">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-8 py-6">
+      <header className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-bold">{deck.name}</h1>
-          <p className="text-sm text-muted">
-            {counts.total} card{counts.total === 1 ? "" : "s"} · {counts.due} due words ·{" "}
-            {counts.newCards} new words
+          <p className="eyebrow">{EYEBROW[deckId] ?? "Lesson"}</p>
+          <h1 className="mt-1 truncate text-3xl font-bold tracking-tight">{deck.name}</h1>
+          <p className="mt-1 text-sm text-muted">
+            {plural(counts.total, "card")} · {counts.due} due · {counts.newCards} new
+            {deckId === ALL_DECK && ` · ${plural(decks.length, "deck")}`}
           </p>
         </div>
-        {deckId !== HARD_DECK && <DeckSettings deck={deck} />}
-      </div>
+        {!virtual && <DeckSettings deck={deck} />}
+      </header>
 
-      {words.length > 0 && counts.newCards === 0 && (
-        <p className="rounded-xl border border-border bg-surface p-4 text-sm text-muted">
-          All {words.length} words have been studied in Spaced Repetition. Writing Chinese and writing pinyin have separate schedules.
-          {counts.due === 0 && nextReview ? ` Next scheduled review: ${nextReview}.` : ""}
-          {" "}Use Normal Review to practice anytime without changing your schedule.
-        </p>
+      <section aria-labelledby="modes-heading" className="space-y-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 id="modes-heading" className="eyebrow">Study modes</h2>
+          <span className="text-xs text-muted">Each mode keeps its own schedule</span>
+        </div>
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <ModeLink primary href={`/review/${deckId}`} title="Spaced Repetition"
+              detail={`${status(counts.due, counts.newCards)} · up to ${DAILY_WORD_GOAL} new a day`}
+              badge={counts.due} />
+          </div>
+          {counts.newCards > 0 && (
+            <ModeLink href={`/review/${deckId}?new=1`} title="Learn new words"
+              detail={`Start ${plural(counts.newCards, "unseen word")}`} />
+          )}
+          <ModeLink href={`/study/${deckId}`} title="Normal Review"
+            detail="Flip freely — doesn’t affect scheduling" />
+          <ModeLink href={`/write/${deckId}`} title="Write Chinese"
+            detail={`Pinyin → characters · ${status(writeCounts.due, writeCounts.newCards)}`}
+            badge={writeCounts.due} />
+          <ModeLink href={`/pinyin/${deckId}`} title="Write Pinyin"
+            detail={`Characters → pinyin · ${status(pinyinCounts.due, pinyinCounts.newCards)}`}
+            badge={pinyinCounts.due} />
+        </div>
+        {words.length > 0 && counts.newCards === 0 && counts.due === 0 && nextReview && (
+          <p className="text-sm text-muted">
+            All caught up in Spaced Repetition. Next scheduled review: {nextReview}.
+          </p>
+        )}
+      </section>
+
+      {!virtual && (
+        <>
+          <div className="flex gap-2">
+            <Link href={`/import?deck=${deck.id}`} className="btn btn-secondary">Import CSV</Link>
+            <a href={`/api/decks/${deck.id}/export`} className="btn btn-secondary">Export CSV</a>
+          </div>
+          <AddCardForm deckId={deck.id} />
+        </>
       )}
 
-      <p className="text-sm text-muted">Each mode has its own queue and review history. Schedules target 95% recall; missed words return sooner.</p>
-      <div className="space-y-2">
-        <Link
-          href={`/review/${deck.id}`}
-          className="pressable flex items-center justify-between rounded-2xl bg-accent px-5 py-4 text-accent-foreground"
-        >
-          <span>
-            <span className="block text-lg font-semibold">Spaced Repetition</span>
-            <span className="block text-sm opacity-80">
-              {counts.due > 0
-                ? `Review ${counts.due} due word${counts.due === 1 ? "" : "s"}`
-                : "Nothing due right now"}
-            </span>
-          </span>
-          <IconChevronRight className="text-xl opacity-70" />
-        </Link>
-        {counts.newCards > 0 && (
-          <Link href={`/review/${deck.id}?new=1`} prefetch={false}
-            className="pressable flex items-center justify-between rounded-2xl border border-accent/40 bg-surface px-5 py-4">
-            <span>
-              <span className="block text-lg font-semibold">Learn new words</span>
-              <span className="block text-sm text-muted">Start with {counts.newCards} unseen words in this deck</span>
-            </span>
-            <IconChevronRight className="text-xl text-muted" />
-          </Link>
-        )}
-        <Link
-          href={`/study/${deck.id}`}
-          className="pressable flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4"
-        >
-          <span>
-            <span className="block text-lg font-semibold">Normal Review</span>
-            <span className="block text-sm text-muted">
-              Browse cards freely — doesn&apos;t affect scheduling
-            </span>
-          </span>
-          <IconChevronRight className="text-xl text-muted" />
-        </Link>
-        <Link
-          href={`/write/${deck.id}`}
-          className="pressable flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4"
-        >
-          <span>
-            <span className="block text-lg font-semibold">Write Chinese</span>
-            <span className="block text-sm text-muted">
-              Pinyin → Chinese · {writeCounts.due} due · {writeCounts.newCards} new
-            </span>
-          </span>
-          <IconChevronRight className="text-xl text-muted" />
-        </Link>
-        <Link
-          href={`/pinyin/${deck.id}`}
-          className="pressable flex items-center justify-between rounded-2xl border border-border bg-surface px-5 py-4"
-        >
-          <span>
-            <span className="block text-lg font-semibold">Write Pinyin</span>
-            <span className="block text-sm text-muted">
-              {pinyinCounts.due} due · {pinyinCounts.newCards} new in pinyin
-            </span>
-          </span>
-          <IconChevronRight className="text-xl text-muted" />
-        </Link>
-      </div>
-
-      {deckId !== HARD_DECK && <div className="flex gap-4 px-1 text-sm">
-        <Link href={`/import?deck=${deck.id}`} className="text-accent">
-          Import CSV
-        </Link>
-        <a href={`/api/decks/${deck.id}/export`} className="text-accent">
-          Export CSV
-        </a>
-      </div>}
-
-      {deckId !== HARD_DECK && <AddCardForm deckId={deck.id} />}
-
-      <section aria-labelledby="deck-cards-heading" className="space-y-2">
-        <div className="flex items-baseline justify-between gap-3 px-1">
-          <h2
-            id="deck-cards-heading"
-            className="text-sm font-medium uppercase tracking-wide text-muted"
-          >
-            Cards
-          </h2>
+      <section aria-labelledby="deck-cards-heading" className="space-y-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 id="deck-cards-heading" className="eyebrow">Cards</h2>
           {shown.length > 0 && (
             <span className="text-xs tabular-nums text-muted">
-              Showing {shownFrom}–{shownTo} of {sorted.length}
+              Showing {pageStart + 1}–{pageStart + shown.length} of {sorted.length}
             </span>
           )}
         </div>
         {sorted.length === 0 && (
-          <p className="text-sm text-muted">{deckId === HARD_DECK ? "No hard words yet. Use Mark as hard while studying or in a lesson’s card list." : "No cards yet — add one above or import a CSV."}</p>
+          <p className="card p-4 text-sm text-muted">
+            {deckId === HARD_DECK
+              ? "No hard words yet. Use Mark as hard while studying or in a lesson’s card list."
+              : virtual ? "No cards yet — create a deck and add some words." : "No cards yet — add one above or import a CSV."}
+          </p>
         )}
-        <ul className="space-y-2">
-          {shown.map((card) => (
-            <li key={`${card.deckId}:${card.id}`}>
-              <CardRow card={card} decks={decks} frontLang={deck.frontLanguage} />
-            </li>
-          ))}
-        </ul>
-        <CardPagination
-          basePath={`/decks/${deck.id}`}
-          currentPage={page}
-          totalPages={totalPages}
-        />
+        <CardList cards={shown} decks={decks} showDeckNames={virtual} />
+        <CardPagination basePath={`/decks/${deck.id}`} currentPage={page} totalPages={totalPages} />
       </section>
     </div>
   );

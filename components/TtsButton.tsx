@@ -22,7 +22,7 @@ export default function TtsButton({
         e.stopPropagation();
         speak(text, lang);
       }}
-      className={`pressable inline-flex h-11 w-11 items-center justify-center rounded-full text-xl text-muted hover:bg-border/40 hover:text-foreground ${className}`}
+      className={`pressable inline-flex h-11 w-11 items-center justify-center rounded-full text-xl text-muted hover:bg-surface-muted hover:text-foreground ${className}`}
     >
       <IconSpeaker strokeWidth={1.8} />
     </button>
