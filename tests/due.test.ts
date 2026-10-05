@@ -87,6 +87,15 @@ describe("new word allowance", () => {
   });
 });
 
+describe("learning-first order", () => {
+  it("puts a card returning from a learning step ahead of overdue reviews", () => {
+    const learning = applyRating(emptyCardState(NOW), Rating.Good, new Date(NOW.getTime() - 3_600_000), "write").fsrs;
+    const overdue = { ...applyRating(emptyCardState(NOW), Rating.Easy, NOW).fsrs, due: new Date(NOW.getTime() - 30 * 86_400_000).toISOString() };
+    const cards = [makeCard({ id: "old", fsrs: overdue }), makeCard({ id: "step", fsrs: learning })];
+    expect(buildQueue(cards, NOW, { limit: 1 }).map((card) => card.id)).toEqual(["step"]);
+  });
+});
+
 describe("buildQueue", () => {
   it("includes only due cards, shuffled deterministically", () => {
     const future = applyRating(emptyCardState(NOW), Rating.Easy, NOW).fsrs;

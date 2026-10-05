@@ -48,11 +48,13 @@ describe("adaptive recall", () => {
     card = rateCard(card, Rating.Good, new Date(card.fsrs.due)).card;
     expect(card.practice).toMatchObject({ failures: 2, successes: 2, correctStreak: 2, firstStudiedAt: now.toISOString() });
   });
-  it("moves Good/Easy out of the current session, while Retry comes back in a minute", () => {
-    for (const grade of [Rating.Good, Rating.Easy] as const) {
-      expect(Date.parse(applyRating(make().fsrs, grade, now).fsrs.due) - now.getTime()).toBeGreaterThanOrEqual(86_400_000);
-    }
-    expect(Date.parse(applyRating(make().fsrs, Rating.Again, now).fsrs.due) - now.getTime()).toBe(60_000);
+  it("confirms a new word 10 minutes later before Good graduates it, while Retry comes back in a minute", () => {
+    const after = (state: ReturnType<typeof make>["fsrs"], grade: 1 | 2 | 3 | 4, at = now) => Date.parse(applyRating(state, grade, at).fsrs.due) - at.getTime();
+    expect(after(make().fsrs, Rating.Again)).toBe(60_000);
+    expect(after(make().fsrs, Rating.Good)).toBe(600_000);
+    expect(after(make().fsrs, Rating.Easy)).toBeGreaterThanOrEqual(86_400_000);
+    const confirmed = applyRating(make().fsrs, Rating.Good, now).fsrs;
+    expect(after(confirmed, Rating.Good, new Date(confirmed.due))).toBeGreaterThanOrEqual(86_400_000);
   });
   it("uses the exact same intervals for all button previews and stored ratings", () => {
     const states = [make().fsrs, applyRating(make().fsrs, Rating.Again, now).fsrs, applyRating(make().fsrs, Rating.Good, now).fsrs];

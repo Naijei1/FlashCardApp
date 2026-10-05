@@ -9,10 +9,11 @@ Tailwind CSS; data lives in a single DynamoDB table.
 
 - **Two study modes**: casual flipping (never touches scheduling) and FSRS
   spaced repetition (`ts-fsrs`, FSRS-6) with Again/Hard/Good/Easy buttons that
-  show the next interval. Good/Easy graduate a word to a day-scale interval;
-  Retry/Hard retain short learning steps. FSRS uses prior failures and successes
-  to adjust future intervals, and due queues prioritize difficult words while
-  reserving room for new vocabulary. Decks with unseen words also offer a
+  show the next interval. New and missed words go through minute-level
+  learning steps before FSRS takes over with day-scale intervals (see
+  [Learning steps](#learning-steps)). FSRS uses prior failures and successes
+  to adjust future intervals, and due queues put words mid-step first, then
+  difficult words, while reserving room for up to 11 new words a day. Decks with unseen words also offer a
   **Learn new words** shortcut. Decks with no unseen words show when the next
   scheduled review is due; Normal Review is available anytime.
 - **Review direction**: spaced repetition shows Chinese first and reveals its
@@ -219,6 +220,28 @@ review frequency; it is a target, not a promise of recall. Existing long-term
 schedules are recalculated on read from their last review and stability, moving
 due dates earlier only. This does not add reviews or reset learning history.
 Reference: https://docs.ankiweb.net/deck-options.html#desired-retention
+
+### Learning steps
+
+Each skill has its own steps; FSRS schedules everything after the last one.
+
+| Skill | New words | Missed (relearning) |
+| --- | --- | --- |
+| Spaced Repetition | 1m → 10m | 10m |
+| Write Chinese, Write Pinyin | 1m → 10m → 1h | 10m → 1h |
+
+On a new word, Again returns in 1m, Hard in about 6m, Good moves to the next
+step, and Easy graduates straight to a day-scale interval. Writing gets the
+extra 1h same-day check because producing characters and tones is harder than
+recognizing them.
+
+Steps up to 15 minutes stay in the current session. A 1h step leaves the
+session with a "back in about an hour" note and comes first in the next session.
+When only parked learning cards remain and more words are waiting, the
+five-minute batch break starts right away and those cards join the next batch.
+When nothing else is waiting, **Finish for now** ends the session without
+sitting through the countdown. Existing card state needs no migration: cards
+keep their FSRS memory state and stored step position.
 
 Use **Mark as hard** during any study mode or in the card list. **Hard Words** on
 the home screen is a filtered deck with normal review, writing, and pinyin modes.

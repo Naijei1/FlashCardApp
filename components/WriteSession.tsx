@@ -303,10 +303,10 @@ export default function WriteSession({
       <div className="flex min-h-28 items-center gap-2 py-3">
         {result && (copiesLeft > 0 || drillFailed) ? (
           <button type="button" onClick={continueWriting} className="btn btn-primary btn-lg w-full">
-            {copiesLeft > 0 ? `Write again (${copiesLeft} left)` : `Continue · review in ${previewIntervals(card.fsrs, new Date()).again}`}
+            {copiesLeft > 0 ? `Write again (${copiesLeft} left)` : `Continue · review in ${previewIntervals(card.fsrs, new Date(), mode).again}`}
           </button>
         ) : result ? (
-          <RatingBar fsrs={card.fsrs} onRate={rate} defaultValue={defaultRating} />
+          <RatingBar fsrs={card.fsrs} mode={mode} onRate={rate} defaultValue={defaultRating} />
         ) : (
           <>
             <button type="button" onClick={() => check(true)} className="btn btn-secondary btn-lg px-4 text-base text-muted">

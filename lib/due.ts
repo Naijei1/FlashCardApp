@@ -12,6 +12,11 @@ export function isNew(card: Card): boolean {
   return card.fsrs.state === State.New;
 }
 
+/** Mid-step cards (for example, back from a 1h writing step) finish before anything else. */
+export function isLearning(card: Card): boolean {
+  return card.fsrs.state === State.Learning || card.fsrs.state === State.Relearning;
+}
+
 export function dueCards(cards: Card[], now: Date): Card[] {
   return uniqueWords(cards).filter((c) => isDue(c, now));
 }
@@ -72,13 +77,13 @@ function priority(card: Card, now: Date): number {
 }
 
 /**
- * Due words split into reviews (most overdue/difficult first) and unseen words
+ * Due words split into reviews (learning steps first, then most overdue/difficult) and unseen words
  * (oldest first), with unseen words limited to the remaining new allowance.
  */
 export function eligibleCards(cards: Card[], now: Date, newLimit = Infinity) {
   const due = dueCards(cards, now);
   const reviews = due.filter((card) => !isNew(card))
-    .sort((a, b) => priority(b, now) - priority(a, now));
+    .sort((a, b) => Number(isLearning(b)) - Number(isLearning(a)) || priority(b, now) - priority(a, now));
   const unseen = due.filter(isNew)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
     .slice(0, Math.max(0, newLimit));

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { previewIntervals } from "@/lib/fsrs";
-import type { StoredFsrs } from "@/lib/types";
+import type { ReviewMode, StoredFsrs } from "@/lib/types";
 
 const RATINGS = [
   { value: 1, key: "again", label: "Retry", classes: "text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/15 active:bg-red-500/25" },
@@ -13,10 +13,13 @@ const RATINGS = [
 
 export default function RatingBar({
   fsrs,
+  mode = "review",
   onRate,
   defaultValue,
 }: {
   fsrs: StoredFsrs;
+  /** Each skill has its own learning steps. */
+  mode?: ReviewMode;
   onRate: (rating: number) => void;
   /** Rating applied by Enter; gets a subtle ring so the shortcut is visible. */
   defaultValue?: number;
@@ -35,7 +38,7 @@ export default function RatingBar({
   }, []);
   // A queue can remain open for days. Preview from the time of this rating,
   // not the time the batch was fetched or the previous learning step was due.
-  const intervals = previewIntervals(fsrs, new Date());
+  const intervals = previewIntervals(fsrs, new Date(), mode);
   return (
     <div className="w-full">
       <p className="mb-2 text-center text-xs text-muted">Next review after this rating</p>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Grade } from "@/lib/fsrs";
+import { State, type Grade } from "@/lib/fsrs";
 import { rateCard } from "@/lib/practice";
 import type { StudyQueueItem } from "@/lib/review-queue";
 import {
@@ -13,6 +13,11 @@ import {
 import { getBreakUntil, startBreak } from "@/lib/study-break";
 import type { Card, ReviewMode } from "@/lib/types";
 import { createReviewSync, type ReviewSyncState } from "./reviewSync";
+
+/** Waiting longer than this for a parked learning card starts the batch break instead. */
+const LONG_WAIT_MS = 60_000;
+
+const itemKey = (item: StudyQueueItem) => `${item.card.deckId}\u0000${item.card.id}`;
 
 const INITIAL_SYNC_STATE: ReviewSyncState = {
   pendingCount: 0,
@@ -42,6 +47,8 @@ export function useStudyQueue({
   const [batchSize, setBatchSize] = useState(0);
   const [breakUntil, setBreakUntil] = useState(0);
   const [reviewed, setReviewed] = useState(0);
+  /** Learning cards whose next step (about an hour) falls outside this session. */
+  const [backLater, setBackLater] = useState(0);
   const [loadError, setLoadError] = useState(false);
   const [syncState, setSyncState] = useState<ReviewSyncState>(INITIAL_SYNC_STATE);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -49,6 +56,8 @@ export function useStudyQueue({
   const loadAbortRef = useRef<AbortController | null>(null);
   const syncPendingRef = useRef<number | null>(null);
   const waitingToLoadRef = useRef(false);
+  /** Parked learning cards carried into the next batch so nobody waits out their step. */
+  const carryRef = useRef<StudyQueueItem[]>([]);
   const sync = useMemo(
     () => createReviewSync((failedCount) => setSyncState((state) => ({ ...state, failedCount }))),
     []
@@ -80,8 +89,11 @@ export function useStudyQueue({
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((data: { queue: StudyQueueItem[]; totalDue: number }) => {
         if (controller.signal.aborted) return;
+        const carried = carryRef.current;
+        carryRef.current = [];
+        const loaded = new Set(data.queue.map(itemKey));
         setNowMs(Date.now());
-        setQueue(data.queue);
+        setQueue([...data.queue, ...carried.filter((item) => !loaded.has(itemKey(item)))]);
         setTotalDue(data.totalDue);
         setBatchSize(data.queue.length);
       })
@@ -105,6 +117,8 @@ export function useStudyQueue({
   useEffect(() => {
     setBreakUntil(0);
     setReviewed(0);
+    setBackLater(0);
+    carryRef.current = [];
     setTotalDue(0);
     setBatchSize(0);
     advancedAtRef.current = null;
@@ -150,17 +164,21 @@ export function useStudyQueue({
       sync.push({ mode, cardId: item.card.id, deckId: item.card.deckId, rating, reviewedAt: now.toISOString() });
       // The local result only decides whether a learning step returns within
       // this session; the server's recomputation stays canonical for storage.
-      const { card } = rateCard(item.card, rating as Grade, now);
+      const { card } = rateCard(item.card, rating as Grade, now, mode);
       const rest = [...queue.slice(0, readyIndex), ...queue.slice(readyIndex + 1)];
-      const next = belongsInCurrentSession(card.fsrs.due, now.getTime())
-        ? [...rest, { ...item, card }]
-        : rest;
+      const staysInSession = belongsInCurrentSession(card.fsrs.due, now.getTime());
+      const next = staysInSession ? [...rest, { ...item, card }] : rest;
+      if (!staysInSession && (card.fsrs.state === State.Learning || card.fsrs.state === State.Relearning)) {
+        setBackLater((n) => n + 1);
+      }
       setReviewed((n) => n + 1);
       setNowMs(now.getTime());
       setQueue(next);
-      if (next.length === 0 && totalDue > batchSize) {
-        // Only start a break after every scheduled learning step in this batch.
-        setBreakUntil(startBreak(breakScope, now.getTime()));
+      const at = now.getTime();
+      const readyAt = firstReadyIndex(next, at) >= 0 ? at : nextQueuedDue(next, at);
+      if (totalDue > batchSize && (readyAt === null || readyAt - at > LONG_WAIT_MS)) {
+        // Rest instead of waiting out a learning step; parked cards join the next batch.
+        setBreakUntil(startBreak(breakScope, at));
       }
       return next;
     },
@@ -176,11 +194,12 @@ export function useStudyQueue({
   }, []);
 
   const continueAfterBreak = useCallback(() => {
+    carryRef.current = queue ?? [];
     setBreakUntil(0);
     setReviewed(0);
     advancedAtRef.current = null;
     loadQueue();
-  }, [loadQueue]);
+  }, [loadQueue, queue]);
 
   return {
     queue,
@@ -193,6 +212,7 @@ export function useStudyQueue({
     breakUntil,
     breakScope,
     reviewed,
+    backLater,
     loadError,
     syncState,
     loadQueue,

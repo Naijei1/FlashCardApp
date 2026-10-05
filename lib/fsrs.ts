@@ -6,16 +6,32 @@ import {
   State,
   type Card as FsrsCard,
   type Grade,
+  type FSRS,
   type ReviewLog,
+  type StepUnit,
 } from "ts-fsrs";
-import type { StoredFsrs } from "./types";
+import type { ReviewMode, StoredFsrs } from "./types";
 import { formatInterval } from "./interval-label";
 
 // A single-user app benefits more from truthful button labels than from
 // randomized workload distribution. Fuzzing is timestamp-seeded, so a label
 // previewed milliseconds before submission can otherwise differ by days from
 // the interval that is actually stored.
-const scheduler = fsrs(generatorParameters({ request_retention: 0.95, enable_fuzz: false, learning_steps: ["1m"], relearning_steps: ["1m"] }));
+//
+// Short learning steps stay inside a session. Production skills add a 1h
+// same-day check, because writing characters and tones is harder than
+// recognizing them. FSRS schedules everything after the last step.
+const STEPS: Record<ReviewMode, { learning_steps: StepUnit[]; relearning_steps: StepUnit[] }> = {
+  review: { learning_steps: ["1m", "10m"], relearning_steps: ["10m"] },
+  write: { learning_steps: ["1m", "10m", "1h"], relearning_steps: ["10m", "1h"] },
+  pinyin: { learning_steps: ["1m", "10m", "1h"], relearning_steps: ["10m", "1h"] },
+};
+const schedulers = Object.fromEntries(
+  Object.entries(STEPS).map(([mode, steps]) => [
+    mode,
+    fsrs(generatorParameters({ request_retention: 0.95, enable_fuzz: false, ...steps })),
+  ])
+) as Record<ReviewMode, FSRS>;
 
 export { Rating, State };
 export type { Grade };
@@ -66,8 +82,8 @@ export type IntervalPreview = {
  * Labels for the next interval of each rating. Uses due - now rather than
  * scheduled_days because scheduled_days is 0 during (re)learning steps.
  */
-export function previewIntervals(stored: StoredFsrs, now: Date): IntervalPreview {
-  const preview = scheduler.repeat(toFsrsCard(stored), now);
+export function previewIntervals(stored: StoredFsrs, now: Date, mode: ReviewMode = "review"): IntervalPreview {
+  const preview = schedulers[mode].repeat(toFsrsCard(stored), now);
   const label = (grade: Grade) =>
     formatInterval(preview[grade].card.due.getTime() - now.getTime());
   return {
@@ -81,9 +97,10 @@ export function previewIntervals(stored: StoredFsrs, now: Date): IntervalPreview
 export function applyRating(
   stored: StoredFsrs,
   rating: Grade,
-  now: Date
+  now: Date,
+  mode: ReviewMode = "review"
 ): { fsrs: StoredFsrs; log: ReviewLog } {
-  const { card, log } = scheduler.next(toFsrsCard(stored), now, rating);
+  const { card, log } = schedulers[mode].next(toFsrsCard(stored), now, rating);
   return { fsrs: toStored(card), log };
 }
 
@@ -93,7 +110,7 @@ export function currentRetentionSchedule(stored: StoredFsrs): StoredFsrs {
       !stored.last_review || stored.stability <= 0) return stored;
   const last = Date.parse(stored.last_review);
   if (!Number.isFinite(last)) return stored;
-  const days = scheduler.next_interval(stored.stability, stored.elapsed_days);
+  const days = schedulers.review.next_interval(stored.stability, stored.elapsed_days);
   const due = new Date(Math.min(Date.parse(stored.due), last + days * 86_400_000)).toISOString();
   return { ...stored, due, scheduled_days: Math.max(0, Math.round((Date.parse(due) - last) / 86_400_000)), retentionTarget: 0.95 };
 }

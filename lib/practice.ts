@@ -1,4 +1,4 @@
-import type { Card } from "./types";
+import type { Card, ReviewMode } from "./types";
 import { applyRating, type Grade } from "./fsrs";
 import { localDateKey } from "./forecast";
 import { wordKey } from "./words";
@@ -7,8 +7,8 @@ export const WEEKLY_WORD_GOAL = 77;
 export const DAILY_WORD_GOAL = 11;
 
 /** One attempted recall updates memory once; correction copies are not new reviews. */
-export function rateCard(card: Card, rating: Grade, now: Date) {
-  const result = applyRating(card.fsrs, rating, now);
+export function rateCard(card: Card, rating: Grade, now: Date, mode: ReviewMode = "review") {
+  const result = applyRating(card.fsrs, rating, now, mode);
   const previous = card.practice;
   return {
     ...result,

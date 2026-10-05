@@ -18,6 +18,8 @@ export function SessionScreen({
   syncState,
   onRetrySaves,
   onRetry,
+  note,
+  backLabel = "← Back",
 }: {
   backHref: string;
   title: string;
@@ -25,11 +27,14 @@ export function SessionScreen({
   syncState: ReviewSyncState;
   onRetrySaves: () => void;
   onRetry?: () => void;
+  note?: string;
+  backLabel?: string;
 }) {
   return (
     <div className="mx-auto flex h-dvh max-w-md flex-col items-center justify-center gap-3 px-6 pb-safe text-center">
       <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
       <p className="text-muted">{body}</p>
+      {note && <BackLaterNote text={note} />}
       <SyncNotice state={syncState} onRetry={onRetrySaves} />
       {onRetry && (
         <button type="button" onClick={onRetry} className="btn btn-primary mt-2">
@@ -37,10 +42,24 @@ export function SessionScreen({
         </button>
       )}
       <Link href={backHref} className={onRetry ? "btn btn-ghost" : "btn btn-primary mt-2"}>
-        ← Back
+        {backLabel}
       </Link>
     </div>
   );
+}
+
+function BackLaterNote({ text }: { text: string }) {
+  return (
+    <p role="status" className="rounded-full bg-accent/10 px-3 py-1 text-sm font-medium text-accent">
+      ↻ {text}
+    </p>
+  );
+}
+
+/** Learning cards that left the session for their ~1h step. */
+function backLaterText(count: number): string | undefined {
+  if (count === 0) return undefined;
+  return `${plural(count, "word")} ${count === 1 ? "comes" : "come"} back in about an hour`;
 }
 
 /**
@@ -57,12 +76,13 @@ export function QueueStatus({
   copy: { noun: string; verb: string; empty: string };
 }) {
   const { queue, syncState, resolveSyncFailures, reviewed } = study;
-  const screen = (title: string, body: string, onRetry?: () => void) => (
+  const note = backLaterText(study.backLater);
+  const screen = (title: string, body: string, onRetry?: () => void, backLabel?: string) => (
     <SessionScreen backHref={backHref} title={title} body={body} syncState={syncState}
-      onRetrySaves={resolveSyncFailures} onRetry={onRetry} />
+      onRetrySaves={resolveSyncFailures} onRetry={onRetry} note={note} backLabel={backLabel} />
   );
   if (study.loadError) return screen("Something went wrong", `Could not load the ${copy.noun} queue.`, study.loadQueue);
-  if (study.breakUntil > 0 && (queue === null || queue.length === 0)) {
+  if (study.breakUntil > 0) {
     return (
       <BreakScreen
         until={study.breakUntil}
@@ -73,6 +93,7 @@ export function QueueStatus({
         backHref={backHref}
         onRetrySaves={resolveSyncFailures}
         onContinue={study.continueAfterBreak}
+        note={note}
       />
     );
   }
@@ -88,8 +109,12 @@ export function QueueStatus({
     return screen(title, reviewed > 0 ? `You ${copy.verb} ${plural(reviewed, "card")}.` : copy.empty);
   }
   if (!study.current && study.nextDueAt !== null) {
-    return screen("Next card is still learning",
-      `Ready in ${formatCountdown(study.nextDueAt - study.nowMs)}. It will appear automatically when it is due.`);
+    // Nothing else is waiting, so the user may stay for the last steps or leave;
+    // unfinished learning cards are saved and come first next session.
+    return screen("Almost done",
+      `${plural(queue.length, "word")} still learning — next one in ${formatCountdown(study.nextDueAt - study.nowMs)}. ` +
+      "Stay and it appears automatically, or finish now and it comes first next time.",
+      undefined, "Finish for now");
   }
   return null;
 }
@@ -122,6 +147,9 @@ export function SessionHeader({
         </div>
         {action}
       </header>
+      {study.backLater > 0 && (
+        <p className="-mt-1 mb-2 text-center text-xs text-muted">↻ {backLaterText(study.backLater)}</p>
+      )}
       <SyncNotice state={study.syncState} onRetry={study.resolveSyncFailures} compact />
     </>
   );

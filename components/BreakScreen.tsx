@@ -18,6 +18,7 @@ export default function BreakScreen({
   backHref,
   onContinue,
   onRetrySaves,
+  note,
 }: {
   until: number;
   /** Cards rated in the batch just finished (0 when resuming a stored break). */
@@ -29,6 +30,8 @@ export default function BreakScreen({
   backHref: string;
   onContinue: () => void;
   onRetrySaves: () => void;
+  /** Learning cards that will return later, shown under the summary. */
+  note?: string;
 }) {
   const [msLeft, setMsLeft] = useState(() => until - Date.now());
 
@@ -56,6 +59,7 @@ export default function BreakScreen({
           ? `${plural(waiting, "more card")} waiting after a short rest.`
           : "A short rest helps the next batch stick."}
       </p>
+      {note && <p className="text-sm text-muted">↻ {note}.</p>}
       <SyncNotice state={syncState} onRetry={onRetrySaves} />
       <div
         className="text-6xl font-semibold tabular-nums tracking-tight"

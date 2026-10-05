@@ -10,7 +10,7 @@ export function cardForMode(card: Card, mode: ReviewMode): Card {
 }
 
 export function rateMode(card: Card, mode: ReviewMode, rating: Grade, now: Date) {
-  const result = rateCard(cardForMode(card, mode), rating, now);
+  const result = rateCard(cardForMode(card, mode), rating, now, mode);
   if (mode === "review") return result;
   // Learning another skill for a legacy known word is not new vocabulary.
   if (card.fsrs.reps > 0 && !card.practice?.firstStudiedAt) {
