@@ -562,60 +562,6 @@ async function ensureReviewStats(): Promise<void> {
   await reviewStatsInitialization;
 }
 
-/**
- * Legacy standalone logger retained for callers outside the review route. Its
- * log write and aggregate update are atomic, and retrying the same log key does
- * not increment the count twice.
- */
-export async function putReviewLog(cardId: string, log: ReviewLog): Promise<void> {
-  await ensureReviewStats();
-  const key = {
-    PK: "LOGS",
-    SK: `${new Date(log.review).toISOString()}#${cardId}`,
-  };
-  try {
-    await db.send(
-      new TransactWriteCommand({
-        TransactItems: [
-          {
-            Put: {
-              TableName: tableName(),
-              Item: { ...key, ...reviewLogFields(cardId, log) },
-              ConditionExpression: "attribute_not_exists(#pk)",
-              ExpressionAttributeNames: { "#pk": "PK" },
-            },
-          },
-          {
-            Update: {
-              TableName: tableName(),
-              Key: reviewStatsKey,
-              UpdateExpression:
-                "SET #updatedAt = :updatedAt ADD #reviewCount :one",
-              ConditionExpression: "attribute_exists(#reviewCount)",
-              ExpressionAttributeNames: {
-                "#reviewCount": "reviewCount",
-                "#updatedAt": "updatedAt",
-              },
-              ExpressionAttributeValues: {
-                ":one": 1,
-                ":updatedAt": new Date().toISOString(),
-              },
-            },
-          },
-        ],
-      })
-    );
-  } catch (error) {
-    if (!(error instanceof Error) || error.name !== "TransactionCanceledException") {
-      throw error;
-    }
-    const existing = await db.send(
-      new GetCommand({ TableName: tableName(), Key: key, ConsistentRead: true })
-    );
-    if (!existing.Item) throw error;
-  }
-}
-
 export type ReviewReceipt = {
   mode?: ReviewMode;
   clientReviewId: string;

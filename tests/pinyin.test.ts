@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checkPinyinAnswer, numberedPinyin, pinyinTextForCard } from "@/lib/pinyin";
-import { buildPinyinQueueData, readingForCard } from "@/lib/pinyin-queue";
+import { buildStudyQueue, readingForCard } from "@/lib/pinyin-queue";
 import { emptyCardState } from "@/lib/fsrs";
 import type { Card } from "@/lib/types";
 
@@ -67,10 +67,10 @@ describe("automatic Pinyin readings", () => {
     future.fsrs.due = "2026-09-09T12:00:00.000Z";
     const cards = [card("hello", "world"), future, ...chinese];
     const before = JSON.stringify(cards);
-    const result = buildPinyinQueueData(cards, "front", NOW);
+    const result = buildStudyQueue(cards, { mode: "pinyin", sideFor: () => "front", now: NOW });
     expect(result.totalDue).toBe(30);
     expect(result.queue).toHaveLength(25);
-    expect(result.queue.every((item) => item.pinyin.syllables.join(" ") === "nǐ hǎo")).toBe(true);
+    expect(result.queue.every((item) => item.pinyin?.syllables.join(" ") === "nǐ hǎo")).toBe(true);
     expect(JSON.stringify(cards)).toBe(before);
   });
 });

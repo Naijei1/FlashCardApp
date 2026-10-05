@@ -1,10 +1,10 @@
 // Server-only by import convention: do not import this dictionary module from
 // a client component. lib/pinyin.ts contains the small client-side checker.
 import { pinyin, polyphonic } from "pinyin-pro";
-import { dueCards } from "./due";
-import { buildReviewQueueData } from "./review-queue";
+import { dueCards, isNew } from "./due";
+import { buildReviewQueueData, type StudyQueueItem } from "./review-queue";
 import { checkPinyinAnswer, pinyinTextForCard, type PinyinReading } from "./pinyin";
-import type { Card } from "./types";
+import type { Card, ReviewMode } from "./types";
 import { chineseSideForCard, chineseTextAndAnnotations, type ChineseSide } from "./write";
 
 export function readingForCard(card: Card, deckSide: ChineseSide | null): PinyinReading | null {
@@ -41,19 +41,47 @@ export function readingForCard(card: Card, deckSide: ChineseSide | null): Pinyin
   return { ...text, syllables };
 }
 
-export function buildPinyinQueueData(
-  cards: Card[],
-  deckSide: ChineseSide | null,
-  now = new Date()
-) {
-  const readings = new Map<Card, PinyinReading>();
+type StudyDetails = Omit<StudyQueueItem, "card">;
+
+/** Reading and answer side for a card, or null when the skill cannot grade it. */
+export function studyDetails(card: Card, mode: ReviewMode, deckSide: ChineseSide | null): StudyDetails | null {
+  const pinyin = readingForCard(card, deckSide) ?? undefined;
+  const chineseSide = chineseSideForCard(card, deckSide) ?? undefined;
+  if (mode !== "review" && !pinyin) return null;
+  if (mode === "write" && !chineseSide) return null;
+  return { pinyin, chineseSide };
+}
+
+export type StudyQueueOptions = {
+  mode: ReviewMode;
+  /** Deck-level Chinese side for a card; virtual decks resolve each card's own deck. */
+  sideFor: (card: Card) => ChineseSide | null;
+  now?: Date;
+  newOnly?: boolean;
+  newLimit?: number;
+};
+
+/**
+ * Due queue for one skill. Cards must already be projected with cardForMode.
+ * Writing skills only include cards with a gradable reading, before batching,
+ * so totals and batch boundaries describe what can actually be practiced.
+ */
+export function buildStudyQueue(cards: Card[], options: StudyQueueOptions): {
+  queue: StudyQueueItem[];
+  totalDue: number;
+} {
+  const { mode, sideFor, now = new Date(), newOnly = false } = options;
+  const details = new Map<Card, StudyDetails>();
   for (const card of dueCards(cards, now)) {
-    const reading = readingForCard(card, deckSide);
-    if (reading) readings.set(card, reading);
+    if (newOnly && !isNew(card)) continue;
+    const detail = studyDetails(card, mode, sideFor(card));
+    if (detail) details.set(card, detail);
   }
-  const data = buildReviewQueueData([...readings.keys()], now);
+  const data = buildReviewQueueData([...details.keys()], now, {
+    newLimit: newOnly ? undefined : options.newLimit,
+  });
   return {
-    ...data,
-    queue: data.queue.map((item) => ({ ...item, pinyin: readings.get(item.card)! })),
+    totalDue: data.totalDue,
+    queue: data.queue.map(({ card }) => ({ card, ...details.get(card) })),
   };
 }

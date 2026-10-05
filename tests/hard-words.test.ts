@@ -1,10 +1,10 @@
 import { beforeEach, it, expect, vi } from "vitest";
 import { emptyCardState } from "@/lib/fsrs";
-const db = vi.hoisted(() => ({ getCard: vi.fn(), listCards: vi.fn(), listAllCards: vi.fn(), getDeck: vi.fn(), setCardHard: vi.fn() }));
+const db = vi.hoisted(() => ({ getCard: vi.fn(), listCards: vi.fn(), listAllCards: vi.fn(), listDecks: vi.fn(async () => [{ id: "lesson", name: "Lesson" }]), getDeck: vi.fn(), setCardHard: vi.fn() }));
 const auth = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/db", () => db);
 vi.mock("@/lib/api", () => ({ requireAuth: auth, badRequest: (error: string) => Response.json({ error }, { status: 400 }), notFound: (error: string) => Response.json({ error }, { status: 404 }) }));
-import { hardWords, studyCards } from "@/lib/hard-words";
+import { hardWords, loadStudySet } from "@/lib/study-sets";
 import { PATCH } from "@/app/api/cards/[id]/hard/route";
 const now = new Date();
 const card = { id: "a", deckId: "lesson", front: "你好", back: "hello", fsrs: emptyCardState(now), createdAt: now.toISOString(), updatedAt: now.toISOString() };
@@ -31,7 +31,7 @@ it("returns not found for deleted cards", async () => {
 it("includes latest siblings for deduplication but excludes unmarked words", async () => {
   const source = [{ ...card, hard: true }, copies[1], { ...card, id: "c", front: "老师" }];
   db.listAllCards.mockResolvedValue(source);
-  const result = await studyCards("hard-words");
+  const result = (await loadStudySet("hard-words"))!.cards;
   expect(result).toHaveLength(2);
   expect(result.every((c) => c.deckId === "lesson" && c.hard)).toBe(true);
   expect(hardWords(copies)).toEqual([]);

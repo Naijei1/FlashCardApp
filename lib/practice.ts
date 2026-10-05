@@ -28,6 +28,19 @@ export function rateCard(card: Card, rating: Grade, now: Date) {
   };
 }
 
+/** Words first studied today in the given (already mode-projected) cards. */
+export function introducedToday(cards: Card[], now: Date, timeZone: string): number {
+  const today = localDateKey(now, timeZone);
+  const words = new Set<string>();
+  for (const card of cards) {
+    const at = card.practice?.firstStudiedAt;
+    if (at && Number.isFinite(Date.parse(at)) && localDateKey(new Date(at), timeZone) === today) {
+      words.add(wordKey(card));
+    }
+  }
+  return words.size;
+}
+
 /** New words introduced, not a claim that a word has already been memorized. */
 export function weeklyProgress(cards: Card[], now: Date, timeZone: string) {
   const today = localDateKey(now, timeZone);

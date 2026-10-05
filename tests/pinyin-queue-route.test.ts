@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyCardState } from "@/lib/fsrs";
 import { GET } from "@/app/api/review/queue/route";
 
-const mocks = vi.hoisted(() => ({ requireAuth: vi.fn(), getDeck: vi.fn(), listCards: vi.fn(), listAllCards: vi.fn() }));
+const mocks = vi.hoisted(() => ({ requireAuth: vi.fn(), getDeck: vi.fn(), listCards: vi.fn(), listAllCards: vi.fn(), listDecks: vi.fn() }));
 vi.mock("@/lib/api", () => ({
   requireAuth: mocks.requireAuth,
   badRequest: (error: string) => Response.json({ error }, { status: 400 }),
@@ -14,6 +14,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.requireAuth.mockResolvedValue(null);
   mocks.getDeck.mockResolvedValue({ id: "deck", name: "Chinese" });
+  mocks.listDecks.mockResolvedValue([{ id: "deck", name: "Chinese" }]);
   const now = new Date("2026-01-01T00:00:00.000Z");
   mocks.listCards.mockResolvedValue([
     { id: "a", deckId: "deck", front: "hello", back: "你好", fsrs: emptyCardState(now), createdAt: now.toISOString(), updatedAt: now.toISOString() },
@@ -38,8 +39,13 @@ describe("Pinyin queue API", () => {
     expect(mocks.listCards).toHaveBeenCalledWith("deck", { consistent: true });
   });
 
-  it("rejects an all-deck request and unknown modes", async () => {
-    expect((await GET(new Request("https://example.com/api/review/queue?mode=pinyin"))).status).toBe(400);
+  it("serves every mode across all decks and rejects unknown modes", async () => {
+    mocks.listAllCards.mockResolvedValue(await mocks.listCards());
+    for (const mode of ["review", "write", "pinyin"]) {
+      const res = await GET(new Request(`https://example.com/api/review/queue?deckId=all&mode=${mode}`));
+      expect(res.status).toBe(200);
+      expect((await res.json()).totalDue).toBe(mode === "review" ? 2 : 1);
+    }
     expect((await GET(new Request("https://example.com/api/review/queue?deckId=deck&mode=unknown"))).status).toBe(400);
   });
 
@@ -104,4 +110,47 @@ it("includes tone-marked pinyin beside the meaning for Chinese writing", async (
   expect(data.queue).toHaveLength(1);
   expect(data.queue[0].pinyin).toMatchObject({ hanzi: "行", meaning: "line", syllables: ["háng"] });
   expect(data.queue[0].card.fsrs.reps).toBe(0);
+});
+
+it("uses each card's own deck settings in the global writing queue", async () => {
+  const now = new Date("2026-01-01T00:00:00.000Z");
+  const base = { fsrs: emptyCardState(now), createdAt: now.toISOString(), updatedAt: now.toISOString() };
+  mocks.listDecks.mockResolvedValue([
+    { id: "front-deck", name: "A", chineseSide: "front" },
+    { id: "back-deck", name: "B", chineseSide: "back" },
+  ]);
+  mocks.listAllCards.mockResolvedValue([
+    { ...base, id: "a", deckId: "front-deck", front: "你好", back: "您好" },
+    { ...base, id: "b", deckId: "back-deck", front: "你好", back: "您好" },
+  ]);
+  const data = await (await GET(new Request("https://example.com/api/review/queue?deckId=all&mode=write"))).json();
+  const sides = Object.fromEntries(data.queue.map((item: { card: { id: string }; chineseSide: string }) => [item.card.id, item.chineseSide]));
+  expect(sides).toEqual({ a: "front", b: "back" });
+});
+
+it("limits regular sessions to a day's new words while Learn new words stays open", async () => {
+  const now = new Date();
+  const fresh = Array.from({ length: 30 }, (_, i) => ({
+    id: `n${i}`, deckId: "deck", front: `word ${i}`, back: `meaning ${i}`,
+    fsrs: emptyCardState(now), createdAt: now.toISOString(), updatedAt: now.toISOString(),
+  }));
+  const { rateMode } = await import("@/lib/modes");
+  const introduced = fresh.slice(0, 4).map((card) => rateMode(card, "review", 3, now).card);
+  mocks.listCards.mockResolvedValue([...introduced, ...fresh.slice(4)]);
+  const regular = await (await GET(new Request("https://example.com/api/review/queue?deckId=deck"))).json();
+  expect(regular.totalDue).toBe(7);
+  expect(regular.queue).toHaveLength(7);
+  const learn = await (await GET(new Request("https://example.com/api/review/queue?deckId=deck&new=1"))).json();
+  expect(learn.totalDue).toBe(26);
+  expect(learn.queue).toHaveLength(25);
+});
+
+it("honors Learn new words in writing modes", async () => {
+  const { rateMode } = await import("@/lib/modes");
+  const [chinese] = await mocks.listCards();
+  const second = { ...chinese, id: "c", front: "goodbye", back: "再见" };
+  const written = rateMode(chinese, "write", 1, new Date(Date.now() - 120_000)).card;
+  mocks.listCards.mockResolvedValue([written, second]);
+  const data = await (await GET(new Request("https://example.com/api/review/queue?deckId=deck&mode=write&new=1"))).json();
+  expect(data.queue.map((item: { card: { id: string } }) => item.card.id)).toEqual(["c"]);
 });

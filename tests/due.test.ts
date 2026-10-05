@@ -33,6 +33,14 @@ describe("isDue", () => {
   });
 });
 
+describe("corrupt schedules", () => {
+  it("treats an unreadable due date as due so the word is not lost", () => {
+    const fsrs = { ...applyRating(emptyCardState(NOW), Rating.Good, NOW).fsrs, due: "not a date" };
+    expect(isDue(makeCard({ fsrs }), NOW)).toBe(true);
+    expect(buildQueue([makeCard({ fsrs })], NOW)).toHaveLength(1);
+  });
+});
+
 describe("isNew", () => {
   it("new card is New; reviewed card is not", () => {
     expect(isNew(makeCard())).toBe(true);
@@ -42,6 +50,11 @@ describe("isNew", () => {
 });
 
 describe("countsByDeck / totalCounts", () => {
+  it("counts due reviews separately from unseen words", () => {
+    const due = { ...applyRating(emptyCardState(NOW), Rating.Good, NOW).fsrs, due: NOW.toISOString() };
+    expect(totalCounts([makeCard({ id: "r", fsrs: due }), makeCard({ id: "n" })], NOW)).toEqual({ total: 2, due: 1, newCards: 1 });
+  });
+
   it("groups totals, due, and new per deck", () => {
     const reviewed = applyRating(emptyCardState(NOW), Rating.Easy, NOW).fsrs;
     const cards = [
@@ -50,9 +63,27 @@ describe("countsByDeck / totalCounts", () => {
       makeCard({ id: "c", deckId: "d2" }),
     ];
     const byDeck = countsByDeck(cards, NOW);
-    expect(byDeck.get("d1")).toEqual({ total: 2, due: 1, newCards: 1 });
-    expect(byDeck.get("d2")).toEqual({ total: 1, due: 1, newCards: 1 });
-    expect(totalCounts(cards, NOW)).toEqual({ total: 3, due: 2, newCards: 2 });
+    expect(byDeck.get("d1")).toEqual({ total: 2, due: 0, newCards: 1 });
+    expect(byDeck.get("d2")).toEqual({ total: 1, due: 0, newCards: 1 });
+    expect(totalCounts(cards, NOW)).toEqual({ total: 3, due: 0, newCards: 2 });
+  });
+});
+
+describe("new word allowance", () => {
+  it("introduces unseen words oldest first and never beyond the allowance", () => {
+    const cards = Array.from({ length: 20 }, (_, i) => makeCard({
+      id: `n${String(i).padStart(2, "0")}`,
+      createdAt: new Date(NOW.getTime() - (20 - i) * 1000).toISOString(),
+    }));
+    const queue = buildQueue(cards, NOW, { random: () => 0, newLimit: 5 });
+    expect(queue.map((card) => card.id).sort()).toEqual(["n00", "n01", "n02", "n03", "n04"]);
+    expect(buildQueue(cards, NOW, { newLimit: 0 })).toEqual([]);
+  });
+
+  it("still fills the batch with reviews when no new words are allowed", () => {
+    const review = (id: string) => makeCard({ id, fsrs: { ...applyRating(emptyCardState(NOW), Rating.Good, NOW).fsrs, due: NOW.toISOString() } });
+    const cards = [review("r1"), review("r2"), makeCard({ id: "new" })];
+    expect(buildQueue(cards, NOW, { newLimit: 0 }).map((card) => card.id).sort()).toEqual(["r1", "r2"]);
   });
 });
 
@@ -64,14 +95,14 @@ describe("buildQueue", () => {
       makeCard({ id: "b", fsrs: future }),
       makeCard({ id: "c" }),
     ];
-    const queue = buildQueue(cards, NOW, () => 0);
+    const queue = buildQueue(cards, NOW, { random: () => 0 });
     expect(queue.map((c) => c.id).sort()).toEqual(["a", "c"]);
   });
 
   it("caps a session at the limit", () => {
     const cards = Array.from({ length: 40 }, (_, i) => makeCard({ id: `c${i}` }));
-    expect(buildQueue(cards, NOW, () => 0)).toHaveLength(25);
-    expect(buildQueue(cards, NOW, () => 0, 10)).toHaveLength(10);
+    expect(buildQueue(cards, NOW, { random: () => 0 })).toHaveLength(25);
+    expect(buildQueue(cards, NOW, { random: () => 0, limit: 10 })).toHaveLength(10);
   });
 
   it("selects the most overdue cards first when capping", () => {
@@ -85,7 +116,7 @@ describe("buildQueue", () => {
       makeCard({ id: "oldest", fsrs: overdue(48) }),
       makeCard({ id: "older", fsrs: overdue(24) }),
     ];
-    const queue = buildQueue(cards, NOW, () => 0, 2);
+    const queue = buildQueue(cards, NOW, { random: () => 0, limit: 2 });
     expect(queue.map((c) => c.id).sort()).toEqual(["older", "oldest"]);
   });
 });

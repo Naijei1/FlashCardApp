@@ -27,7 +27,7 @@ describe("one word, one schedule", () => {
     const due = new Date(good.fsrs.due);
     const failed = { ...good, id: "failed", front: "难", practice: { failures: 5, successes: 0, correctStreak: 0 } };
     const future = { ...failed, id: "future", front: "未来", fsrs: { ...failed.fsrs, due: new Date(due.getTime() + 1000).toISOString() } };
-    expect(buildQueue([good, failed, future], due, () => 0, 1)).toEqual([failed]);
+    expect(buildQueue([good, failed, future], due, { random: () => 0, limit: 1 })).toEqual([failed]);
   });
   it("makes room for 11 new words alongside overdue reviews", () => {
     const reviews = Array.from({ length: 40 }, (_, i) => ({ ...rateCard(make(String(i)), Rating.Good, now).card, front: `review-${i}` }));
