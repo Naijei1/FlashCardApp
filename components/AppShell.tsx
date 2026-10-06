@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import {
   IconHome,
   IconImport,
@@ -19,11 +20,18 @@ const NAV = [
 ];
 
 function isActive(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  return href === "/" ? pathname === "/" || pathname.startsWith("/decks/") : pathname.startsWith(href);
 }
+
+function noop() {}
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  // iOS Safari only applies :active (our press feedback) once a touch listener exists.
+  useEffect(() => {
+    document.addEventListener("touchstart", noop, { passive: true });
+    return () => document.removeEventListener("touchstart", noop);
+  }, []);
   // Study screens use their own full-screen layout with no nav chrome.
   const immersive =
     pathname.startsWith("/study/") ||
@@ -66,7 +74,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   key={item.href}
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium ${
+                  className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium ${
                     active
                       ? "bg-accent/10 text-accent"
                       : "text-muted hover:bg-surface-muted hover:text-foreground"
@@ -84,7 +92,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Content */}
       <main
         id="main-content"
-        className="mx-auto w-full max-w-3xl flex-1 px-4 pt-safe pb-28 sm:px-6 md:px-10 md:pb-12"
+        className="mx-auto w-full max-w-3xl flex-1 px-safe pt-safe pb-28 [--gutter:1rem] sm:[--gutter:1.5rem] md:pb-12 md:[--gutter:2.5rem] lg:max-w-4xl xl:max-w-5xl"
       >
         {children}
       </main>
@@ -94,7 +102,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         aria-label="Primary navigation"
         className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-surface/90 pb-safe backdrop-blur-md md:hidden"
       >
-        <div className="flex">
+        <div className="flex px-safe [--gutter:0px]">
           {NAV.map((item) => {
             const active = isActive(pathname, item.href);
             return (

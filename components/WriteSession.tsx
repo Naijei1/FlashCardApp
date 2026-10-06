@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { previewIntervals } from "@/lib/fsrs";
 import { checkPinyinAnswer, numberedPinyin } from "@/lib/pinyin";
+import { isImeEnter } from "@/lib/ime";
 import { checkAnswer, diffChars, toWritePrompt, type DiffChar } from "@/lib/write";
 import HardWordButton from "./HardWordButton";
 import { IconCheck, IconX } from "./icons";
 import RatingBar from "./RatingBar";
 import { QueueStatus, SessionHeader, SessionScreen } from "./SessionChrome";
 import TtsButton from "./TtsButton";
+import { useHandwritingGuard } from "./useHandwritingGuard";
+import { useKeepInView } from "./useKeepInView";
 import { useKeyboard } from "./useKeyboard";
 import { useStudyQueue } from "./useStudyQueue";
 
@@ -43,6 +46,8 @@ export default function WriteSession({
   const [result, setResult] = useState<Result | null>(null);
   const checkedRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const keyboardInset = useKeepInView(inputRef);
+  const handwriting = useHandwritingGuard();
 
   useEffect(() => {
     try { setRepeatMistakes(localStorage.getItem(REPEAT_MISTAKES_KEY) === "true"); } catch {}
@@ -115,7 +120,8 @@ export default function WriteSession({
 
   function onInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     // Never treat the Enter that confirms a pinyin/IME candidate as a submit.
-    if (event.defaultPrevented || event.repeat || event.nativeEvent.isComposing || event.keyCode === 229) {
+    if (event.defaultPrevented || event.repeat || isImeEnter(event) || event.nativeEvent.isComposing ||
+      event.key === "Process" || handwriting.composing) {
       return;
     }
     if (!result) {
@@ -168,7 +174,8 @@ export default function WriteSession({
   const answerLang = mode === "pinyin" ? "zh-Latn-pinyin" : chineseLang;
 
   return (
-    <div className="study-surface mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-4 pb-safe">
+    <div className="study-surface mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-safe pb-safe lg:max-w-3xl"
+      style={keyboardInset ? { paddingBottom: keyboardInset } : undefined}>
       <SessionHeader backHref={backHref} study={study} action={
         <HardWordButton key={`${card.deckId}:${card.id}`} card={card} onChange={(hard) => study.setHard(card, hard)} />
       } />
@@ -202,6 +209,7 @@ export default function WriteSession({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={onInputKeyDown}
+          {...handwriting.inputProps}
           readOnly={!!result}
           autoFocus
           autoComplete="off"
@@ -210,13 +218,13 @@ export default function WriteSession({
           spellCheck={false}
           enterKeyHint={result ? "next" : "go"}
           placeholder={result ? "" : mode === "pinyin" ? "e.g. ni3 hao3" : "输入中文…"}
-          className={`input mt-2 py-3 text-center text-2xl ${
+          className={`input mt-2 min-h-16 py-3 text-center text-2xl ${
             result ? (result.correct ? "!border-green-600/70" : "!border-red-500/70") : ""
           }`}
         />
         {mode === "pinyin" && (
           <div className="mt-3 space-y-1.5 text-sm text-muted">
-            <label className="flex w-fit items-center gap-2">
+            <label className="check-row">
               <input type="checkbox" checked={checkTones} onChange={(event) => setCheckTones(event.target.checked)}
                 disabled={!!result} className="checkbox" />
               Check tones
@@ -227,7 +235,7 @@ export default function WriteSession({
             </p>
           </div>
         )}
-        <label className="mt-3 flex w-fit items-center gap-2 text-sm text-muted">
+        <label className="check-row mt-1 text-sm text-muted">
           <input type="checkbox" checked={repeatMistakes} disabled={drillFailed || !!result} className="checkbox"
             onChange={(event) => {
               const enabled = event.target.checked;
@@ -294,7 +302,10 @@ export default function WriteSession({
               {prompt.notes && <p className="selectable text-sm text-muted">{prompt.notes}</p>}
             </div>
           ) : (
-            <span className="text-xs text-muted">Enter ↵ to check</span>
+            <span className="text-xs text-muted">
+              <span className="touch-hint">Type or write with Apple Pencil, then tap Check answer</span>
+              <span className="kbd-hint">Enter ↵ to check</span>
+            </span>
           )}
         </div>
       </div>
@@ -309,10 +320,12 @@ export default function WriteSession({
           <RatingBar fsrs={card.fsrs} mode={mode} onRate={rate} defaultValue={defaultRating} />
         ) : (
           <>
-            <button type="button" onClick={() => check(true)} className="btn btn-secondary btn-lg px-4 text-base text-muted">
+            <button type="button" {...handwriting.guard(() => check(true))} disabled={handwriting.composing}
+              className="btn btn-secondary btn-lg px-4 text-base text-muted">
               Don&apos;t know
             </button>
-            <button type="button" onClick={() => check()} disabled={!value.trim()} className="btn btn-primary btn-lg flex-1">
+            <button type="button" {...handwriting.guard(() => check())} disabled={!value.trim() || handwriting.composing}
+              className="btn btn-primary btn-lg flex-1">
               Check answer
             </button>
           </>

@@ -23,7 +23,7 @@ export default function HardWordButton({ card, onChange }: { card: Card; onChang
       <button type="button" aria-pressed={hard} disabled={busy} onClick={(event) => { event.stopPropagation(); void toggle(); }}
         aria-label={hard ? "In Hard Words — remove" : "Mark as hard"}
         title={hard ? "Remove from Hard Words" : "Add to Hard Words"}
-        className={`pressable inline-flex h-9 items-center gap-1 rounded-full border px-3 text-sm whitespace-nowrap disabled:opacity-50 ${
+        className={`pressable inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-full border px-3 text-sm whitespace-nowrap disabled:opacity-50 ${
           hard ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300" : "border-border text-muted hover:text-foreground"
         }`}>
         <span aria-hidden="true">{hard ? "★" : "☆"}</span>

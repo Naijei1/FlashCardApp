@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useRef, useState } from "react";
+import { isImeEnter } from "@/lib/ime";
 import { responseError } from "@/lib/response-error";
 
 export default function AddCardForm({ deckId }: { deckId: string }) {
@@ -47,8 +48,7 @@ export default function AddCardForm({ deckId }: { deckId: string }) {
       onCompositionStart={() => { composing.current = true; }}
       onCompositionEnd={() => { composing.current = false; }}
       onKeyDown={(event) => {
-        // Safari may report keyCode 229 after isComposing has become false.
-        if (event.key === "Enter" && (composing.current || event.nativeEvent.isComposing || event.keyCode === 229)) {
+        if (isImeEnter(event) || (event.key === "Enter" && composing.current)) {
           event.preventDefault();
         }
       }}
@@ -94,7 +94,7 @@ export default function AddCardForm({ deckId }: { deckId: string }) {
             type="checkbox"
             checked={reverse}
             onChange={(e) => setReverse(e.target.checked)}
-            className="h-5 w-5 accent-[var(--accent)]"
+            className="checkbox"
           />
           Create reverse card
         </label>

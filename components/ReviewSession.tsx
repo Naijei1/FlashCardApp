@@ -65,7 +65,7 @@ export default function ReviewSession({
   const prompt = pinyin?.hanzi ?? card.front;
 
   return (
-    <div className="study-surface mx-auto flex h-dvh w-full max-w-2xl flex-col px-4 pb-safe">
+    <div className="study-surface mx-auto flex h-dvh w-full max-w-2xl flex-col px-safe pb-safe lg:max-w-3xl">
       <SessionHeader backHref={backHref} study={study} action={
         <HardWordButton key={`${card.deckId}:${card.id}`} card={card} onChange={(hard) => study.setHard(card, hard)} />
       } />
@@ -101,7 +101,10 @@ export default function ReviewSession({
               {card.notes && <p className="selectable text-base text-muted">{card.notes}</p>}
             </div>
           ) : (
-            <span className="text-sm text-muted">Tap to reveal · Space</span>
+            <span className="text-sm text-muted">
+              <span className="touch-hint">Tap the card to reveal</span>
+              <span className="kbd-hint">Click or press Space to reveal · 1–4 to rate</span>
+            </span>
           )}
         </div>
       </div>

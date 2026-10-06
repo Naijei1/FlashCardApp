@@ -150,6 +150,17 @@ export function useStudyQueue({
     return () => window.clearTimeout(id);
   }, [nextDueAt, nowMs]);
 
+  // iPadOS suspends timers in the background; re-check learning steps on return.
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === "visible") setNowMs(Date.now()); };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+
   /** Saves a rating in the background and returns the next queue, or null if ignored. */
   const submitRating = useCallback(
     (rating: number): StudyQueueItem[] | null => {

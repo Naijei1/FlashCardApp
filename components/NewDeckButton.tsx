@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { preventImeSubmit } from "@/lib/ime";
 import { responseError } from "@/lib/response-error";
 
 export default function NewDeckButton() {
@@ -43,7 +44,7 @@ export default function NewDeckButton() {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-2">
+    <form onSubmit={submit} onKeyDown={preventImeSubmit} className="space-y-2">
       <div className="flex gap-2">
         <label className="min-w-0 flex-1">
           <span className="sr-only">Deck name</span>

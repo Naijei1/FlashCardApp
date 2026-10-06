@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { shuffle } from "@/lib/due";
 import { DEFAULT_BACK_LANG, DEFAULT_FRONT_LANG } from "@/lib/languages";
 import type { Card } from "@/lib/types";
@@ -9,6 +9,7 @@ import { wordKey } from "@/lib/words";
 import HardWordButton from "./HardWordButton";
 import TtsButton from "./TtsButton";
 import { useKeyboard } from "./useKeyboard";
+import { useSwipe } from "./useSwipe";
 
 type DeckLangs = Record<string, { front?: string; back?: string }>;
 
@@ -28,6 +29,13 @@ export default function StudySession({
   const [revealed, setRevealed] = useState(false);
   const [marked, setMarked] = useState<Record<string, boolean>>({});
 
+  // A refreshed card list must not keep indexes into the previous list.
+  useEffect(() => {
+    setOrder(initialOrder);
+    setIndex(0);
+    setRevealed(false);
+  }, [initialOrder]);
+
   function go(delta: number) {
     setIndex((i) => Math.min(Math.max(i + delta, 0), order.length - 1));
     setRevealed(false);
@@ -38,6 +46,8 @@ export default function StudySession({
     setIndex(0);
     setRevealed(false);
   }
+
+  const swipe = useSwipe((direction) => go(direction === "left" ? 1 : -1));
 
   useKeyboard((event) => {
     if (event.key === " " || event.key === "Enter") {
@@ -67,27 +77,26 @@ export default function StudySession({
   const progress = order.length > 0 ? (index + 1) / order.length : 0;
 
   return (
-    <div className="study-surface mx-auto flex h-dvh w-full max-w-2xl flex-col px-4 pb-safe">
+    <div className="study-surface mx-auto flex h-dvh w-full max-w-2xl flex-col px-safe pb-safe lg:max-w-3xl">
       <header className="flex items-center gap-3 py-3">
         <Link href={backHref} className="btn btn-ghost -ml-2 shrink-0 px-3">← Back</Link>
         <div className="min-w-0 flex-1">
           <div className="flex justify-between text-xs tabular-nums text-muted">
             <span>{index + 1} / {order.length}</span>
-            <span className="flex gap-3">
-              <button type="button" onClick={() => reorder(shuffle(order))} className="hover:text-foreground">Shuffle</button>
-              <button type="button" onClick={() => reorder(initialOrder)} className="hover:text-foreground">Restart</button>
-            </span>
           </div>
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-border/70" aria-hidden="true">
             <div className="h-full rounded-full bg-accent transition-[width] duration-300" style={{ width: `${progress * 100}%` }} />
           </div>
         </div>
+        <button type="button" onClick={() => reorder(shuffle(order))} className="btn btn-ghost shrink-0 px-2.5">Shuffle</button>
+        <button type="button" onClick={() => reorder(initialOrder)} className="btn btn-ghost hidden shrink-0 px-2.5 sm:inline-flex">Restart</button>
         <HardWordButton key={`${card.deckId}:${card.id}`} card={card}
           onChange={(hard) => setMarked((current) => ({ ...current, [wordKey(card)]: hard }))} />
       </header>
 
       {/* Tap anywhere on the card to flip; two fixed halves so nothing jumps. */}
-      <div onClick={() => setRevealed((r) => !r)} className="flashcard flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden">
+      <div {...swipe.handlers} onClick={() => { if (!swipe.consumeClick()) setRevealed((r) => !r); }}
+        className="flashcard flex min-h-0 flex-1 cursor-pointer touch-pan-y flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 basis-1/2 items-center justify-center gap-2 overflow-y-auto px-6 py-6 text-center">
           <span lang={frontLang} className="selectable text-5xl leading-tight font-medium break-words sm:text-6xl">
             {card.front}
@@ -106,7 +115,10 @@ export default function StudySession({
               {card.notes && <p className="selectable text-base text-muted">{card.notes}</p>}
             </div>
           ) : (
-            <span className="text-sm text-muted">Tap to reveal · Space</span>
+            <span className="text-sm text-muted">
+              <span className="touch-hint">Tap to flip · swipe for next</span>
+              <span className="kbd-hint">Click or press Space to flip · ←/→ to move</span>
+            </span>
           )}
         </div>
       </div>

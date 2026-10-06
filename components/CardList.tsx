@@ -13,7 +13,7 @@ export default function CardList({
 }) {
   const byId = new Map(decks.map((deck) => [deck.id, deck]));
   return (
-    <ul className="space-y-2">
+    <ul className="grid gap-2 xl:grid-cols-2">
       {cards.map((card) => (
         <li key={`${card.deckId}:${card.id}`}>
           {showDeckNames && (

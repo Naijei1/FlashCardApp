@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "Flashcards",
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
   },
 };
 
@@ -16,6 +16,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // Chromium/Android resize the layout for the soft keyboard; iPad Safari is
+  // handled by keeping the focused answer field in view (useKeepInView).
+  interactiveWidget: "resizes-content",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f6f5f3" },
     { media: "(prefers-color-scheme: dark)", color: "#0f0e0d" },

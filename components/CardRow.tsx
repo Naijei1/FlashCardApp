@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Card, Deck } from "@/lib/types";
 import { formatInterval } from "@/lib/interval-label";
+import { preventImeSubmit } from "@/lib/ime";
 import { responseError } from "@/lib/response-error";
 import { IconPencil } from "./icons";
 import TtsButton from "./TtsButton";
@@ -130,6 +131,7 @@ export default function CardRow({
       <form
         aria-label={`Edit card ${card.front}`}
         aria-busy={busy}
+        onKeyDown={preventImeSubmit}
         onSubmit={(event: FormEvent) => {
           event.preventDefault();
           void save();

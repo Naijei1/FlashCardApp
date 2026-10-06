@@ -314,3 +314,52 @@ it("starts the batch break instead of a long countdown and carries the learning 
   expect(container.textContent).toContain("2 left");
   expect(container.textContent).toContain("谢谢");
 });
+
+function pointer(target: Element, type: string, init: { clientX?: number; clientY?: number; pointerType?: string } = {}) {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: init.clientX ?? 0, clientY: init.clientY ?? 0 });
+  Object.defineProperties(event, { pointerType: { value: init.pointerType ?? "touch" }, pointerId: { value: 1 }, isPrimary: { value: true } });
+  target.dispatchEvent(event);
+}
+
+function button(label: string) {
+  return [...container.querySelectorAll("button")].find((item) => item.textContent?.startsWith(label))!;
+}
+
+it("does not check a handwritten answer while it is still being composed", async () => {
+  await render(createElement(WriteSession, { deckId: "deck", chineseLang: "zh-CN", backHref: "/" }));
+  const input = container.querySelector<HTMLInputElement>("#write-input")!;
+  await act(async () => input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true })));
+  await typeAnswer("ni");
+  expect(button("Check answer").disabled).toBe(true);
+  await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+  expect(container.textContent).not.toContain("Incorrect");
+  await act(async () => input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true })));
+  await typeAnswer("你好");
+  expect(button("Check answer").disabled).toBe(false);
+});
+
+it("ignores a Pencil tap on Check answer while Scribble is still inserting text", async () => {
+  vi.spyOn(performance, "now").mockImplementation(() => Date.now());
+  await render(createElement(WriteSession, { deckId: "deck", chineseLang: "zh-CN", backHref: "/" }));
+  await typeAnswer("你好");
+  await act(async () => { pointer(button("Check answer"), "pointerdown", { pointerType: "pen" }); button("Check answer").click(); });
+  expect(container.textContent).not.toContain("Correct");
+  await act(async () => vi.advanceTimersByTimeAsync(600));
+  await act(async () => { pointer(button("Check answer"), "pointerdown", { pointerType: "pen" }); button("Check answer").click(); });
+  expect(container.textContent).toContain("Correct");
+});
+
+it("swipes between words in Normal Review without flipping the card", async () => {
+  const StudySession = (await import("@/components/StudySession")).default;
+  const other = { ...card, id: "other", front: "谢谢", back: "thank you" };
+  await render(createElement(StudySession, { cards: [card, other], deckLangs: {}, backHref: "/" }));
+  expect(container.textContent).toContain("1 / 2");
+  const flashcard = container.querySelector(".flashcard")!;
+  await act(async () => {
+    pointer(flashcard, "pointerdown", { clientX: 300, clientY: 200 });
+    pointer(flashcard, "pointerup", { clientX: 150, clientY: 210 });
+    (flashcard as HTMLElement).click();
+  });
+  expect(container.textContent).toContain("2 / 2");
+  expect(container.textContent).not.toContain("thank you");
+});

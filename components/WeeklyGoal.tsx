@@ -12,13 +12,20 @@ export default function WeeklyGoal() {
         if (res.ok) setProgress(await res.json());
       } catch { /* The goal remains visible when offline. */ }
     };
+    // Installed iPad/iPhone apps resume with visibilitychange rather than focus.
+    const onVisible = () => { if (document.visibilityState === "visible") void update(); };
     void update();
     window.addEventListener("focus", update);
-    return () => { controller.abort(); window.removeEventListener("focus", update); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      controller.abort();
+      window.removeEventListener("focus", update);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
   const week = progress?.week ?? 0;
   return (
-    <section className="card p-5 sm:p-6">
+    <section className="card h-full p-5 sm:p-6">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="eyebrow">Weekly vocabulary goal</h2>
         {progress && <span className="text-xs text-muted">Today {progress.today} / {DAILY_WORD_GOAL}</span>}

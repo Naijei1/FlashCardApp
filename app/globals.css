@@ -39,6 +39,10 @@
 
 html {
   height: 100%;
+  /* iPad/iPhone: no landscape font inflation, no double-tap zoom (pinch still works) */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: manipulation;
 }
 
 body {
@@ -88,11 +92,16 @@ body {
   .btn-danger {
     @apply border border-red-500/40 text-red-600 hover:bg-red-500/10 dark:text-red-400;
   }
+  /* text-base keeps iOS from zooming the page when a field gains focus */
   .input {
-    @apply w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-foreground outline-none placeholder:text-muted/70 focus:border-accent focus:ring-2 focus:ring-accent/20;
+    @apply w-full rounded-xl text-base border border-border bg-surface px-3.5 py-2.5 text-foreground outline-none placeholder:text-muted/70 focus:border-accent focus:ring-2 focus:ring-accent/20;
   }
   .checkbox {
-    @apply h-4 w-4 accent-[var(--accent)];
+    @apply h-5 w-5 shrink-0 accent-[var(--accent)];
+  }
+  /* A checkbox row with a full 44pt touch target */
+  .check-row {
+    @apply flex min-h-11 w-fit cursor-pointer items-center gap-2.5;
   }
 }
 
@@ -104,9 +113,32 @@ body {
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
-.study-surface .selectable {
+/* Long-press with a finger or Pencil should never select or open a callout while
+   studying; precise pointers (mouse, trackpad) can still copy the prompt. */
+@media (pointer: fine) {
+  .study-surface .selectable {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+}
+/* iOS can refuse typing and Scribble inside a user-select: none ancestor. */
+.study-surface :is(input, textarea, [contenteditable]) {
   user-select: text;
   -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* Keyboard hints only where a hardware keyboard is likely; touch hints elsewhere. */
+.kbd-hint {
+  display: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .kbd-hint {
+    display: inline;
+  }
+  .touch-hint {
+    display: none;
+  }
 }
 
 /* Instant press feedback, native-app style */
@@ -148,7 +180,11 @@ body {
   }
 }
 
-/* Safe-area helpers for iPhone standalone mode */
+/* Safe-area helpers for iPhone/iPad standalone mode and landscape notches */
+@utility px-safe {
+  padding-left: max(var(--gutter, 1rem), env(safe-area-inset-left));
+  padding-right: max(var(--gutter, 1rem), env(safe-area-inset-right));
+}
 .pt-safe {
   padding-top: env(safe-area-inset-top);
 }

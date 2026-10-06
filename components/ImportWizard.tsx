@@ -76,8 +76,8 @@ export default function ImportWizard({
       }),
     }).catch(() => null);
     setBusy(false);
-    if (res?.ok) {
-      const data = await res.json();
+    const data = res?.ok ? ((await res.json().catch(() => null)) as { created?: unknown } | null) : null;
+    if (res?.ok && typeof data?.created === "number") {
       setResult(data.created);
       setParsed(null);
       setFileName("");
@@ -109,7 +109,7 @@ export default function ImportWizard({
         <input
           ref={fileInput}
           type="file"
-          accept=".csv,text/csv"
+          accept=".csv,text/csv,text/comma-separated-values,text/plain"
           onChange={(e) => onFile(e.target.files?.[0])}
           className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-accent file:px-4 file:py-2.5 file:font-medium file:text-accent-foreground"
         />
@@ -199,7 +199,7 @@ export default function ImportWizard({
               type="checkbox"
               checked={reverse}
               onChange={(e) => setReverse(e.target.checked)}
-              className="h-5 w-5 accent-[var(--accent)]"
+              className="checkbox"
             />
             Also create reverse cards (back → front)
           </label>

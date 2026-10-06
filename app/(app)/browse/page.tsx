@@ -1,6 +1,6 @@
 import CardList from "@/components/CardList";
 import CardPagination from "@/components/CardPagination";
-import { IconSearch } from "@/components/icons";
+import SearchForm from "@/components/SearchForm";
 import { listAllCards, listDecks } from "@/lib/db";
 import { plural } from "@/lib/plural";
 
@@ -39,21 +39,7 @@ export default async function BrowsePage({
   return (
     <div className="space-y-5 py-6">
       <h1 className="text-3xl font-bold tracking-tight">Browse</h1>
-      <form role="search" method="GET" action="/browse" className="relative">
-        <label htmlFor="card-search" className="sr-only">
-          Search cards
-        </label>
-        <IconSearch className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-muted" />
-        <input
-          id="card-search"
-          type="search"
-          name="q"
-          defaultValue={q}
-          aria-describedby="search-summary"
-          placeholder="Search front, back, or notes…"
-          className="input py-3 pl-10"
-        />
-      </form>
+      <SearchForm defaultValue={q} />
       <p id="search-summary" className="text-sm text-muted">
         {plural(matches.length, "card")}
         {shown.length > 0 ? ` · showing ${pageStart + 1}–${pageStart + shown.length}` : ""}

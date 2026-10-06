@@ -82,8 +82,8 @@ export default async function DeckPage({
           <h2 id="modes-heading" className="eyebrow">Study modes</h2>
           <span className="text-xs text-muted">Each mode keeps its own schedule</span>
         </div>
-        <div className="grid gap-2.5 sm:grid-cols-2">
-          <div className="sm:col-span-2">
+        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="sm:col-span-2 xl:col-span-4">
             <ModeLink primary href={`/review/${deckId}`} title="Spaced Repetition"
               detail={`${status(counts.due, counts.newCards)} · up to ${DAILY_WORD_GOAL} new a day`}
               badge={counts.due} />
