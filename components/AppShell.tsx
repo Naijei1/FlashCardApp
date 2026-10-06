@@ -60,7 +60,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar */}
       <aside className="hidden w-60 shrink-0 border-r border-border bg-surface/60 md:block">
         <div className="sticky top-0 flex h-dvh flex-col p-4">
-          <Link href="/" className="mb-8 flex items-center gap-2.5 px-2 text-lg font-semibold tracking-tight">
+          <Link href="/" className="mb-8 flex min-h-11 items-center gap-2.5 px-2 text-lg font-semibold tracking-tight">
             <span aria-hidden="true" className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-xl text-accent-foreground">
               学
             </span>

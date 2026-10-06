@@ -92,9 +92,10 @@ body {
   .btn-danger {
     @apply border border-red-500/40 text-red-600 hover:bg-red-500/10 dark:text-red-400;
   }
-  /* text-base keeps iOS from zooming the page when a field gains focus */
+  /* text-base keeps iOS from zooming the page when a field gains focus; the
+     focus ring replaces the global outline so fields don't get a double ring */
   .input {
-    @apply w-full rounded-xl text-base border border-border bg-surface px-3.5 py-2.5 text-foreground outline-none placeholder:text-muted/70 focus:border-accent focus:ring-2 focus:ring-accent/20;
+    @apply w-full rounded-xl text-base border border-border bg-surface px-3.5 py-2.5 text-foreground outline-none placeholder:text-muted/70 focus:border-accent focus:ring-2 focus:ring-accent/20 focus-visible:outline-none;
   }
   .checkbox {
     @apply h-5 w-5 shrink-0 accent-[var(--accent)];
@@ -126,6 +127,13 @@ body {
   user-select: text;
   -webkit-user-select: text;
   -webkit-touch-callout: default;
+}
+
+/* Horizontal swipes go to JS; vertical scrolling stays native. touch-action does
+   not carry across scroll containers, so every descendant needs it too. */
+.swipeable,
+.swipeable * {
+  touch-action: pan-y;
 }
 
 /* Keyboard hints only where a hardware keyboard is likely; touch hints elsewhere. */

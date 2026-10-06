@@ -96,7 +96,7 @@ export default function StudySession({
 
       {/* Tap anywhere on the card to flip; two fixed halves so nothing jumps. */}
       <div {...swipe.handlers} onClick={() => { if (!swipe.consumeClick()) setRevealed((r) => !r); }}
-        className="flashcard flex min-h-0 flex-1 cursor-pointer touch-pan-y flex-col overflow-hidden">
+        className="swipeable flashcard flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 basis-1/2 items-center justify-center gap-2 overflow-y-auto px-6 py-6 text-center">
           <span lang={frontLang} className="selectable text-5xl leading-tight font-medium break-words sm:text-6xl">
             {card.front}

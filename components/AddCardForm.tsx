@@ -89,7 +89,7 @@ export default function AddCardForm({ deckId }: { deckId: string }) {
       </label>
       {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
       <div className="flex items-center justify-between gap-3">
-        <label className="flex min-h-11 items-center gap-2 text-sm">
+        <label className="check-row text-sm">
           <input
             type="checkbox"
             checked={reverse}

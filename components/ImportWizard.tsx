@@ -194,7 +194,7 @@ export default function ImportWizard({
             </select>
           </label>
 
-          <label className="flex min-h-11 items-center gap-2 text-sm">
+          <label className="check-row text-sm">
             <input
               type="checkbox"
               checked={reverse}
