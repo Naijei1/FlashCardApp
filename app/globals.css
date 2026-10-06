@@ -57,9 +57,11 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-:where(a, button, input, select, textarea, [role="button"]):focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+@layer base {
+  :where(a, button, input, select, textarea, [role="button"]):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
 }
 
 @layer components {
@@ -95,7 +97,7 @@ body {
   /* text-base keeps iOS from zooming the page when a field gains focus; the
      focus ring replaces the global outline so fields don't get a double ring */
   .input {
-    @apply w-full rounded-xl text-base border border-border bg-surface px-3.5 py-2.5 text-foreground outline-none placeholder:text-muted/70 focus:border-accent focus:ring-2 focus:ring-accent/20 focus-visible:outline-none;
+    @apply w-full rounded-xl text-base border border-border bg-surface px-3.5 py-2.5 text-foreground outline-none placeholder:text-muted/70 focus:border-accent focus:ring-4 focus:ring-accent/12 focus-visible:outline-none;
   }
   .checkbox {
     @apply h-5 w-5 shrink-0 accent-[var(--accent)];
