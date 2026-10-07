@@ -61,12 +61,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden w-60 shrink-0 border-r border-border bg-surface/60 md:block">
         <div className="sticky top-0 flex h-dvh flex-col p-4">
           <Link href="/" className="mb-8 flex min-h-11 items-center gap-2.5 px-2 text-lg font-semibold tracking-tight">
-            <span aria-hidden="true" className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-xl text-accent-foreground">
+            <span aria-hidden="true" className="nav-active-fill flex h-10 w-10 items-center justify-center rounded-2xl text-xl">
               学
             </span>
             Flashcards
           </Link>
-          <nav aria-label="Primary navigation" className="space-y-1">
+          <nav aria-label="Primary navigation" className="space-y-1.5">
             {NAV.map((item) => {
               const active = isActive(pathname, item.href);
               return (
@@ -74,13 +74,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   key={item.href}
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium ${
+                  className={`pressable group flex min-h-12 items-center gap-3 rounded-2xl px-2 text-sm font-semibold ${
                     active
-                      ? "bg-accent/10 text-accent"
+                      ? "bg-accent/10 text-foreground"
                       : "text-muted hover:bg-surface-muted hover:text-foreground"
                   }`}
                 >
-                  <item.Icon className="text-base" />
+                  <span
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg transition-all duration-200 ${
+                      active
+                        ? "nav-active-fill"
+                        : "bg-surface-muted text-muted group-hover:text-foreground"
+                    }`}
+                  >
+                    <item.Icon strokeWidth={active ? 2.2 : 1.9} />
+                  </span>
                   {item.label}
                 </Link>
               );
@@ -92,17 +100,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Content */}
       <main
         id="main-content"
-        className="mx-auto w-full max-w-3xl flex-1 px-safe pt-safe pb-28 [--gutter:1rem] sm:[--gutter:1.5rem] md:pb-12 md:[--gutter:2.5rem] lg:max-w-4xl xl:max-w-5xl"
+        className="mx-auto w-full max-w-3xl flex-1 px-safe pt-safe pb-[calc(7.5rem+env(safe-area-inset-bottom))] [--gutter:1rem] sm:[--gutter:1.5rem] md:pb-12 md:[--gutter:2.5rem] lg:max-w-4xl xl:max-w-5xl"
       >
         {children}
       </main>
 
-      {/* Mobile bottom tabs */}
+      {/* Mobile and Split View: floating dock above the home indicator */}
       <nav
         aria-label="Primary navigation"
-        className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-surface/90 pb-safe backdrop-blur-md md:hidden"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-20 px-safe pb-[max(0.75rem,env(safe-area-inset-bottom))] [--gutter:0.75rem] md:hidden"
       >
-        <div className="flex px-safe [--gutter:0px]">
+        <div className="nav-dock pointer-events-auto mx-auto flex max-w-md gap-1 rounded-[1.75rem] p-1.5">
           {NAV.map((item) => {
             const active = isActive(pathname, item.href);
             return (
@@ -110,12 +118,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium ${
-                  active ? "text-accent" : "text-muted"
+                className={`pressable flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.35rem] text-[11px] font-semibold transition-colors duration-200 ${
+                  active ? "nav-active-fill" : "text-muted active:bg-surface-muted"
                 }`}
               >
-                <item.Icon className="text-[22px]" strokeWidth={1.8} />
-                {item.label}
+                <item.Icon className="text-[22px]" strokeWidth={active ? 2.2 : 1.8} />
+                <span className="truncate">{item.label}</span>
               </Link>
             );
           })}

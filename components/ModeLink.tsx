@@ -26,7 +26,7 @@ export default function ModeLink({
       }`}
     >
       <span className="min-w-0 flex-1">
-        <span className="block text-base font-semibold">{title}</span>
+        <span className="block truncate text-base font-semibold">{title}</span>
         <span className={`block text-sm ${primary ? "opacity-85" : "text-muted"}`}>{detail}</span>
       </span>
       {badge !== undefined && badge > 0 && (

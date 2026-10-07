@@ -24,7 +24,7 @@ export default async function HomePage() {
         <h1 className="mt-1 text-3xl font-bold tracking-tight">Chinese Flashcards</h1>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-5 lg:items-stretch">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5 lg:items-stretch">
         <section className="card flex flex-col overflow-hidden lg:col-span-3">
           <div className="flex-1 p-5 sm:p-6">
             <h2 className="eyebrow">Today</h2>
@@ -53,7 +53,7 @@ export default async function HomePage() {
 
       <section aria-labelledby="collections-heading" className="space-y-3">
         <h2 id="collections-heading" className="eyebrow">Study everything</h2>
-        <div className="grid gap-2.5 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
           <ModeLink href="/decks/all" title="All Cards"
             detail={`Every mode across ${plural(decks.length, "deck")}`} badge={totals.due} />
           <ModeLink href="/decks/hard-words" title="★ Hard Words"
@@ -66,7 +66,7 @@ export default async function HomePage() {
         {decks.length === 0 && (
           <p className="card p-4 text-sm text-muted">No decks yet — create one to get started.</p>
         )}
-        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
           {decks.map((deck) => {
             const counts = byDeck.get(deck.id) ?? { total: 0, due: 0, newCards: 0 };
             return (

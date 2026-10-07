@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Keep the dev-only badge clear of the bottom navigation dock.
+  devIndicators: { position: "top-right" },
   async headers() {
     return [
       {

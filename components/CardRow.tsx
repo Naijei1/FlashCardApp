@@ -222,7 +222,7 @@ export default function CardRow({
         {card.notes && <div className="truncate text-sm text-muted">{card.notes}</div>}
       </div>
       <HardWordButton key={`${card.deckId}:${card.id}:${!!card.hard}`} card={card} />
-      <time dateTime={card.fsrs.due} className={`shrink-0 rounded-full px-2 py-0.5 text-xs tabular-nums ${
+      <time dateTime={card.fsrs.due} className={`w-14 shrink-0 rounded-full px-2 py-0.5 text-center text-xs tabular-nums ${
         dueLabel(card) === "due" ? "bg-accent/10 font-medium text-accent" : "text-muted"
       }`}>
         {dueLabel(card)}

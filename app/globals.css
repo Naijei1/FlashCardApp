@@ -73,6 +73,17 @@ body {
     @apply rounded-3xl border border-border bg-surface;
     box-shadow: var(--shadow);
   }
+  /* Active navigation: a lit accent tile with a soft glow */
+  .nav-active-fill {
+    @apply bg-linear-to-br from-accent to-rose-500 text-accent-foreground;
+    box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--accent) 70%, transparent),
+      inset 0 1px 0 rgb(255 255 255 / 0.25);
+  }
+  /* Frosted floating dock for phone and Split View widths */
+  .nav-dock {
+    @apply border border-border/80 bg-surface/92 backdrop-blur-xl backdrop-saturate-150;
+    box-shadow: 0 12px 32px -12px rgb(28 25 23 / 0.28), 0 2px 6px rgb(28 25 23 / 0.06);
+  }
   .eyebrow {
     @apply text-xs font-semibold tracking-wider text-muted uppercase;
   }
