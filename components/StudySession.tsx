@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { shuffle } from "@/lib/due";
 import { DEFAULT_BACK_LANG, DEFAULT_FRONT_LANG } from "@/lib/languages";
-import type { Card } from "@/lib/types";
+import type { StudyFlipCard } from "@/lib/study-sets";
 import { wordKey } from "@/lib/words";
 import HardWordButton from "./HardWordButton";
 import TtsButton from "./TtsButton";
@@ -19,7 +19,7 @@ export default function StudySession({
   deckLangs,
   backHref,
 }: {
-  cards: Card[];
+  cards: StudyFlipCard[];
   deckLangs: DeckLangs;
   backHref: string;
 }) {

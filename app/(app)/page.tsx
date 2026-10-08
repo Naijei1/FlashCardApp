@@ -5,6 +5,8 @@ import WeeklyGoal from "@/components/WeeklyGoal";
 import { listAllCards, listDecks } from "@/lib/db";
 import { countsByDeck, totalCounts } from "@/lib/due";
 import { plural } from "@/lib/plural";
+import { appTimeZone } from "@/lib/forecast";
+import { weeklyProgress } from "@/lib/practice";
 import { hardWords } from "@/lib/study-sets";
 import { uniqueWords } from "@/lib/words";
 
@@ -15,6 +17,7 @@ export default async function HomePage() {
   const totals = totalCounts(cards, now);
   const byDeck = countsByDeck(cards, now);
   const hardCount = uniqueWords(hardWords(cards)).length;
+  const progress = weeklyProgress(cards, now, appTimeZone());
   const canStudy = totals.due + totals.newCards > 0;
 
   return (
@@ -22,6 +25,9 @@ export default async function HomePage() {
       <header>
         <p className="eyebrow">学中文</p>
         <h1 className="mt-1 text-3xl font-bold tracking-tight">Chinese Flashcards</h1>
+        <p className="mt-2 max-w-2xl text-sm text-muted">
+          Start with today&apos;s review, or open a lesson to add cards, import CSV, and choose a practice mode.
+        </p>
       </header>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5 lg:items-stretch">
@@ -38,6 +44,9 @@ export default async function HomePage() {
                 <div className="mt-1 text-sm text-muted">new words</div>
               </div>
             </div>
+            <p className="mt-4 text-sm text-muted">
+              Spaced Repetition is the daily default. It mixes due reviews with a small number of new words.
+            </p>
           </div>
           <div className="flex flex-col gap-2 border-t border-border bg-surface-muted/50 p-4 sm:flex-row">
             {canStudy ? (
@@ -48,7 +57,7 @@ export default async function HomePage() {
             <Link href="/decks/all" className="btn btn-secondary btn-lg flex-1 text-base">All study modes</Link>
           </div>
         </section>
-        <div className="lg:col-span-2"><WeeklyGoal /></div>
+        <div className="lg:col-span-2"><WeeklyGoal initialProgress={progress} /></div>
       </div>
 
       <section aria-labelledby="collections-heading" className="space-y-3">
@@ -64,7 +73,19 @@ export default async function HomePage() {
       <section aria-labelledby="decks-heading" className="space-y-3">
         <h2 id="decks-heading" className="eyebrow">Decks</h2>
         {decks.length === 0 && (
-          <p className="card p-4 text-sm text-muted">No decks yet — create one to get started.</p>
+          <div className="card space-y-3 p-5">
+            <div>
+              <h3 className="font-semibold">Start with one small lesson deck</h3>
+              <p className="mt-1 text-sm text-muted">
+                Create a deck, add a few words, then tap Start Review. You can import a CSV later when you have a larger list.
+              </p>
+            </div>
+            <ol className="grid gap-2 text-sm text-muted sm:grid-cols-3">
+              <li><span className="font-semibold text-foreground">1.</span> Create a deck</li>
+              <li><span className="font-semibold text-foreground">2.</span> Add or import cards</li>
+              <li><span className="font-semibold text-foreground">3.</span> Review daily</li>
+            </ol>
+          </div>
         )}
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
           {decks.map((deck) => {

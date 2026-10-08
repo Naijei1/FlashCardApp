@@ -5,7 +5,7 @@ const db = vi.hoisted(() => ({ getCard: vi.fn(), listCards: vi.fn(), listAllCard
 const auth = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/db", () => db);
 vi.mock("@/lib/api", () => ({ requireRegularUser: auth, badRequest: (error: string) => Response.json({ error }, { status: 400 }), notFound: (error: string) => Response.json({ error }, { status: 404 }) }));
-import { hardWords, loadStudySet } from "@/lib/study-sets";
+import { hardWords, loadStudySet, studyFlipCards } from "@/lib/study-sets";
 import { PATCH } from "@/app/api/cards/[id]/hard/route";
 const now = new Date();
 const card = { id: "a", deckId: "lesson", front: "你好", back: "hello", fsrs: emptyCardState(now), createdAt: now.toISOString(), updatedAt: now.toISOString() };
@@ -36,4 +36,19 @@ it("includes latest siblings for deduplication but excludes unmarked words", asy
   expect(result).toHaveLength(2);
   expect(result.every((c) => c.deckId === "lesson" && c.hard)).toBe(true);
   expect(hardWords(copies)).toEqual([]);
+});
+
+it("reuses already loaded decks when building a virtual study set", async () => {
+  const decks = [{ id: "lesson", name: "Lesson", frontLanguage: "zh-CN", createdAt: "", updatedAt: "" }];
+  db.listAllCards.mockResolvedValue([card]);
+  const result = await loadStudySet("all", decks);
+  expect(db.listDecks).not.toHaveBeenCalled();
+  expect(db.listAllCards).toHaveBeenCalledWith(decks, { consistent: true });
+  expect(result?.cards).toEqual([card]);
+  expect(result?.sideFor(card)).toBe("front");
+});
+
+it("keeps Normal Review cards free of stored schedules", () => {
+  const scheduled = { ...card, notes: "greeting", hard: true, fsrs: card.fsrs, modes: { write: { fsrs: card.fsrs } }, practice: { failures: 1, successes: 2, correctStreak: 2 } };
+  expect(studyFlipCards([scheduled])).toEqual([{ id: "a", deckId: "lesson", front: "你好", back: "hello", notes: "greeting", hard: true }]);
 });

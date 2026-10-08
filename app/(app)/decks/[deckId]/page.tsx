@@ -36,7 +36,11 @@ export default async function DeckPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const [{ deckId }, { page: pageParam }] = await Promise.all([params, searchParams]);
-  const [set, decks] = await Promise.all([loadStudySet(deckId), listDecks()]);
+  const preloadedDecks = isVirtualDeck(deckId) ? await listDecks() : undefined;
+  const [set, decks] = await Promise.all([
+    loadStudySet(deckId, preloadedDecks),
+    preloadedDecks ? Promise.resolve(preloadedDecks) : listDecks(),
+  ]);
   if (!set) notFound();
   const { deck, cards, sideFor } = set;
   const virtual = isVirtualDeck(deckId);
@@ -78,18 +82,25 @@ export default async function DeckPage({
       </header>
 
       <section aria-labelledby="modes-heading" className="space-y-3">
-        <div className="flex items-baseline justify-between gap-3">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
           <h2 id="modes-heading" className="eyebrow">Study modes</h2>
           <span className="text-xs text-muted">Each mode keeps its own schedule</span>
         </div>
+        <div className="card bg-surface-muted/45 p-4 text-sm text-muted">
+          <p>
+            Not sure what to choose? Use <span className="font-semibold text-foreground">Spaced Repetition</span> for the daily habit.
+            Pick <span className="font-semibold text-foreground">Normal Review</span> for a no-pressure flip-through, or a writing mode when you want active recall.
+          </p>
+        </div>
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
           <div className="sm:col-span-2 xl:col-span-4">
-            <ModeLink primary href={`/review/${deckId}`} title="Spaced Repetition"
-              detail={`${status(counts.due, counts.newCards)} · up to ${DAILY_WORD_GOAL} new a day`}
+            <ModeLink primary href={`/review/${deckId}`} kicker="Recommended"
+              title="Spaced Repetition"
+              detail={`${status(counts.due, counts.newCards)} · daily review with up to ${DAILY_WORD_GOAL} new`}
               badge={counts.due} />
           </div>
           {counts.newCards > 0 && (
-            <ModeLink href={`/review/${deckId}?new=1`} title="Learn new words"
+            <ModeLink href={`/review/${deckId}?new=1`} kicker="Shortcut" title="Learn new words"
               detail={`Start ${plural(counts.newCards, "unseen word")}`} />
           )}
           <ModeLink href={`/study/${deckId}`} title="Normal Review"
