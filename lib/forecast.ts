@@ -12,13 +12,23 @@ export function appTimeZone(): string {
   }
 }
 
-function dateParts(date: Date, timeZone: string) {
-  const parts = new Intl.DateTimeFormat("en-US", {
+const dateFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function dateFormatter(timeZone: string): Intl.DateTimeFormat {
+  const cached = dateFormatters.get(timeZone);
+  if (cached) return cached;
+  const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(date);
+  });
+  dateFormatters.set(timeZone, formatter);
+  return formatter;
+}
+
+function dateParts(date: Date, timeZone: string) {
+  const parts = dateFormatter(timeZone).formatToParts(date);
   const value = (type: Intl.DateTimeFormatPartTypes) =>
     Number(parts.find((part) => part.type === type)?.value);
   return { year: value("year"), month: value("month"), day: value("day") };

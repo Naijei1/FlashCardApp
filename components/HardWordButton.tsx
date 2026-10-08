@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { Card } from "@/lib/types";
 
 /** Star toggle for the Hard Words list; the label collapses to the star on narrow screens. */
-export default function HardWordButton({ card, onChange }: { card: Card; onChange?: (hard: boolean) => void }) {
+export default function HardWordButton({ card, onChange }: { card: Pick<Card, "id" | "deckId" | "hard">; onChange?: (hard: boolean) => void }) {
   const [hard, setHard] = useState(!!card.hard);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);

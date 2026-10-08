@@ -7,11 +7,17 @@ import { checkPinyinAnswer, pinyinTextForCard, type PinyinReading } from "./piny
 import type { Card, ReviewMode } from "./types";
 import { chineseSideForCard, chineseTextAndAnnotations, type ChineseSide } from "./write";
 
+const MAX_READING_CACHE_SIZE = 10_000;
+const readingCache = new Map<string, PinyinReading | null>();
+
 export function readingForCard(card: Card, deckSide: ChineseSide | null): PinyinReading | null {
   const text = pinyinTextForCard(card, deckSide);
   if (!text) return null;
   const side = chineseSideForCard(card, deckSide) ?? "front";
+  const cacheKey = `${side}\u0000${card[side]}\u0000${text.hanzi}\u0000${text.meaning}`;
+  if (readingCache.has(cacheKey)) return copyReading(readingCache.get(cacheKey) ?? null);
   const { annotations } = chineseTextAndAnnotations(card[side]);
+  let reading: PinyinReading | null = null;
   if (annotations.length > 0) {
     const choices = polyphonic(text.hanzi.replace(/\s/g, ""), {
       type: "array", traditional: true,
@@ -26,19 +32,30 @@ export function readingForCard(card: Card, deckSide: ChineseSide | null): Pinyin
         choices[index].find((option) => checkPinyinAnswer(token, [option]))
       );
       if (supplied.every((syllable): syllable is string => !!syllable)) {
-        return { ...text, syllables: supplied };
+        reading = { ...text, syllables: supplied };
+        break;
       }
     }
   }
-  const syllables = pinyin(text.hanzi, {
-    type: "array",
-    nonZh: "removed",
-    toneSandhi: false,
-    traditional: true,
-  });
-  // Do not grade a partial pronunciation if the dictionary lacks a character.
-  if (syllables.length !== [...text.hanzi.replace(/\s/g, "")].length) return null;
-  return { ...text, syllables };
+  if (!reading) {
+    const syllables = pinyin(text.hanzi, {
+      type: "array",
+      nonZh: "removed",
+      toneSandhi: false,
+      traditional: true,
+    });
+    // Do not grade a partial pronunciation if the dictionary lacks a character.
+    if (syllables.length === [...text.hanzi.replace(/\s/g, "")].length) {
+      reading = { ...text, syllables };
+    }
+  }
+  if (readingCache.size >= MAX_READING_CACHE_SIZE) readingCache.clear();
+  readingCache.set(cacheKey, reading);
+  return copyReading(reading);
+}
+
+function copyReading(reading: PinyinReading | null): PinyinReading | null {
+  return reading ? { ...reading, syllables: [...reading.syllables] } : null;
 }
 
 type StudyDetails = Omit<StudyQueueItem, "card">;

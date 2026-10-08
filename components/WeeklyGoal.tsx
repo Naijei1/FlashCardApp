@@ -2,9 +2,12 @@
 import { useEffect, useState } from "react";
 import { DAILY_WORD_GOAL, WEEKLY_WORD_GOAL } from "@/lib/practice";
 
-export default function WeeklyGoal() {
-  const [progress, setProgress] = useState<{ today: number; week: number } | null>(null);
+type Progress = { today: number; week: number };
+
+export default function WeeklyGoal({ initialProgress = null }: { initialProgress?: Progress | null }) {
+  const [progress, setProgress] = useState<Progress | null>(initialProgress);
   useEffect(() => {
+    if (initialProgress) setProgress(initialProgress);
     const controller = new AbortController();
     const update = async () => {
       try {
@@ -14,7 +17,7 @@ export default function WeeklyGoal() {
     };
     // Installed iPad/iPhone apps resume with visibilitychange rather than focus.
     const onVisible = () => { if (document.visibilityState === "visible") void update(); };
-    void update();
+    if (!initialProgress) void update();
     window.addEventListener("focus", update);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
@@ -22,7 +25,7 @@ export default function WeeklyGoal() {
       window.removeEventListener("focus", update);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [initialProgress]);
   const week = progress?.week ?? 0;
   const percent = Math.min(100, (week / WEEKLY_WORD_GOAL) * 100);
   return (

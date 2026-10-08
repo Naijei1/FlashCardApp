@@ -56,16 +56,20 @@ export async function POST(request: Request) {
     reviewedAt,
     mode,
   };
-  const existing = await getReviewReceipt(clientReviewId);
-  if (existing) {
-    return reviewReceiptsMatch(existing, requested)
-      ? NextResponse.json({ ok: true, duplicate: true })
-      : conflict("clientReviewId was already used for a different review");
-  }
 
   for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt++) {
     const found = await getCardForReview(deckId, cardId);
-    if (!found) return notFound("card not found");
+    if (!found) {
+      // Preserve idempotency for a retry whose original card was later deleted,
+      // without making every ordinary review pay this read before the transaction.
+      const existing = await getReviewReceipt(clientReviewId);
+      if (existing) {
+        return reviewReceiptsMatch(existing, requested)
+          ? NextResponse.json({ ok: true, duplicate: true })
+          : conflict("clientReviewId was already used for a different review");
+      }
+      return notFound("card not found");
+    }
 
     // A durable offline queue can arrive after another device has reviewed the
     // same card. Never pass FSRS a timestamp older than the canonical state.

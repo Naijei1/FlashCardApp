@@ -36,7 +36,11 @@ export default async function DeckPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const [{ deckId }, { page: pageParam }] = await Promise.all([params, searchParams]);
-  const [set, decks] = await Promise.all([loadStudySet(deckId), listDecks()]);
+  const preloadedDecks = isVirtualDeck(deckId) ? await listDecks() : undefined;
+  const [set, decks] = await Promise.all([
+    loadStudySet(deckId, preloadedDecks),
+    preloadedDecks ? Promise.resolve(preloadedDecks) : listDecks(),
+  ]);
   if (!set) notFound();
   const { deck, cards, sideFor } = set;
   const virtual = isVirtualDeck(deckId);
