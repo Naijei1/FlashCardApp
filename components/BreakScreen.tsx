@@ -46,7 +46,7 @@ export default function BreakScreen({
   const savesPending = syncState.pendingCount > 0;
 
   return (
-    <div className="mx-auto flex h-dvh max-w-md flex-col items-center justify-center gap-4 px-6 pb-safe text-center">
+    <div className="study-frame mx-auto flex max-w-md flex-col items-center justify-center gap-4 px-6 pt-safe pb-safe text-center">
       <span className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 text-3xl text-accent">
         <IconClock strokeWidth={1.8} />
       </span>

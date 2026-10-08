@@ -63,7 +63,7 @@ export default function StudySession({
   const selected = cards[order[index]];
   if (!selected) {
     return (
-      <div className="mx-auto flex h-dvh max-w-md flex-col items-center justify-center gap-3 px-6 pb-safe text-center">
+      <div className="study-frame mx-auto flex max-w-md flex-col items-center justify-center gap-3 px-6 pt-safe pb-safe text-center">
         <h1 className="text-2xl font-semibold tracking-tight">No cards to study</h1>
         <p className="text-muted">Add some cards first.</p>
         <Link href={backHref} className="btn btn-primary mt-2">← Back</Link>
@@ -77,7 +77,7 @@ export default function StudySession({
   const progress = order.length > 0 ? (index + 1) / order.length : 0;
 
   return (
-    <div className="study-surface mx-auto flex h-dvh w-full max-w-2xl flex-col px-safe pb-safe lg:max-w-3xl">
+    <div className="study-surface study-frame mx-auto flex w-full max-w-2xl flex-col px-safe pt-safe pb-safe lg:max-w-3xl">
       <header className="flex items-center gap-3 py-3">
         <Link href={backHref} className="btn btn-ghost -ml-2 shrink-0 px-3">← Back</Link>
         <div className="min-w-0 flex-1">
@@ -95,7 +95,7 @@ export default function StudySession({
       </header>
 
       {/* Tap anywhere on the card to flip; two fixed halves so nothing jumps. */}
-      <div {...swipe.handlers} onClick={() => { if (!swipe.consumeClick()) setRevealed((r) => !r); }}
+      <div key={`${card.id}-${index}`} {...swipe.handlers} onClick={() => { if (!swipe.consumeClick()) setRevealed((r) => !r); }}
         className="swipeable flashcard flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 basis-1/2 items-center justify-center gap-2 overflow-y-auto px-6 py-6 text-center">
           <span lang={frontLang} className="selectable text-5xl leading-tight font-medium break-words sm:text-6xl">
@@ -123,7 +123,7 @@ export default function StudySession({
         </div>
       </div>
 
-      <div className="flex min-h-28 items-center gap-2 py-3">
+      <div className="flex min-h-28 shrink-0 items-center gap-2 py-3">
         <button type="button" onClick={() => go(-1)} disabled={index === 0} className="btn btn-secondary btn-lg flex-1">
           ← Prev
         </button>

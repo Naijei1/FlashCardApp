@@ -43,3 +43,13 @@ next-env.d.ts
 # personal data
 sample-data.csv
 !.env.example
+
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/tests/e2e/artifacts/
+
+# local dynamodb extract
+/dynamodb-local-metadata.json

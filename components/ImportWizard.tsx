@@ -153,7 +153,7 @@ export default function ImportWizard({
             </div>
           )}
 
-          <div className="max-h-72 overflow-y-auto rounded-2xl border border-border bg-surface">
+          <div className="overscroll-contain max-h-72 overflow-y-auto rounded-2xl border border-border bg-surface">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-surface text-left text-muted">
                 <tr>

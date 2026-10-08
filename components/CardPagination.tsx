@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { scrollDocumentToTop } from "./useViewportLock";
 
 type CardPaginationProps = {
   basePath: string;
@@ -42,6 +45,7 @@ export default function CardPagination({
           rel="prev"
           prefetch={false}
           className={linkClass}
+          onClick={scrollDocumentToTop}
         >
           ← Previous
         </Link>
@@ -61,6 +65,7 @@ export default function CardPagination({
           rel="next"
           prefetch={false}
           className={linkClass}
+          onClick={scrollDocumentToTop}
         >
           Next →
         </Link>
