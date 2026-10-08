@@ -32,6 +32,11 @@ Tailwind CSS; data lives in a single DynamoDB table.
   in Write Chinese or Write Pinyin. A miss requires three additional correct
   entries, then records one failed recall; the correction copies do not inflate
   review counts or successful recall streaks. The toggle is saved on the device.
+- **Mistake Clinic**: a home-screen session that finds the weakest words across
+  all decks — repeated failures, low streaks, recent lapses, and anything marked
+  hard — then drills them with mixed Recognition, Write Chinese, and Write
+  Pinyin prompts. Each prompt records as its real skill mode, so FSRS schedules
+  and weekly new-word progress stay independent and consistent.
 - **Weekly goal**: 77 new words per week (about 11 a day), alongside due reviews.
   Tracks newly introduced words from this version onward, using Eastern
   Monday–Sunday weeks. Introduction counts are not a guarantee of mastery.
@@ -248,3 +253,10 @@ the home screen is a filtered deck with normal review, writing, and pinyin modes
 Words stay in their original lessons and use the same schedule for the selected
 skill. Reverse duplicates are marked together; removing a marker keeps the card
 and all study history. The weekly target counts each word once across skills.
+
+**Mistake Clinic** is also virtual: it stores no extra deck or card records.
+Weak-word scoring combines each mode's failure count, correct streak, FSRS
+lapses/relearning state, recent lapse timing, and the manual hard marker. The
+clinic queue may show the same word in more than one skill, but every answer is
+submitted with the underlying mode (`review`, `write`, or `pinyin`) and the
+server still recomputes from the canonical card before committing the review.
