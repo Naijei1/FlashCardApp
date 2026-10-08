@@ -1,0 +1,10 @@
+{
+  "naijeiUserId": "cognito-sub-for-naijei",
+  "adminUserId": "cognito-sub-for-admin",
+  "naijeiEmail": "naijei@example.com",
+  "adminEmail": "admin@example.com",
+  "decks": {
+    "existing-deck-id": "global",
+    "another-existing-deck-id": "private"
+  }
+}
