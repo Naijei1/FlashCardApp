@@ -33,7 +33,7 @@ for (const route of ROUTES) {
 
 test("Mistake Clinic session locks the viewport and keeps write prompts in view", async ({ page }, info) => {
   await page.goto("/clinic");
-  await expect(page.getByText("Recognition")).toBeVisible();
+  await expect(page.locator(".rounded-full").filter({ hasText: "Recognition" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Show answer" })).toBeVisible();
   await expectStudyFitsViewport(page);
   await screenshot(page, `${info.project.name}-clinic-review`);
@@ -43,9 +43,9 @@ test("Mistake Clinic session locks the viewport and keeps write prompts in view"
   await expectStudyFitsViewport(page);
   await page.getByRole("button", { name: /^Retry/ }).click();
 
-  await expect(page.getByText("Write Chinese")).toBeVisible();
   const input = page.locator("#clinic-input");
   await expect(input).toBeVisible();
+  await expect(page.locator(".eyebrow")).toHaveText("Write Chinese");
   await expectStudyFitsViewport(page);
   const fontSize = await input.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
   expect(fontSize).toBeGreaterThanOrEqual(16);
@@ -66,7 +66,7 @@ test("Mistake Clinic session locks the viewport and keeps write prompts in view"
   await expect(page.getByRole("button", { name: /^Retry/ })).toBeVisible();
   await page.getByRole("button", { name: /^Retry/ }).click();
 
-  await expect(page.getByText("Write Pinyin")).toBeVisible();
+  await expect(page.locator(".eyebrow")).toHaveText("Write Pinyin");
   await expect(input).toBeVisible();
   await input.focus();
   await simulateSoftKeyboard(page);
