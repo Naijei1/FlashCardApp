@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { badRequest, requireAuth } from "@/lib/api";
+import { badRequest, requireSession } from "@/lib/api";
 import { listDecks, putDeck } from "@/lib/db";
 import type { Deck } from "@/lib/types";
 import { isSupportedLanguage } from "@/lib/languages";
 import { isRecord, MAX_DECK_NAME_LENGTH } from "@/lib/validation";
 
 export async function GET() {
-  const denied = await requireAuth();
-  if (denied) return denied;
-  return NextResponse.json(await listDecks());
+  const auth = await requireSession();
+  if (auth.response) return auth.response;
+  return NextResponse.json(await listDecks(auth.session));
 }
 
 export async function POST(request: Request) {
-  const denied = await requireAuth();
-  if (denied) return denied;
+  const auth = await requireSession();
+  if (auth.response) return auth.response;
   const body: unknown = await request.json().catch(() => null);
   if (!isRecord(body)) return badRequest("invalid body");
   const name = typeof body?.name === "string" ? body.name.trim() : "";
@@ -37,6 +37,9 @@ export async function POST(request: Request) {
     createdAt: now,
     updatedAt: now,
   };
-  await putDeck(deck, { create: true });
+  await putDeck({ ...deck, source: auth.session.isAdmin ? "global" : "private" }, {
+    create: true,
+    session: auth.session,
+  });
   return NextResponse.json(deck, { status: 201 });
 }

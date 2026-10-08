@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { badRequest, notFound, requireAuth } from "@/lib/api";
+import { badRequest, contentAccessResponse, notFound, requireSession } from "@/lib/api";
 import { buildCards } from "@/lib/cards";
 import { batchPutCards, getDeck } from "@/lib/db";
 import {
@@ -9,8 +9,8 @@ import {
 } from "@/lib/validation";
 
 export async function POST(request: Request) {
-  const denied = await requireAuth();
-  if (denied) return denied;
+  const auth = await requireSession();
+  if (auth.response) return auth.response;
   const body: unknown = await request.json().catch(() => null);
   if (!isRecord(body)) return badRequest("invalid body");
   const deckId = typeof body?.deckId === "string" ? body.deckId : "";
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   }
   const notes = typeof body.notes === "string" ? body.notes.trim() : "";
   if (notes.length > MAX_CARD_NOTES_LENGTH) return badRequest("card notes are too long");
-  if (!(await getDeck(deckId))) return notFound("deck not found");
+  if (!(await getDeck(deckId, auth.session))) return notFound("deck not found");
 
   const cards = buildCards(
     {
@@ -37,8 +37,10 @@ export async function POST(request: Request) {
     new Date()
   );
   try {
-    await batchPutCards(cards);
+    await batchPutCards(cards, { session: auth.session });
   } catch (error) {
+    const denied = contentAccessResponse(error);
+    if (denied) return denied;
     if (error instanceof Error && error.name === "DeckUnavailableError") {
       return NextResponse.json(
         { error: "This deck is being deleted. Refresh and try again." },

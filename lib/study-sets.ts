@@ -1,4 +1,5 @@
 import { getDeck, listAllCards, listCards, listDecks } from "./db";
+import type { AuthSession } from "./auth";
 import { wordKey } from "./words";
 import { chineseSideForDeck, type ChineseSide } from "./write";
 import type { Card, Deck } from "./types";
@@ -26,8 +27,8 @@ function virtualDeck(id: string): Deck {
 }
 
 /** Deck metadata only, for pages whose cards are loaded by the queue API. */
-export async function getStudyDeck(id: string): Promise<Deck | null> {
-  return isVirtualDeck(id) ? virtualDeck(id) : getDeck(id);
+export async function getStudyDeck(id: string, session?: AuthSession): Promise<Deck | null> {
+  return isVirtualDeck(id) ? virtualDeck(id) : getDeck(id, session);
 }
 
 export type StudySet = {
@@ -38,10 +39,10 @@ export type StudySet = {
 };
 
 /** Loads a real deck, All Cards, or Hard Words with strongly consistent card reads. */
-export async function loadStudySet(id: string): Promise<StudySet | null> {
+export async function loadStudySet(id: string, session?: AuthSession): Promise<StudySet | null> {
   if (isVirtualDeck(id)) {
-    const decks = await listDecks();
-    const all = await listAllCards(decks, { consistent: true });
+    const decks = await listDecks(session);
+    const all = await listAllCards(decks, { consistent: true, session });
     const sides = new Map(decks.map((deck) => [deck.id, chineseSideForDeck(deck)]));
     return {
       deck: virtualDeck(id),
@@ -49,7 +50,7 @@ export async function loadStudySet(id: string): Promise<StudySet | null> {
       sideFor: (card) => sides.get(card.deckId) ?? null,
     };
   }
-  const [deck, cards] = await Promise.all([getDeck(id), listCards(id, { consistent: true })]);
+  const [deck, cards] = await Promise.all([getDeck(id, session), listCards(id, { consistent: true, session })]);
   if (!deck) return null;
   const side = chineseSideForDeck(deck);
   return { deck, cards, sideFor: () => side };
