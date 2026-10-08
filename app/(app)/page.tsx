@@ -4,6 +4,7 @@ import NewDeckButton from "@/components/NewDeckButton";
 import WeeklyGoal from "@/components/WeeklyGoal";
 import { listAllCards, listDecks } from "@/lib/db";
 import { countsByDeck, totalCounts } from "@/lib/due";
+import { weakWordCount } from "@/lib/mistake-clinic";
 import { plural } from "@/lib/plural";
 import { appTimeZone } from "@/lib/forecast";
 import { weeklyProgress } from "@/lib/practice";
@@ -17,6 +18,7 @@ export default async function HomePage() {
   const totals = totalCounts(cards, now);
   const byDeck = countsByDeck(cards, now);
   const hardCount = uniqueWords(hardWords(cards)).length;
+  const clinicCount = weakWordCount(cards, { now });
   const progress = weeklyProgress(cards, now, appTimeZone());
   const canStudy = totals.due + totals.newCards > 0;
 
@@ -67,6 +69,9 @@ export default async function HomePage() {
             detail={`Every mode across ${plural(decks.length, "deck")}`} badge={totals.due} />
           <ModeLink href="/decks/hard-words" title="★ Hard Words"
             detail={hardCount > 0 ? `${plural(hardCount, "marked word")}` : "Mark tricky words while studying"} />
+          <ModeLink href="/clinic" title="Mistake Clinic"
+            detail={clinicCount > 0 ? `${plural(clinicCount, "weak word")} to drill` : "Repeated misses and hard words appear here"}
+            badge={clinicCount} />
         </div>
       </section>
 
