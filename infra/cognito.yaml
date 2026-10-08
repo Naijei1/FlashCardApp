@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Cognito user pool for FlashCardApp multi-user auth. This stack does not
+  create or modify the DynamoDB table. Deploy it separately from the app and
+  keep AUTH_MODE=shared until the migration has been validated.
+
+Parameters:
+  HostedUiPrefix:
+    Type: String
+    Description: Globally unique prefix for the Cognito hosted UI domain.
+    AllowedPattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+  CallbackUrl:
+    Type: String
+    Default: http://localhost:3000/api/auth/cognito/callback
+  LogoutUrl:
+    Type: String
+    Default: http://localhost:3000/login
+
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: flashcards-users
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref HostedUiPrefix
+      UserPoolId: !Ref UserPool
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: flashcards-web
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      ExplicitAuthFlows:
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+      CallbackURLs:
+        - !Ref CallbackUrl
+      LogoutURLs:
+        - !Ref LogoutUrl
+
+  AdminsGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: admins
+      Description: Dedicated admin account. Members cannot study.
+      UserPoolId: !Ref UserPool
+
+Outputs:
+  UserPoolId:
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Value: !Ref UserPoolClient
+  CognitoIssuer:
+    Value: !GetAtt UserPool.ProviderURL
+  HostedUiDomain:
+    Value: !Sub https://${HostedUiPrefix}.auth.${AWS::Region}.amazoncognito.com
+  AdminsGroup:
+    Value: admins

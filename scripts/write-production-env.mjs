@@ -32,6 +32,26 @@ if (!/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+-\d+$/.test(region)) {
 if (!/^[A-Za-z0-9_+./-]+$/.test(timeZone)) {
   throw new Error("APP_TIME_ZONE contains unsupported characters");
 }
+const authMode = process.env.AUTH_MODE;
+if (authMode && authMode !== "shared" && authMode !== "cognito") {
+  throw new Error("AUTH_MODE must be shared or cognito for a production build");
+}
+const cognitoNames = [
+  "COGNITO_USER_POOL_ID",
+  "COGNITO_CLIENT_ID",
+  "COGNITO_DOMAIN",
+  "COGNITO_REDIRECT_URI",
+];
+if (authMode === "cognito") {
+  const missingCognito = cognitoNames.filter((name) => !process.env[name]);
+  if (missingCognito.length > 0) {
+    throw new Error(`AUTH_MODE=cognito requires ${missingCognito.join(", ")}`);
+  }
+}
+for (const name of ["AUTH_MODE", ...cognitoNames, "COGNITO_ISSUER", "COGNITO_LOGOUT_URI"]) {
+  const value = process.env[name];
+  if (value && /[\r\n]/.test(value)) throw new Error(`${name} must be a single line`);
+}
 try {
   new Intl.DateTimeFormat("en-US", { timeZone }).format();
 } catch {
@@ -48,6 +68,11 @@ const values = {
   APP_REGION: region,
   APP_TIME_ZONE: timeZone,
 };
+if (authMode === "cognito") {
+  for (const name of ["AUTH_MODE", ...cognitoNames, "COGNITO_ISSUER", "COGNITO_LOGOUT_URI"]) {
+    if (process.env[name]) values[name] = process.env[name];
+  }
+}
 const contents =
   Object.entries(values)
     .map(([name, value]) => `${name}=${value}`)

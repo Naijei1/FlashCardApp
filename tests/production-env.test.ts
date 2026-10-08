@@ -57,6 +57,30 @@ describe("production environment", () => {
     }
   });
 
+  it("refuses to bake local-dev auth into a production build", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "flashcards-env-test-"));
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      NODE_ENV: "production",
+      APP_PASSWORD: "a-long-password",
+      SESSION_SECRET: "b".repeat(32),
+      TABLE_NAME: "test-table",
+      APP_REGION: "us-east-1",
+      AUTH_MODE: "local-dev",
+    };
+    try {
+      expect(() =>
+        execFileSync(process.execPath, [path.resolve("scripts/write-production-env.mjs")], {
+          cwd: directory,
+          env,
+          stdio: "pipe",
+        })
+      ).toThrow(/local-dev|shared or cognito/);
+    } finally {
+      rmSync(directory, { recursive: true });
+    }
+  });
+
   it("uses the same encoded secret for server sessions and login redirects", async () => {
     vi.stubEnv("SESSION_SECRET", "");
     vi.stubEnv("SESSION_SECRET_HEX", Buffer.from('session"\\$#\u5bc6'.repeat(4)).toString("hex"));
