@@ -21,7 +21,7 @@ export type ReviewQueueData = {
 export function buildReviewQueueData(
   cards: Card[],
   now: Date = new Date(),
-  options: Omit<QueueOptions, "random"> = {}
+  options: QueueOptions = {}
 ): ReviewQueueData {
   const { reviews, unseen } = eligibleCards(cards, now, options.newLimit);
   return {

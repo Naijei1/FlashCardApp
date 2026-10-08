@@ -90,9 +90,14 @@ describe("Mistake Clinic weak-word selection", () => {
       },
     } satisfies Card;
 
-    const data = buildMistakeClinicQueue([review, write, pinyin], () => "front", now);
-    expect(data.queue.map((item) => item.mode)).toEqual(["review", "write", "pinyin"]);
-    expect(data.queue.map((item) => item.card.front)).toEqual(["忘记", "难", "学习"]);
+    const data = buildMistakeClinicQueue([review, write, pinyin], () => "front", now, { random: () => 0 });
+    expect(data.queue.map((item) => item.mode).sort()).toEqual(["pinyin", "review", "write"]);
+    expect(data.queue.map((item) => item.card.front).sort()).toEqual(["学习", "忘记", "难"]);
+    const other = buildMistakeClinicQueue([review, write, pinyin], () => "front", now, { random: () => 0.99 });
+    expect(other.queue.map((item) => `${item.mode}:${item.card.id}`).sort()).toEqual(
+      data.queue.map((item) => `${item.mode}:${item.card.id}`).sort()
+    );
+    expect(other.queue.map((item) => item.card.id)).not.toEqual(data.queue.map((item) => item.card.id));
   });
 });
 

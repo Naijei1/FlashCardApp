@@ -1,3 +1,4 @@
+import { shuffle } from "./due";
 import { cardForMode } from "./modes";
 import { MISTAKE_CLINIC_LIMIT, weakWords } from "./mistake-clinic";
 import { studyDetails } from "./pinyin-queue";
@@ -20,8 +21,9 @@ export function buildMistakeClinicQueue(
   cards: Card[],
   sideFor: (card: Card) => ChineseSide | null,
   now: Date = new Date(),
-  limit = MISTAKE_CLINIC_LIMIT
+  options: { limit?: number; random?: () => number } = {}
 ): MistakeClinicQueueData {
+  const { limit = MISTAKE_CLINIC_LIMIT, random = Math.random } = options;
   const words = weakWords(cards, { now });
   const items: MistakeClinicQueueItem[] = [];
 
@@ -41,10 +43,11 @@ export function buildMistakeClinicQueue(
     }
   }
 
+  const selected = items
+    .sort((a, b) => b.weaknessScore - a.weaknessScore || a.card.updatedAt.localeCompare(b.card.updatedAt))
+    .slice(0, limit);
   return {
     totalWeak: words.length,
-    queue: items
-      .sort((a, b) => b.weaknessScore - a.weaknessScore || a.card.updatedAt.localeCompare(b.card.updatedAt))
-      .slice(0, limit),
+    queue: shuffle(selected, random),
   };
 }
