@@ -100,6 +100,28 @@ describe("learning-first order", () => {
     const cards = [...Array.from({ length: 10 }, (_, i) => makeCard({ id: `n${i}` })), makeCard({ id: "step", fsrs: learning })];
     for (const seed of [0, 0.5, 0.99]) expect(buildQueue(cards, NOW, { random: () => seed })[0].id).toBe("step");
   });
+
+  it("keeps learning, then due reviews, then new cards, shuffled within each group", () => {
+    const learningFsrs = applyRating(emptyCardState(NOW), Rating.Good, new Date(NOW.getTime() - 3_600_000), "write").fsrs;
+    const reviewFsrs = { ...applyRating(emptyCardState(NOW), Rating.Easy, NOW).fsrs, due: NOW.toISOString() };
+    const cards = [
+      makeCard({ id: "new-b" }),
+      makeCard({ id: "rev-b", fsrs: reviewFsrs }),
+      makeCard({ id: "learn-b", fsrs: learningFsrs }),
+      makeCard({ id: "new-a" }),
+      makeCard({ id: "rev-a", fsrs: reviewFsrs }),
+      makeCard({ id: "learn-a", fsrs: learningFsrs }),
+    ];
+    const ids = (seed: number) => buildQueue(cards, NOW, { random: () => seed }).map((card) => card.id);
+    const groups = (seed: number) => {
+      const queued = ids(seed);
+      return [queued.slice(0, 2), queued.slice(2, 4), queued.slice(4)];
+    };
+    expect(groups(0)[0].sort()).toEqual(["learn-a", "learn-b"]);
+    expect(groups(0)[1].sort()).toEqual(["rev-a", "rev-b"]);
+    expect(groups(0)[2].sort()).toEqual(["new-a", "new-b"]);
+    expect(ids(0)).not.toEqual(ids(0.99));
+  });
 });
 
 describe("buildQueue", () => {

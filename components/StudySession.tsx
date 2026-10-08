@@ -18,23 +18,25 @@ export default function StudySession({
   cards,
   deckLangs,
   backHref,
+  random = Math.random,
 }: {
   cards: StudyFlipCard[];
   deckLangs: DeckLangs;
   backHref: string;
+  random?: () => number;
 }) {
-  const initialOrder = useMemo(() => cards.map((_, i) => i), [cards]);
-  const [order, setOrder] = useState(initialOrder);
+  const listOrder = useMemo(() => cards.map((_, i) => i), [cards]);
+  const [order, setOrder] = useState(listOrder);
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [marked, setMarked] = useState<Record<string, boolean>>({});
 
-  // A refreshed card list must not keep indexes into the previous list.
+  // Shuffle after mount so SSR markup matches hydration, then randomize.
   useEffect(() => {
-    setOrder(initialOrder);
+    setOrder(shuffle(cards.map((_, i) => i), random));
     setIndex(0);
     setRevealed(false);
-  }, [initialOrder]);
+  }, [cards, random]);
 
   function go(delta: number) {
     setIndex((i) => Math.min(Math.max(i + delta, 0), order.length - 1));
@@ -89,7 +91,7 @@ export default function StudySession({
           </div>
         </div>
         <button type="button" onClick={() => reorder(shuffle(order))} className="btn btn-ghost shrink-0 px-2.5">Shuffle</button>
-        <button type="button" onClick={() => reorder(initialOrder)} className="btn btn-ghost hidden shrink-0 px-2.5 sm:inline-flex">Restart</button>
+        <button type="button" onClick={() => reorder(listOrder)} className="btn btn-ghost hidden shrink-0 px-2.5 sm:inline-flex">Restart</button>
         <HardWordButton key={`${card.deckId}:${card.id}`} card={card}
           onChange={(hard) => setMarked((current) => ({ ...current, [wordKey(card)]: hard }))} />
       </header>

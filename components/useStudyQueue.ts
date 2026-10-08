@@ -7,8 +7,11 @@ import type { StudyQueueItem } from "@/lib/review-queue";
 import {
   belongsInCurrentSession,
   canAcceptRating,
-  firstReadyIndex,
   nextQueuedDue,
+  pickReadyIndex,
+  queuedDueAt,
+  readyIndexes,
+  studyItemKey,
 } from "@/lib/session-scheduling";
 import { getBreakUntil, startBreak } from "@/lib/study-break";
 import type { Card, ReviewMode } from "@/lib/types";
@@ -16,8 +19,6 @@ import { createReviewSync, type ReviewSyncState } from "./reviewSync";
 
 /** Waiting longer than this for a parked learning card starts the batch break instead. */
 const LONG_WAIT_MS = 60_000;
-
-const itemKey = (item: StudyQueueItem) => `${item.card.deckId}\u0000${item.card.id}`;
 
 const INITIAL_SYNC_STATE: ReviewSyncState = {
   pendingCount: 0,
@@ -35,10 +36,12 @@ export function useStudyQueue({
   deckId,
   mode,
   newOnly = false,
+  random = Math.random,
 }: {
   deckId: string;
   mode: ReviewMode;
   newOnly?: boolean;
+  random?: () => number;
 }) {
   // Client storage can contain a pending review or enforced break that the
   // server cannot see. Gate the first card until that local check completes.
@@ -58,6 +61,23 @@ export function useStudyQueue({
   const waitingToLoadRef = useRef(false);
   /** Parked learning cards carried into the next batch so nobody waits out their step. */
   const carryRef = useRef<StudyQueueItem[]>([]);
+  const currentKeyRef = useRef<string | null>(null);
+  const lastShownKeyRef = useRef<string | null>(null);
+  const randomRef = useRef(random);
+  randomRef.current = random;
+  const [currentKey, setCurrentKey] = useState<string | null>(null);
+
+  const chooseCurrent = useCallback((items: StudyQueueItem[], at: number, avoidKey: string | null) => {
+    const index = pickReadyIndex(items, at, {
+      random: randomRef.current,
+      avoidKey,
+      keyOf: studyItemKey,
+    });
+    const key = index >= 0 ? studyItemKey(items[index]) : null;
+    currentKeyRef.current = key;
+    setCurrentKey(key);
+    return index;
+  }, []);
   const sync = useMemo(
     () => createReviewSync((failedCount) => setSyncState((state) => ({ ...state, failedCount }))),
     []
@@ -91,16 +111,20 @@ export function useStudyQueue({
         if (controller.signal.aborted) return;
         const carried = carryRef.current;
         carryRef.current = [];
-        const loaded = new Set(data.queue.map(itemKey));
-        setNowMs(Date.now());
-        setQueue([...data.queue, ...carried.filter((item) => !loaded.has(itemKey(item)))]);
+        const loaded = new Set(data.queue.map(studyItemKey));
+        const combined = [...data.queue, ...carried.filter((item) => !loaded.has(studyItemKey(item)))];
+        const at = Date.now();
+        setNowMs(at);
+        lastShownKeyRef.current = null;
+        chooseCurrent(combined, at, null);
+        setQueue(combined);
         setTotalDue(data.totalDue);
         setBatchSize(data.queue.length);
       })
       .catch(() => {
         if (!controller.signal.aborted) setLoadError(true);
       });
-  }, [deckId, mode, newOnly, sync]);
+  }, [chooseCurrent, deckId, mode, newOnly, sync]);
 
   useEffect(() => {
     const unsubscribe = sync.subscribe((state) => {
@@ -122,6 +146,9 @@ export function useStudyQueue({
     setTotalDue(0);
     setBatchSize(0);
     advancedAtRef.current = null;
+    currentKeyRef.current = null;
+    lastShownKeyRef.current = null;
+    setCurrentKey(null);
     // Always fetch a fresh queue after local saves drain. Navigation can reuse
     // server-rendered pages containing cards that have already been reviewed.
     // An unfinished break (even across a reload) blocks the next batch.
@@ -140,7 +167,9 @@ export function useStudyQueue({
     if (waitingToLoadRef.current && syncPendingRef.current === 0) loadQueue();
   }, [loadQueue, syncState.pendingCount]);
 
-  const readyIndex = queue ? firstReadyIndex(queue, nowMs) : -1;
+  const readyIndex = queue && currentKey
+    ? queue.findIndex((item) => studyItemKey(item) === currentKey && queuedDueAt(item) <= nowMs)
+    : -1;
   const nextDueAt = queue && readyIndex < 0 ? nextQueuedDue(queue, nowMs) : null;
 
   useEffect(() => {
@@ -149,6 +178,25 @@ export function useStudyQueue({
     const id = window.setTimeout(() => setNowMs(Date.now()), delay);
     return () => window.clearTimeout(id);
   }, [nextDueAt, nowMs]);
+
+  useEffect(() => {
+    if (!queue) {
+      if (currentKeyRef.current !== null || currentKey !== null) {
+        currentKeyRef.current = null;
+        setCurrentKey(null);
+      }
+      return;
+    }
+    const existing = currentKeyRef.current;
+    if (existing) {
+      const stillReady = queue.findIndex((item) => studyItemKey(item) === existing && queuedDueAt(item) <= nowMs);
+      if (stillReady >= 0) {
+        if (currentKey !== existing) setCurrentKey(existing);
+        return;
+      }
+    }
+    chooseCurrent(queue, nowMs, lastShownKeyRef.current);
+  }, [chooseCurrent, currentKey, nowMs, queue]);
 
   // iPadOS suspends timers in the background; re-check learning steps on return.
   useEffect(() => {
@@ -182,18 +230,20 @@ export function useStudyQueue({
       if (!staysInSession && (card.fsrs.state === State.Learning || card.fsrs.state === State.Relearning)) {
         setBackLater((n) => n + 1);
       }
-      setReviewed((n) => n + 1);
-      setNowMs(now.getTime());
-      setQueue(next);
       const at = now.getTime();
-      const readyAt = firstReadyIndex(next, at) >= 0 ? at : nextQueuedDue(next, at);
+      lastShownKeyRef.current = studyItemKey(item);
+      chooseCurrent(next, at, lastShownKeyRef.current);
+      setReviewed((n) => n + 1);
+      setNowMs(at);
+      setQueue(next);
+      const readyAt = readyIndexes(next, at).length > 0 ? at : nextQueuedDue(next, at);
       if (totalDue > batchSize && (readyAt === null || readyAt - at > LONG_WAIT_MS)) {
         // Rest instead of waiting out a learning step; parked cards join the next batch.
         setBreakUntil(startBreak(breakScope, at));
       }
       return next;
     },
-    [batchSize, breakScope, mode, queue, readyIndex, sync, totalDue]
+    [batchSize, breakScope, chooseCurrent, mode, queue, readyIndex, sync, totalDue]
   );
 
   const setHard = useCallback((target: Card, hard: boolean) => {

@@ -92,8 +92,9 @@ export function eligibleCards(cards: Card[], now: Date, newLimit = Infinity) {
 
 /**
  * Prioritize words mid-step, then overdue/difficult words, reserve room for
- * new vocabulary, and shuffle the rest of a bounded batch. Future cards are
- * never pulled in early.
+ * new vocabulary, and shuffle each group in a bounded batch. Future cards are
+ * never pulled in early. Serving order within a live session is chosen later
+ * from cards that are actually due.
  */
 export function buildQueue(cards: Card[], now: Date, options: QueueOptions = {}): Card[] {
   const { random = Math.random, limit = SESSION_LIMIT, newLimit } = options;
@@ -101,7 +102,8 @@ export function buildQueue(cards: Card[], now: Date, options: QueueOptions = {})
   const newSlots = Math.min(NEW_SLOTS_PER_BATCH, unseen.length, limit);
   const selectedReviews = reviews.slice(0, limit - newSlots);
   const batch = [...selectedReviews, ...unseen.slice(0, limit - selectedReviews.length)];
-  // Finish words mid-step first, earliest due first; shuffle everything else.
-  const learning = batch.filter(isLearning).sort((a, b) => Date.parse(a.fsrs.due) - Date.parse(b.fsrs.due));
-  return [...learning, ...shuffle(batch.filter((card) => !isLearning(card)), random)];
+  const learning = shuffle(batch.filter(isLearning), random);
+  const dueReviews = shuffle(batch.filter((card) => !isLearning(card) && !isNew(card)), random);
+  const newCards = shuffle(batch.filter(isNew), random);
+  return [...learning, ...dueReviews, ...newCards];
 }

@@ -76,6 +76,7 @@ export type StudyQueueOptions = {
   now?: Date;
   newOnly?: boolean;
   newLimit?: number;
+  random?: () => number;
 };
 
 /**
@@ -96,6 +97,7 @@ export function buildStudyQueue(cards: Card[], options: StudyQueueOptions): {
   }
   const data = buildReviewQueueData([...details.keys()], now, {
     newLimit: newOnly ? undefined : options.newLimit,
+    random: options.random,
   });
   return {
     totalDue: data.totalDue,
