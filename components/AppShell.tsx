@@ -10,6 +10,7 @@ import {
   IconSettings,
   IconStats,
 } from "./icons";
+import { scrollDocumentToTop, useViewportLock } from "./useViewportLock";
 
 const NAV = [
   { href: "/", label: "Home", Icon: IconHome },
@@ -27,29 +28,33 @@ function noop() {}
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  // iOS Safari only applies :active (our press feedback) once a touch listener exists.
-  useEffect(() => {
-    document.addEventListener("touchstart", noop, { passive: true });
-    return () => document.removeEventListener("touchstart", noop);
-  }, []);
   // Study screens use their own full-screen layout with no nav chrome.
   const immersive =
     pathname.startsWith("/study/") ||
     pathname.startsWith("/review/") ||
     pathname.startsWith("/write/") ||
-    pathname.startsWith("/pinyin/");
+    pathname.startsWith("/pinyin/") ||
+    pathname === "/clinic" ||
+    pathname.startsWith("/clinic/");
+  useViewportLock(immersive);
+  // iOS Safari only applies :active (our press feedback) once a touch listener exists.
+  useEffect(() => {
+    document.addEventListener("touchstart", noop, { passive: true });
+    return () => document.removeEventListener("touchstart", noop);
+  }, []);
+  useEffect(() => {
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+    scrollDocumentToTop();
+  }, [pathname]);
 
   if (immersive) {
-    // Put the top safe-area padding inside the full-height study screen. A
-    // padded wrapper around a 100dvh child makes the page taller than the
-    // viewport and causes a persistent iPhone scroll bounce.
-    return (
-      <div className="min-h-dvh [&>*]:pt-[env(safe-area-inset-top)]">{children}</div>
-    );
+    // Size the frame to the visual viewport. Children use h-full + safe-area
+    // padding so the page is never taller than the screen (iOS bounce).
+    return <div className="study-shell">{children}</div>;
   }
 
   return (
-    <div className="min-h-dvh md:flex">
+    <div className="min-h-dvh max-w-full overflow-x-clip md:flex">
       <a
         href="#main-content"
         className="sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:not-sr-only focus:rounded-lg focus:bg-surface focus:px-4 focus:py-2 focus:shadow"
@@ -108,7 +113,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile and Split View: floating dock above the home indicator */}
       <nav
         aria-label="Primary navigation"
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-20 px-safe pb-[max(0.75rem,env(safe-area-inset-bottom))] [--gutter:0.75rem] md:hidden"
+        className="nav-dock-wrap pointer-events-none fixed inset-x-0 bottom-0 z-20 px-safe pb-[max(0.75rem,env(safe-area-inset-bottom))] [--gutter:0.75rem] md:hidden"
       >
         <div className="nav-dock pointer-events-auto mx-auto flex max-w-md gap-1 rounded-[1.75rem] p-1.5">
           {NAV.map((item) => {

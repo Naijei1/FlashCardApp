@@ -46,7 +46,7 @@ export default function WriteSession({
   const [result, setResult] = useState<Result | null>(null);
   const checkedRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const keyboardInset = useKeepInView(inputRef);
+  useKeepInView(inputRef);
   const handwriting = useHandwritingGuard();
 
   useEffect(() => {
@@ -174,13 +174,12 @@ export default function WriteSession({
   const answerLang = mode === "pinyin" ? "zh-Latn-pinyin" : chineseLang;
 
   return (
-    <div className="study-surface mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-safe pb-safe lg:max-w-3xl"
-      style={keyboardInset ? { paddingBottom: keyboardInset } : undefined}>
+    <div className="study-surface study-frame mx-auto flex w-full max-w-2xl flex-col px-safe pt-safe pb-safe lg:max-w-3xl">
       <SessionHeader backHref={backHref} study={study} action={
         <HardWordButton key={`${card.deckId}:${card.id}`} card={card} onChange={(hard) => study.setHard(card, hard)} />
       } />
 
-      <div className="flashcard flex flex-col px-5 py-6 sm:px-8">
+      <div key={card.id} className="study-scroll flashcard flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-6 sm:px-8">
         <p className="eyebrow text-center">{mode === "pinyin" ? "Write Pinyin" : "Write Chinese"}</p>
         <div className="mt-3 text-center">
           <span lang={mode === "pinyin" ? chineseLang : "zh-Latn-pinyin"} className="selectable text-4xl font-medium break-words sm:text-5xl">
@@ -311,7 +310,7 @@ export default function WriteSession({
       </div>
 
       {/* Bottom bar keeps one height in both phases. */}
-      <div className="flex min-h-28 items-center gap-2 py-3">
+      <div className="flex min-h-28 shrink-0 items-center gap-2 py-3">
         {result && (copiesLeft > 0 || drillFailed) ? (
           <button type="button" onClick={continueWriting} className="btn btn-primary btn-lg w-full">
             {copiesLeft > 0 ? `Write again (${copiesLeft} left)` : `Continue · review in ${previewIntervals(card.fsrs, new Date(), mode).again}`}

@@ -63,6 +63,37 @@ describe("Mistake Clinic weak-word selection", () => {
     expect(data.queue.map((item) => item.mode).sort()).toEqual(["pinyin", "review", "write"]);
     expect(data.queue.every((item) => item.card.id === "weak" && item.weaknessReasons.length > 0)).toBe(true);
   });
+
+  it("orders dedicated weak skills as recognition, then write, then pinyin", () => {
+    const fresh = emptyCardState(now);
+    const review = {
+      ...make("e2e-clinic-review", "忘记", "to forget"),
+      fsrs: { ...fresh, reps: 6, lapses: 5, state: 3, last_review: now.toISOString() },
+      practice: { failures: 2, successes: 3, correctStreak: 0, firstStudiedAt: "2026-09-20T12:00:00.000Z" },
+    } satisfies Card;
+    const write = {
+      ...make("e2e-clinic-write", "难", "difficult"),
+      modes: {
+        write: {
+          fsrs: fresh,
+          practice: { failures: 8, successes: 0, correctStreak: 0, firstStudiedAt: "2026-09-20T12:00:00.000Z" },
+        },
+      },
+    } satisfies Card;
+    const pinyin = {
+      ...make("e2e-clinic-pinyin", "学习", "to study"),
+      modes: {
+        pinyin: {
+          fsrs: fresh,
+          practice: { failures: 5, successes: 0, correctStreak: 0, firstStudiedAt: "2026-09-20T12:00:00.000Z" },
+        },
+      },
+    } satisfies Card;
+
+    const data = buildMistakeClinicQueue([review, write, pinyin], () => "front", now);
+    expect(data.queue.map((item) => item.mode)).toEqual(["review", "write", "pinyin"]);
+    expect(data.queue.map((item) => item.card.front)).toEqual(["忘记", "难", "学习"]);
+  });
 });
 
 describe("Mistake Clinic review recording", () => {

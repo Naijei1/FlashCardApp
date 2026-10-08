@@ -13,6 +13,7 @@ import { SessionScreen } from "./SessionChrome";
 import SyncNotice from "./SyncNotice";
 import TtsButton from "./TtsButton";
 import { useHandwritingGuard } from "./useHandwritingGuard";
+import { useKeepInView } from "./useKeepInView";
 import { useKeyboard } from "./useKeyboard";
 import { useMistakeClinicQueue } from "./useMistakeClinicQueue";
 
@@ -29,6 +30,7 @@ export default function MistakeClinicSession({ deckLangs }: { deckLangs: DeckLan
   const [checkTones, setCheckTones] = useState(true);
   const checkedRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  useKeepInView(inputRef);
   const handwriting = useHandwritingGuard();
 
   useEffect(() => {
@@ -96,7 +98,7 @@ export default function MistakeClinicSession({ deckLangs }: { deckLangs: DeckLan
   const modeLabel = current.mode === "review" ? "Recognition" : current.mode === "write" ? "Write Chinese" : "Write Pinyin";
 
   return (
-    <div className="study-surface mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-safe pb-safe lg:max-w-3xl">
+    <div className="study-surface study-frame mx-auto flex w-full max-w-2xl flex-col px-safe pt-safe pb-safe lg:max-w-3xl">
       <header className="flex items-center gap-3 py-3">
         <Link href="/" className="btn btn-ghost -ml-2 shrink-0 px-3">← Back</Link>
         <div className="min-w-0 flex-1">
@@ -150,7 +152,7 @@ function RecognitionPrompt({
 
   return (
     <>
-      <div onClick={() => setRevealed(true)} className="flashcard flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden">
+      <div key={card.id} onClick={() => setRevealed(true)} className="flashcard flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 basis-1/2 flex-col items-center justify-center gap-3 overflow-y-auto px-6 py-6 text-center">
           <div className="flex items-center gap-2">
             <span lang={frontLang} className="selectable text-5xl leading-tight font-medium break-words sm:text-6xl">{prompt}</span>
@@ -184,7 +186,7 @@ function RecognitionPrompt({
           )}
         </div>
       </div>
-      <div className="flex min-h-28 items-center py-3">
+      <div className="flex min-h-28 shrink-0 items-center py-3">
         {revealed ? <RatingBar fsrs={card.fsrs} onRate={rate} /> : (
           <button type="button" onClick={() => setRevealed(true)} className="btn btn-primary btn-lg w-full">Show answer</button>
         )}
@@ -248,7 +250,7 @@ function WritingPrompt({
 
   if (!prompt) {
     return (
-      <div className="flashcard flex flex-1 flex-col items-center justify-center gap-3 px-6 py-6 text-center">
+      <div className="study-scroll flashcard flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-6 py-6 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">Nothing writable</h1>
         <p className="text-muted">This prompt no longer has a gradable Mandarin reading.</p>
       </div>
@@ -260,7 +262,7 @@ function WritingPrompt({
 
   return (
     <>
-      <div className="flashcard flex flex-col px-5 py-6 sm:px-8">
+      <div key={item.card.id} className="study-scroll flashcard flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-6 sm:px-8">
         <p className="eyebrow text-center">{item.mode === "pinyin" ? "Write Pinyin" : "Write Chinese"}</p>
         <div className="mt-3 text-center">
           <span lang={item.mode === "pinyin" ? "zh-CN" : "zh-Latn-pinyin"} className="selectable text-4xl font-medium break-words sm:text-5xl">
@@ -343,7 +345,7 @@ function WritingPrompt({
           )}
         </div>
       </div>
-      <div className="flex min-h-28 items-center gap-2 py-3">
+      <div className="flex min-h-28 shrink-0 items-center gap-2 py-3">
         {result ? <RatingBar fsrs={item.card.fsrs} mode={item.mode} onRate={rate} defaultValue={defaultRating} /> : (
           <>
             <button type="button" {...handwriting.guard(() => check(true))} disabled={handwriting.composing}

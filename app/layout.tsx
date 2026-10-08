@@ -16,8 +16,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  // Chromium/Android resize the layout for the soft keyboard; iPad Safari is
-  // handled by keeping the focused answer field in view (useKeepInView).
+  // Chromium/Android resize the layout for the soft keyboard. iOS Safari is
+  // handled by pinning study screens to visualViewport (useViewportLock).
   interactiveWidget: "resizes-content",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f6f5f3" },

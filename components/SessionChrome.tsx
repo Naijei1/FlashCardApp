@@ -31,7 +31,7 @@ export function SessionScreen({
   backLabel?: string;
 }) {
   return (
-    <div className="mx-auto flex h-dvh max-w-md flex-col items-center justify-center gap-3 px-6 pb-safe text-center">
+    <div className="study-frame mx-auto flex max-w-md flex-col items-center justify-center gap-3 px-6 pt-safe pb-safe text-center">
       <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
       <p className="text-muted">{body}</p>
       {note && <BackLaterNote text={note} />}

@@ -65,13 +65,13 @@ export default function ReviewSession({
   const prompt = pinyin?.hanzi ?? card.front;
 
   return (
-    <div className="study-surface mx-auto flex h-dvh w-full max-w-2xl flex-col px-safe pb-safe lg:max-w-3xl">
+    <div className="study-surface study-frame mx-auto flex w-full max-w-2xl flex-col px-safe pt-safe pb-safe lg:max-w-3xl">
       <SessionHeader backHref={backHref} study={study} action={
         <HardWordButton key={`${card.deckId}:${card.id}`} card={card} onChange={(hard) => study.setHard(card, hard)} />
       } />
 
       {/* Tap anywhere on the card to reveal; two fixed halves so nothing jumps. */}
-      <div onClick={reveal} className="flashcard flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden">
+      <div key={card.id} onClick={reveal} className="flashcard flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 basis-1/2 flex-col items-center justify-center gap-3 overflow-y-auto px-6 py-6 text-center">
           <div className="flex items-center gap-2">
             <span lang={frontLang} className="selectable text-5xl leading-tight font-medium break-words sm:text-6xl">
@@ -110,7 +110,7 @@ export default function ReviewSession({
       </div>
 
       {/* Bottom bar keeps one height in both states — no layout shift. */}
-      <div className="flex min-h-28 items-center py-3">
+      <div className="flex min-h-28 shrink-0 items-center py-3">
         {revealed ? (
           <RatingBar fsrs={card.fsrs} onRate={rate} />
         ) : (
