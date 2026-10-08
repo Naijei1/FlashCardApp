@@ -36,6 +36,7 @@ export default function NewDeckButton() {
     return (
       <button
         onClick={() => setOpen(true)}
+        aria-expanded={open}
         className="btn w-full border border-dashed border-border py-3 text-muted hover:border-accent hover:text-accent"
       >
         + New Deck
@@ -44,31 +45,31 @@ export default function NewDeckButton() {
   }
 
   return (
-    <form onSubmit={submit} onKeyDown={preventImeSubmit} className="space-y-2">
-      <div className="flex gap-2">
-        <label className="min-w-0 flex-1">
-          <span className="sr-only">Deck name</span>
-          <input
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Deck name, e.g. Chinese Lesson 1"
-            className="input py-3"
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={busy || !name.trim()}
-          className="btn btn-primary"
-        >
-          {busy ? "Creating…" : "Create"}
-        </button>
+    <form onSubmit={submit} onKeyDown={preventImeSubmit} className="card space-y-3 p-4">
+      <label className="block text-sm font-medium text-muted">
+        Deck name
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Chinese Lesson 1"
+          className="input mt-1 py-3"
+        />
+      </label>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button
           type="button"
           onClick={() => { setOpen(false); setName(""); setError(""); }}
           className="btn btn-secondary"
         >
           Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={busy || !name.trim()}
+          className="btn btn-primary"
+        >
+          {busy ? "Creating…" : "Create deck"}
         </button>
       </div>
       {error && <p role="alert" className="text-sm text-red-500">{error}</p>}

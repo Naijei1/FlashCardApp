@@ -37,10 +37,27 @@ export type StudySet = {
   sideFor: (card: Card) => ChineseSide | null;
 };
 
+/** Fields Normal Review renders. Scheduling state stays on the server. */
+export type StudyFlipCard = Pick<Card, "id" | "deckId" | "front" | "back" | "notes" | "hard">;
+
+export function studyFlipCards(cards: readonly Card[]): StudyFlipCard[] {
+  return cards.map(({ id, deckId, front, back, notes, hard }) => ({
+    id,
+    deckId,
+    front,
+    back,
+    ...(notes ? { notes } : {}),
+    ...(hard ? { hard } : {}),
+  }));
+}
+
 /** Loads a real deck, All Cards, or Hard Words with strongly consistent card reads. */
-export async function loadStudySet(id: string): Promise<StudySet | null> {
+export async function loadStudySet(
+  id: string,
+  knownDecks?: readonly Deck[]
+): Promise<StudySet | null> {
   if (isVirtualDeck(id)) {
-    const decks = await listDecks();
+    const decks = knownDecks ?? (await listDecks());
     const all = await listAllCards(decks, { consistent: true });
     const sides = new Map(decks.map((deck) => [deck.id, chineseSideForDeck(deck)]));
     return {
