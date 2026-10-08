@@ -15,7 +15,7 @@ export function readingForCard(card: Card, deckSide: ChineseSide | null): Pinyin
   if (!text) return null;
   const side = chineseSideForCard(card, deckSide) ?? "front";
   const cacheKey = `${side}\u0000${card[side]}\u0000${text.hanzi}\u0000${text.meaning}`;
-  if (readingCache.has(cacheKey)) return readingCache.get(cacheKey) ?? null;
+  if (readingCache.has(cacheKey)) return copyReading(readingCache.get(cacheKey) ?? null);
   const { annotations } = chineseTextAndAnnotations(card[side]);
   let reading: PinyinReading | null = null;
   if (annotations.length > 0) {
@@ -51,7 +51,11 @@ export function readingForCard(card: Card, deckSide: ChineseSide | null): Pinyin
   }
   if (readingCache.size >= MAX_READING_CACHE_SIZE) readingCache.clear();
   readingCache.set(cacheKey, reading);
-  return reading;
+  return copyReading(reading);
+}
+
+function copyReading(reading: PinyinReading | null): PinyinReading | null {
+  return reading ? { ...reading, syllables: [...reading.syllables] } : null;
 }
 
 type StudyDetails = Omit<StudyQueueItem, "card">;

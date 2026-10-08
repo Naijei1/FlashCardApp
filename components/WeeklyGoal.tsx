@@ -7,6 +7,7 @@ type Progress = { today: number; week: number };
 export default function WeeklyGoal({ initialProgress = null }: { initialProgress?: Progress | null }) {
   const [progress, setProgress] = useState<Progress | null>(initialProgress);
   useEffect(() => {
+    if (initialProgress) setProgress(initialProgress);
     const controller = new AbortController();
     const update = async () => {
       try {
