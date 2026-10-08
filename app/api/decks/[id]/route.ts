@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { badRequest, notFound, requireAuth } from "@/lib/api";
+import { badRequest, contentAccessResponse, notFound, requireSession } from "@/lib/api";
 import { deleteDeck, getDeck, putDeck } from "@/lib/db";
 import { isSupportedLanguage } from "@/lib/languages";
 import { isRecord, MAX_DECK_NAME_LENGTH } from "@/lib/validation";
@@ -7,10 +7,10 @@ import { isRecord, MAX_DECK_NAME_LENGTH } from "@/lib/validation";
 type Context = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, { params }: Context) {
-  const denied = await requireAuth();
-  if (denied) return denied;
+  const auth = await requireSession();
+  if (auth.response) return auth.response;
   const { id } = await params;
-  const deck = await getDeck(id);
+  const deck = await getDeck(id, auth.session);
   if (!deck) return notFound("deck not found");
   const body: unknown = await request.json().catch(() => null);
   if (!isRecord(body)) return badRequest("invalid body");
@@ -43,8 +43,10 @@ export async function PATCH(request: Request, { params }: Context) {
   }
   deck.updatedAt = new Date().toISOString();
   try {
-    await putDeck(deck);
+    await putDeck(deck, { session: auth.session });
   } catch (error) {
+    const denied = contentAccessResponse(error);
+    if (denied) return denied;
     if (error instanceof Error && error.name === "ConditionalCheckFailedException") {
       return NextResponse.json(
         { error: "This deck changed or is being deleted. Refresh and try again." },
@@ -57,9 +59,15 @@ export async function PATCH(request: Request, { params }: Context) {
 }
 
 export async function DELETE(_request: Request, { params }: Context) {
-  const denied = await requireAuth();
-  if (denied) return denied;
+  const auth = await requireSession();
+  if (auth.response) return auth.response;
   const { id } = await params;
-  await deleteDeck(id);
+  try {
+    await deleteDeck(id, auth.session);
+  } catch (error) {
+    const denied = contentAccessResponse(error);
+    if (denied) return denied;
+    throw error;
+  }
   return NextResponse.json({ ok: true });
 }

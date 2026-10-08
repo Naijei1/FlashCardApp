@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { badRequest, notFound, requireAuth } from "@/lib/api";
+import { badRequest, contentAccessResponse, notFound, requireSession } from "@/lib/api";
 import { deleteCard, getCard, getDeck, moveCard, putCard } from "@/lib/db";
 import {
   isRecord,
@@ -26,14 +26,14 @@ function writeConflict() {
 }
 
 export async function PATCH(request: Request, { params }: Context) {
-  const denied = await requireAuth();
-  if (denied) return denied;
+  const auth = await requireSession();
+  if (auth.response) return auth.response;
   const { id } = await params;
   const body: unknown = await request.json().catch(() => null);
   if (!isRecord(body)) return badRequest("invalid body");
   const deckId = typeof body?.deckId === "string" ? body.deckId : "";
   if (!deckId) return badRequest("deckId is required");
-  const card = await getCard(deckId, id);
+  const card = await getCard(deckId, id, auth.session);
   if (!card) return notFound("card not found");
 
   if (typeof body.front === "string") {
@@ -60,18 +60,22 @@ export async function PATCH(request: Request, { params }: Context) {
       ? body.moveToDeckId
       : null;
   if (moveToDeckId) {
-    if (!(await getDeck(moveToDeckId))) return notFound("target deck not found");
+    if (!(await getDeck(moveToDeckId, auth.session))) return notFound("target deck not found");
     try {
-      const moved = await moveCard(card, moveToDeckId);
+      const moved = await moveCard(card, moveToDeckId, auth.session);
       return NextResponse.json(moved);
     } catch (error) {
+      const denied = contentAccessResponse(error);
+      if (denied) return denied;
       if (isWriteConflict(error)) return writeConflict();
       throw error;
     }
   }
   try {
-    await putCard(card);
+    await putCard(card, auth.session);
   } catch (error) {
+    const denied = contentAccessResponse(error);
+    if (denied) return denied;
     if (isWriteConflict(error)) return writeConflict();
     throw error;
   }
@@ -79,11 +83,17 @@ export async function PATCH(request: Request, { params }: Context) {
 }
 
 export async function DELETE(request: Request, { params }: Context) {
-  const denied = await requireAuth();
-  if (denied) return denied;
+  const auth = await requireSession();
+  if (auth.response) return auth.response;
   const { id } = await params;
   const deckId = new URL(request.url).searchParams.get("deckId");
   if (!deckId) return badRequest("deckId query param is required");
-  await deleteCard(deckId, id);
+  try {
+    await deleteCard(deckId, id, auth.session);
+  } catch (error) {
+    const denied = contentAccessResponse(error);
+    if (denied) return denied;
+    throw error;
+  }
   return NextResponse.json({ ok: true });
 }

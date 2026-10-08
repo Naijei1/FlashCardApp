@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { badRequest, notFound, requireAuth } from "@/lib/api";
+import { badRequest, contentAccessResponse, notFound, requireSession } from "@/lib/api";
 import { buildCards } from "@/lib/cards";
 import { batchPutCards, getDeck } from "@/lib/db";
 import type { Card } from "@/lib/types";
@@ -16,8 +16,8 @@ const MAX_IMPORT_ROWS = 2_000;
 const MAX_IMPORT_BYTES = 8 * 1024 * 1024;
 
 export async function POST(request: Request) {
-  const denied = await requireAuth();
-  if (denied) return denied;
+  const auth = await requireSession();
+  if (auth.response) return auth.response;
   const contentLength = Number(request.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > MAX_IMPORT_BYTES) {
     return NextResponse.json(
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
   ) {
     return badRequest("one or more imported fields are too long");
   }
-  if (!(await getDeck(deckId))) return notFound("deck not found");
+  if (!(await getDeck(deckId, auth.session))) return notFound("deck not found");
 
   const now = new Date();
   const cards: Card[] = [];
@@ -83,8 +83,10 @@ export async function POST(request: Request) {
   });
   if (cards.length === 0) return badRequest("no valid cards to import");
   try {
-    await batchPutCards(cards, { skipExisting: true });
+    await batchPutCards(cards, { skipExisting: true, session: auth.session });
   } catch (error) {
+    const denied = contentAccessResponse(error);
+    if (denied) return denied;
     if (error instanceof Error && error.name === "DeckUnavailableError") {
       return NextResponse.json(
         { error: "This deck is being deleted. Refresh and try again." },

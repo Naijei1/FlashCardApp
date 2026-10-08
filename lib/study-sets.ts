@@ -1,4 +1,5 @@
 import { getDeck, listAllCards, listCards, listDecks } from "./db";
+import type { AuthSession } from "./auth";
 import { wordKey } from "./words";
 import { chineseSideForDeck, type ChineseSide } from "./write";
 import type { Card, Deck } from "./types";
@@ -26,8 +27,8 @@ function virtualDeck(id: string): Deck {
 }
 
 /** Deck metadata only, for pages whose cards are loaded by the queue API. */
-export async function getStudyDeck(id: string): Promise<Deck | null> {
-  return isVirtualDeck(id) ? virtualDeck(id) : getDeck(id);
+export async function getStudyDeck(id: string, session?: AuthSession): Promise<Deck | null> {
+  return isVirtualDeck(id) ? virtualDeck(id) : getDeck(id, session);
 }
 
 export type StudySet = {
@@ -51,14 +52,28 @@ export function studyFlipCards(cards: readonly Card[]): StudyFlipCard[] {
   }));
 }
 
-/** Loads a real deck, All Cards, or Hard Words with strongly consistent card reads. */
+function isAuthSession(value: readonly Deck[] | AuthSession): value is AuthSession {
+  return !Array.isArray(value) && "userId" in value && "role" in value;
+}
+
+/**
+ * Loads a real deck, All Cards, or Hard Words with strongly consistent card reads.
+ * Pages pass already-loaded decks so virtual sets do not query decks again.
+ * API routes pass the authenticated session so reads stay user-scoped.
+ */
 export async function loadStudySet(
   id: string,
-  knownDecks?: readonly Deck[]
+  knownDecksOrSession?: readonly Deck[] | AuthSession,
+  maybeSession?: AuthSession
 ): Promise<StudySet | null> {
+  const knownDecks = Array.isArray(knownDecksOrSession) ? knownDecksOrSession : undefined;
+  const session = knownDecksOrSession && isAuthSession(knownDecksOrSession)
+    ? knownDecksOrSession
+    : maybeSession;
+  const readOptions = session ? { consistent: true, session } : { consistent: true };
   if (isVirtualDeck(id)) {
-    const decks = knownDecks ?? (await listDecks());
-    const all = await listAllCards(decks, { consistent: true });
+    const decks = knownDecks ?? (await listDecks(session));
+    const all = await listAllCards(decks, readOptions);
     const sides = new Map(decks.map((deck) => [deck.id, chineseSideForDeck(deck)]));
     return {
       deck: virtualDeck(id),
@@ -66,7 +81,7 @@ export async function loadStudySet(
       sideFor: (card) => sides.get(card.deckId) ?? null,
     };
   }
-  const [deck, cards] = await Promise.all([getDeck(id), listCards(id, { consistent: true })]);
+  const [deck, cards] = await Promise.all([getDeck(id, session), listCards(id, readOptions)]);
   if (!deck) return null;
   const side = chineseSideForDeck(deck);
   return { deck, cards, sideFor: () => side };

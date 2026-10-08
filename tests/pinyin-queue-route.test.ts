@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyCardState } from "@/lib/fsrs";
 import { GET } from "@/app/api/review/queue/route";
 
-const mocks = vi.hoisted(() => ({ requireAuth: vi.fn(), getDeck: vi.fn(), listCards: vi.fn(), listAllCards: vi.fn(), listDecks: vi.fn() }));
+const session = { userId: "user-1", role: "user" as const, isAdmin: false };
+const mocks = vi.hoisted(() => ({ requireRegularUser: vi.fn(), getDeck: vi.fn(), listCards: vi.fn(), listAllCards: vi.fn(), listDecks: vi.fn() }));
 vi.mock("@/lib/api", () => ({
-  requireAuth: mocks.requireAuth,
+  requireRegularUser: mocks.requireRegularUser,
   badRequest: (error: string) => Response.json({ error }, { status: 400 }),
   notFound: (error: string) => Response.json({ error }, { status: 404 }),
 }));
@@ -12,7 +13,7 @@ vi.mock("@/lib/db", () => mocks);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.requireAuth.mockResolvedValue(null);
+  mocks.requireRegularUser.mockResolvedValue({ session, response: null });
   mocks.getDeck.mockResolvedValue({ id: "deck", name: "Chinese" });
   mocks.listDecks.mockResolvedValue([{ id: "deck", name: "Chinese" }]);
   const now = new Date("2026-01-01T00:00:00.000Z");
@@ -24,7 +25,10 @@ beforeEach(() => {
 
 describe("Pinyin queue API", () => {
   it("authenticates before reading cards", async () => {
-    mocks.requireAuth.mockResolvedValue(Response.json({ error: "unauthorized" }, { status: 401 }));
+    mocks.requireRegularUser.mockResolvedValue({
+      session: null,
+      response: Response.json({ error: "unauthorized" }, { status: 401 }),
+    });
     expect((await GET(new Request("https://example.com/api/review/queue?deckId=deck&mode=pinyin"))).status).toBe(401);
     expect(mocks.listCards).not.toHaveBeenCalled();
   });
@@ -36,7 +40,7 @@ describe("Pinyin queue API", () => {
     expect(data.totalDue).toBe(1);
     expect(data.queue).toHaveLength(1);
     expect(data.queue[0].pinyin).toEqual({ hanzi: "你好", meaning: "hello", syllables: ["nǐ", "hǎo"] });
-    expect(mocks.listCards).toHaveBeenCalledWith("deck", { consistent: true });
+    expect(mocks.listCards).toHaveBeenCalledWith("deck", { consistent: true, session });
   });
 
   it("serves every mode across all decks and rejects unknown modes", async () => {

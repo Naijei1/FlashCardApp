@@ -1,5 +1,6 @@
 export type Deck = {
   id: string;
+  source?: "global" | "private";
   name: string;
   /** BCP-47 tag used to pick a speech voice for the front side, e.g. "zh-CN" */
   frontLanguage?: string;
@@ -30,6 +31,7 @@ export type ReviewMode = "review" | "write" | "pinyin";
 export type Card = {
   id: string;
   deckId: string;
+  source?: "global" | "private";
   front: string;
   back: string;
   notes?: string;
