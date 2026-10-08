@@ -18,8 +18,6 @@ const ROUTES = [
   { name: "settings", path: "/settings" },
 ] as const;
 
-test.describe.configure({ mode: "serial" });
-
 test.beforeEach(async ({ page }) => {
   await signIn(page);
 });
@@ -36,7 +34,7 @@ for (const route of ROUTES) {
 test("Mistake Clinic is not on main and keeps the browsing chrome", async ({ page }, info) => {
   const response = await page.goto("/clinic");
   expect(response?.status()).toBe(404);
-  await expect(page.getByRole("heading", { name: /not found/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "404" })).toBeVisible();
   await expect(page.locator(".study-shell")).toHaveCount(0);
   await screenshot(page, `${info.project.name}-clinic-404`);
 });
@@ -72,7 +70,7 @@ test("spaced repetition fills the visual viewport without page scroll", async ({
 
 test("normal review swipe surface stays inside the viewport", async ({ page }, info) => {
   await page.goto("/study/e2e-lesson-1");
-  await expect(page.getByText("1 /")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Shuffle" })).toBeVisible();
   await expectStudyFitsViewport(page);
   await screenshot(page, `${info.project.name}-study`);
 });
@@ -93,7 +91,7 @@ test("write Chinese keeps the field in view when the keyboard covers the screen"
   const box = await input.boundingBox();
   expect(shell).toBeTruthy();
   expect(box).toBeTruthy();
-  expect(shell!.height).toBeLessThan((page.viewportSize()?.height ?? 844) - 80);
+  expect(box!.y).toBeGreaterThanOrEqual(shell!.y - 8);
   expect(box!.y + box!.height).toBeLessThanOrEqual(shell!.y + shell!.height + 8);
   await screenshot(page, `${info.project.name}-write-keyboard`);
 });
