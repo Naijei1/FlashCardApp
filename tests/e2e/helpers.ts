@@ -102,5 +102,5 @@ export async function screenshot(page: Page, name: string) {
 }
 
 export function studyInput(page: Page): Locator {
-  return page.locator("#write-input");
+  return page.locator("#write-input, #clinic-input");
 }

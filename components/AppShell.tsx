@@ -33,7 +33,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     pathname.startsWith("/study/") ||
     pathname.startsWith("/review/") ||
     pathname.startsWith("/write/") ||
-    pathname.startsWith("/pinyin/");
+    pathname.startsWith("/pinyin/") ||
+    pathname === "/clinic" ||
+    pathname.startsWith("/clinic/");
   useViewportLock(immersive);
   // iOS Safari only applies :active (our press feedback) once a touch listener exists.
   useEffect(() => {

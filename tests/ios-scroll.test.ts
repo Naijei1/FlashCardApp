@@ -9,7 +9,9 @@ import { scrollDocumentToTop, useViewportLock } from "@/components/useViewportLo
 import AppShell from "@/components/AppShell";
 import WriteSession from "@/components/WriteSession";
 import ReviewSession from "@/components/ReviewSession";
+import MistakeClinicSession from "@/components/MistakeClinicSession";
 import { emptyCardState } from "@/lib/fsrs";
+import { buildMistakeClinicQueue } from "@/lib/mistake-clinic-queue";
 import { buildStudyQueue } from "@/lib/pinyin-queue";
 import { cardForMode } from "@/lib/modes";
 import type { Card, ReviewMode } from "@/lib/types";
@@ -74,7 +76,16 @@ beforeEach(() => {
     updatedAt: "2026-09-16T12:00:00.000Z",
     fsrs: emptyCardState(new Date("2026-09-16T12:00:00.000Z")),
   };
-  fetchMock = vi.fn(async (url: string) => {
+  fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/api/mistake-clinic/queue")) {
+      const data = buildMistakeClinicQueue(
+        [card],
+        () => "front",
+        new Date("2026-09-16T12:00:00.000Z")
+      );
+      return { ok: true, json: async () => data };
+    }
     const mode = (new URL(url, "https://example.com").searchParams.get("mode") ?? "review") as ReviewMode;
     const data = buildStudyQueue([cardForMode(card, mode)], {
       mode,
@@ -247,4 +258,58 @@ it("lays out spaced repetition as a viewport-locked frame", async () => {
   expect(frame).not.toBeNull();
   expect(frame?.className).not.toMatch(/min-h-dvh|h-screen/);
   expect(container.querySelector(".flashcard")).not.toBeNull();
+});
+
+it("uses a clipped study shell without the bottom dock on Mistake Clinic", async () => {
+  nav.pathname = "/clinic";
+  await render(createElement(AppShell, null, createElement("p", null, "Clinic")));
+  expect(container.querySelector(".study-shell")).not.toBeNull();
+  expect(container.querySelector(".nav-dock-wrap")).toBeNull();
+  expect(document.documentElement.classList.contains("immersive")).toBe(true);
+  expect(container.textContent).toContain("Clinic");
+});
+
+function clinicCard(mode: ReviewMode): Card {
+  const now = new Date("2026-09-16T12:00:00.000Z");
+  const fresh = emptyCardState(now);
+  const practice = { failures: 8, successes: 0, correctStreak: 0, firstStudiedAt: now.toISOString() };
+  if (mode === "review") {
+    return { ...card, practice, fsrs: { ...fresh, reps: 4, lapses: 3, state: 3, last_review: now.toISOString() } };
+  }
+  return {
+    ...card,
+    modes: { [mode]: { fsrs: fresh, practice } },
+  };
+}
+
+it("lays out Mistake Clinic recognition as a viewport-locked frame", async () => {
+  fetchMock.mockImplementation(async () => ({
+    ok: true,
+    json: async () => buildMistakeClinicQueue([clinicCard("review")], () => "front", new Date("2026-09-16T12:00:00.000Z")),
+  }));
+  await render(createElement(MistakeClinicSession, { deckLangs: { deck: { front: "zh-CN", back: "en-US" } } }));
+  await vi.waitFor(() => expect(container.querySelector(".flashcard")).not.toBeNull());
+  const frame = container.querySelector(".study-frame");
+  expect(frame).not.toBeNull();
+  expect(frame?.className).not.toMatch(/min-h-dvh|h-dvh|h-screen/);
+  expect(container.querySelector(".study-surface")).not.toBeNull();
+  expect(container.textContent).toMatch(/Recognition/);
+  expect(container.textContent).toMatch(/Show answer/);
+});
+
+it("lays out Mistake Clinic write and pinyin prompts with an inner scroller", async () => {
+  fetchMock.mockImplementation(async () => ({
+    ok: true,
+    json: async () => buildMistakeClinicQueue([clinicCard("write")], () => "front", new Date("2026-09-16T12:00:00.000Z")),
+  }));
+  await render(createElement(MistakeClinicSession, { deckLangs: { deck: { front: "zh-CN", back: "en-US" } } }));
+  await vi.waitFor(() => expect(container.querySelector("#clinic-input")).not.toBeNull());
+  const frame = container.querySelector(".study-frame");
+  const scroller = container.querySelector(".study-scroll");
+  const input = container.querySelector<HTMLInputElement>("#clinic-input");
+  expect(frame).not.toBeNull();
+  expect(scroller).not.toBeNull();
+  expect(frame?.className).not.toMatch(/min-h-dvh|h-dvh|h-screen/);
+  expect(input?.className).toMatch(/\binput\b/);
+  expect(input?.className).toMatch(/text-2xl/);
 });

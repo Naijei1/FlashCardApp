@@ -31,12 +31,49 @@ for (const route of ROUTES) {
   });
 }
 
-test("Mistake Clinic is not on main and keeps the browsing chrome", async ({ page }, info) => {
-  const response = await page.goto("/clinic");
-  expect(response?.status()).toBe(404);
-  await expect(page.getByRole("heading", { name: "404" })).toBeVisible();
-  await expect(page.locator(".study-shell")).toHaveCount(0);
-  await screenshot(page, `${info.project.name}-clinic-404`);
+test("Mistake Clinic session locks the viewport and keeps write prompts in view", async ({ page }, info) => {
+  await page.goto("/clinic");
+  await expect(page.getByText("Recognition")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show answer" })).toBeVisible();
+  await expectStudyFitsViewport(page);
+  await screenshot(page, `${info.project.name}-clinic-review`);
+
+  await page.getByRole("button", { name: "Show answer" }).click();
+  await expect(page.getByRole("button", { name: /^Retry/ })).toBeVisible();
+  await expectStudyFitsViewport(page);
+  await page.getByRole("button", { name: /^Retry/ }).click();
+
+  await expect(page.getByText("Write Chinese")).toBeVisible();
+  const input = page.locator("#clinic-input");
+  await expect(input).toBeVisible();
+  await expectStudyFitsViewport(page);
+  const fontSize = await input.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  expect(fontSize).toBeGreaterThanOrEqual(16);
+  await input.focus();
+  await simulateSoftKeyboard(page);
+  await expect.poll(async () => (await layoutMetrics(page)).keyboardOpen).toBe(true);
+  await expect.poll(async () => (await layoutMetrics(page)).scrollY).toBe(0);
+  await expectStudyFitsViewport(page);
+  const shell = await page.locator(".study-shell").boundingBox();
+  const box = await input.boundingBox();
+  expect(shell).toBeTruthy();
+  expect(box).toBeTruthy();
+  expect(box!.y).toBeGreaterThanOrEqual(shell!.y - 8);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(shell!.y + shell!.height + 8);
+  await screenshot(page, `${info.project.name}-clinic-write-keyboard`);
+
+  await page.getByRole("button", { name: "Don't know" }).click();
+  await expect(page.getByRole("button", { name: /^Retry/ })).toBeVisible();
+  await page.getByRole("button", { name: /^Retry/ }).click();
+
+  await expect(page.getByText("Write Pinyin")).toBeVisible();
+  await expect(input).toBeVisible();
+  await input.focus();
+  await simulateSoftKeyboard(page);
+  await expect.poll(async () => (await layoutMetrics(page)).keyboardOpen).toBe(true);
+  await expect.poll(async () => (await layoutMetrics(page)).immersive).toBe(true);
+  expect((await layoutMetrics(page)).scrollY).toBe(0);
+  await screenshot(page, `${info.project.name}-clinic-pinyin-keyboard`);
 });
 
 test("browse search field stays 16px and does not zoom the layout", async ({ page }) => {

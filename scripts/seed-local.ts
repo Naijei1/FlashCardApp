@@ -1,5 +1,7 @@
 import { loadEnvConfig } from "@next/env";
 import { buildCards } from "../lib/cards";
+import { emptyCardState, State } from "../lib/fsrs";
+import type { Card } from "../lib/types";
 
 loadEnvConfig(process.cwd());
 
@@ -68,41 +70,106 @@ const WORDS: Array<[string, string, string?]> = [
   ["没关系", "it's alright"],
 ];
 
+function clinicWeakCards(now: Date): Card[] {
+  const stamp = now.toISOString();
+  const fresh = emptyCardState(now);
+  const base = (id: string, front: string, back: string): Card => ({
+    id,
+    deckId: "e2e-lesson-1",
+    front,
+    back,
+    createdAt: stamp,
+    updatedAt: stamp,
+    fsrs: fresh,
+  });
+  // Dedicated modes so the clinic queue is recognition → write → pinyin.
+  // Review: lapses + relearning + failures ≈ 36–40. Write failures = 24. Pinyin failures = 15.
+  return [
+    {
+      ...base("e2e-clinic-review", "忘记", "to forget"),
+      fsrs: {
+        ...fresh,
+        reps: 6,
+        lapses: 5,
+        state: State.Relearning,
+        last_review: stamp,
+      },
+      practice: {
+        failures: 2,
+        successes: 3,
+        correctStreak: 0,
+        firstStudiedAt: "2026-09-20T12:00:00.000Z",
+      },
+    },
+    {
+      ...base("e2e-clinic-write", "难", "difficult"),
+      modes: {
+        write: {
+          fsrs: fresh,
+          practice: {
+            failures: 8,
+            successes: 0,
+            correctStreak: 0,
+            firstStudiedAt: "2026-09-20T12:00:00.000Z",
+          },
+        },
+      },
+    },
+    {
+      ...base("e2e-clinic-pinyin", "学习", "to study"),
+      modes: {
+        pinyin: {
+          fsrs: fresh,
+          practice: {
+            failures: 5,
+            successes: 0,
+            correctStreak: 0,
+            firstStudiedAt: "2026-09-20T12:00:00.000Z",
+          },
+        },
+      },
+    },
+  ];
+}
+
 async function main() {
   const { putDeck, batchPutCards, listDecks } = await import("../lib/db");
   const existing = await listDecks();
+  const now = new Date("2026-10-08T12:00:00.000Z");
   if (existing.some((deck) => deck.id === "e2e-lesson-1")) {
     console.log("Seed data already present");
-    return;
-  }
-  const now = new Date("2026-10-08T12:00:00.000Z");
-  await putDeck(
-    {
-      id: "e2e-lesson-1",
-      name: "E2E Lesson 1",
-      frontLanguage: "zh-CN",
-      backLanguage: "en-US",
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
-    },
-    { create: true }
-  );
-  const cards = WORDS.flatMap(([front, back, notes], index) => {
-    let copy = 0;
-    return buildCards(
+  } else {
+    await putDeck(
       {
-        deckId: "e2e-lesson-1",
-        front,
-        back,
-        notes,
-        reverse: index % 17 === 0,
+        id: "e2e-lesson-1",
+        name: "E2E Lesson 1",
+        frontLanguage: "zh-CN",
+        backLanguage: "en-US",
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
       },
-      now,
-      () => `e2e-card-${index}-${copy++}`
+      { create: true }
     );
-  });
-  await batchPutCards(cards);
-  console.log(`Seeded ${cards.length} cards into E2E Lesson 1`);
+    const cards = WORDS.flatMap(([front, back, notes], index) => {
+      let copy = 0;
+      return buildCards(
+        {
+          deckId: "e2e-lesson-1",
+          front,
+          back,
+          notes,
+          reverse: index % 17 === 0,
+        },
+        now,
+        () => `e2e-card-${index}-${copy++}`
+      );
+    });
+    await batchPutCards(cards);
+    console.log(`Seeded ${cards.length} cards into E2E Lesson 1`);
+  }
+  const clinic = clinicWeakCards(now);
+  await batchPutCards(clinic, { skipExisting: true });
+  console.log(`Ensured ${clinic.length} Mistake Clinic weak cards`);
 }
 
 main().catch((error) => {
