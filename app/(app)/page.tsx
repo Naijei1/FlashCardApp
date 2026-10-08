@@ -5,6 +5,8 @@ import WeeklyGoal from "@/components/WeeklyGoal";
 import { listAllCards, listDecks } from "@/lib/db";
 import { countsByDeck, totalCounts } from "@/lib/due";
 import { plural } from "@/lib/plural";
+import { appTimeZone } from "@/lib/forecast";
+import { weeklyProgress } from "@/lib/practice";
 import { hardWords } from "@/lib/study-sets";
 import { uniqueWords } from "@/lib/words";
 
@@ -15,6 +17,7 @@ export default async function HomePage() {
   const totals = totalCounts(cards, now);
   const byDeck = countsByDeck(cards, now);
   const hardCount = uniqueWords(hardWords(cards)).length;
+  const progress = weeklyProgress(cards, now, appTimeZone());
   const canStudy = totals.due + totals.newCards > 0;
 
   return (
@@ -48,7 +51,7 @@ export default async function HomePage() {
             <Link href="/decks/all" className="btn btn-secondary btn-lg flex-1 text-base">All study modes</Link>
           </div>
         </section>
-        <div className="lg:col-span-2"><WeeklyGoal /></div>
+        <div className="lg:col-span-2"><WeeklyGoal initialProgress={progress} /></div>
       </div>
 
       <section aria-labelledby="collections-heading" className="space-y-3">

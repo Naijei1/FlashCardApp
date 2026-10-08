@@ -79,6 +79,30 @@ describe("POST /api/review", () => {
   });
 
   it("turns a committed-but-lost-response retry into a lean success", async () => {
+    dbMocks.getCardForReview.mockResolvedValue({ card: card(), version: 1 });
+    dbMocks.commitReview.mockResolvedValue({
+      status: "duplicate",
+      receipt: {
+        clientReviewId: CLIENT_REVIEW_ID,
+        cardId: "card-1",
+        deckId: "deck-1",
+        rating: 3,
+        reviewedAt: REVIEWED_AT,
+        mode: "review",
+      },
+    });
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, duplicate: true });
+    expect(dbMocks.getReviewReceipt).not.toHaveBeenCalled();
+    expect(dbMocks.getCardForReview).toHaveBeenCalledTimes(1);
+    expect(dbMocks.commitReview).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps duplicate success when the reviewed card was later deleted", async () => {
+    dbMocks.getCardForReview.mockResolvedValue(null);
     dbMocks.getReviewReceipt.mockResolvedValue({
       clientReviewId: CLIENT_REVIEW_ID,
       cardId: "card-1",
@@ -91,17 +115,22 @@ describe("POST /api/review", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true, duplicate: true });
-    expect(dbMocks.getCardForReview).not.toHaveBeenCalled();
+    expect(dbMocks.getCardForReview).toHaveBeenCalledTimes(1);
     expect(dbMocks.commitReview).not.toHaveBeenCalled();
   });
 
   it("rejects reuse of an id for different review data", async () => {
-    dbMocks.getReviewReceipt.mockResolvedValue({
-      clientReviewId: CLIENT_REVIEW_ID,
-      cardId: "another-card",
-      deckId: "deck-1",
-      rating: 3,
-      reviewedAt: REVIEWED_AT,
+    dbMocks.getCardForReview.mockResolvedValue({ card: card(), version: 1 });
+    dbMocks.commitReview.mockResolvedValue({
+      status: "mismatch",
+      receipt: {
+        clientReviewId: CLIENT_REVIEW_ID,
+        cardId: "another-card",
+        deckId: "deck-1",
+        rating: 3,
+        reviewedAt: REVIEWED_AT,
+        mode: "review",
+      },
     });
 
     const response = await POST(request());
@@ -151,7 +180,18 @@ it.each(["write", "pinyin"] as const)("persists %s separately and leaves recogni
   expect(saved.card.modes[mode].fsrs.reps).toBe(1);
 });
 it("rejects a duplicate request ID reused for a different mode", async () => {
-  dbMocks.getReviewReceipt.mockResolvedValue({ clientReviewId: CLIENT_REVIEW_ID, cardId: "card-1", deckId: "deck-1", rating: 3, reviewedAt: REVIEWED_AT, mode: "write" });
+  dbMocks.getCardForReview.mockResolvedValue({ card: card(), version: 1 });
+  dbMocks.commitReview.mockResolvedValue({
+    status: "mismatch",
+    receipt: {
+      clientReviewId: CLIENT_REVIEW_ID,
+      cardId: "card-1",
+      deckId: "deck-1",
+      rating: 3,
+      reviewedAt: REVIEWED_AT,
+      mode: "write",
+    },
+  });
   expect((await POST(request({ mode: "pinyin" }))).status).toBe(409);
 });
 it("rejects unknown modes before reading or writing", async () => {
