@@ -7,25 +7,35 @@ export default function ModeLink({
   title,
   detail,
   badge,
+  kicker,
   primary = false,
 }: {
   href: string;
   title: string;
   detail: string;
   badge?: number;
+  kicker?: string;
   primary?: boolean;
 }) {
   return (
     <Link
       href={href}
       prefetch={false}
-      className={`pressable group flex items-center gap-3 rounded-2xl px-5 py-4 ${
+      aria-label={`${title}. ${detail}`}
+      className={`pressable group flex min-h-20 items-center gap-3 rounded-2xl px-5 py-4 ${
         primary
           ? "bg-accent text-accent-foreground shadow-sm hover:brightness-110"
           : "card hover:border-accent/50"
       }`}
     >
       <span className="min-w-0 flex-1">
+        {kicker && (
+          <span className={`mb-1 block text-[11px] font-semibold tracking-wider uppercase ${
+            primary ? "text-accent-foreground/80" : "text-accent"
+          }`}>
+            {kicker}
+          </span>
+        )}
         <span className="block truncate text-base font-semibold">{title}</span>
         <span className={`block text-sm ${primary ? "opacity-85" : "text-muted"}`}>{detail}</span>
       </span>
