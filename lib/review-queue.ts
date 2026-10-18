@@ -15,6 +15,8 @@ export type ReviewQueueData = {
   queue: Array<{ card: Card }>;
   /** Every word eligible right now, including those beyond this batch. */
   totalDue: number;
+  /** Unstarted words left after the new-word allowance, not the session batch cap. */
+  remainingNew: number;
 };
 
 /** Build the same bounded review batch for server-rendered pages and the API. */
@@ -23,9 +25,10 @@ export function buildReviewQueueData(
   now: Date = new Date(),
   options: QueueOptions = {}
 ): ReviewQueueData {
-  const { reviews, unseen } = eligibleCards(cards, now, options.newLimit);
+  const { reviews, unseen, remainingNew } = eligibleCards(cards, now, options.newLimit);
   return {
     queue: buildQueue(cards, now, options).map((card) => ({ card })),
     totalDue: reviews.length + unseen.length,
+    remainingNew,
   };
 }

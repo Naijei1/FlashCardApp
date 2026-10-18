@@ -72,6 +72,14 @@ describe("adaptive recall", () => {
     expect(weeklyProgress([a, b, { ...a, id: "copy" }], now, "America/New_York")).toEqual({ week: 2, today: 1 });
     expect(weeklyProgress([a, b], new Date("2026-09-21T04:00:00Z"), "America/New_York")).toEqual({ week: 0, today: 0 });
   });
+  it("counts extra writing-skill introductions toward the weekly goal", () => {
+    const write = rateCard(make("write"), Rating.Good, now, "write").card;
+    const pinyin = rateCard({ ...make("pinyin"), front: "老师" }, Rating.Good, now, "pinyin").card;
+    expect(weeklyProgress([
+      { ...write, modes: { write: { fsrs: write.fsrs, practice: write.practice } }, practice: undefined, fsrs: emptyCardState(now) },
+      { ...pinyin, modes: { pinyin: { fsrs: pinyin.fsrs, practice: pinyin.practice } }, practice: undefined, fsrs: emptyCardState(now) },
+    ], now, "America/New_York")).toEqual({ week: 2, today: 2 });
+  });
 });
 
 it("gives a failed mature word a shorter recovery interval than another successful recall", () => {

@@ -84,10 +84,10 @@ export function eligibleCards(cards: Card[], now: Date, newLimit = Infinity) {
   const due = dueCards(cards, now);
   const reviews = due.filter((card) => !isNew(card))
     .sort((a, b) => Number(isLearning(b)) - Number(isLearning(a)) || priority(b, now) - priority(a, now));
-  const unseen = due.filter(isNew)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
-    .slice(0, Math.max(0, newLimit));
-  return { reviews, unseen };
+  const allUnseen = due.filter(isNew)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  const unseen = allUnseen.slice(0, Math.max(0, newLimit));
+  return { reviews, unseen, remainingNew: allUnseen.length - unseen.length };
 }
 
 /**

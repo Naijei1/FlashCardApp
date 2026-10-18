@@ -47,6 +47,7 @@ export function useStudyQueue({
   // server cannot see. Gate the first card until that local check completes.
   const [queue, setQueue] = useState<StudyQueueItem[] | null>(null);
   const [totalDue, setTotalDue] = useState(0);
+  const [remainingNew, setRemainingNew] = useState(0);
   const [batchSize, setBatchSize] = useState(0);
   const [breakUntil, setBreakUntil] = useState(0);
   const [reviewed, setReviewed] = useState(0);
@@ -61,6 +62,8 @@ export function useStudyQueue({
   const waitingToLoadRef = useRef(false);
   /** Parked learning cards carried into the next batch so nobody waits out their step. */
   const carryRef = useRef<StudyQueueItem[]>([]);
+  /** After the daily new-word cap, keep loading unstarted cards via ?new=1. */
+  const extendNewRef = useRef(false);
   const currentKeyRef = useRef<string | null>(null);
   const lastShownKeyRef = useRef<string | null>(null);
   const randomRef = useRef(random);
@@ -104,10 +107,10 @@ export function useStudyQueue({
     const controller = new AbortController();
     loadAbortRef.current = controller;
     const params = new URLSearchParams({ deckId, mode });
-    if (newOnly) params.set("new", "1");
+    if (newOnly || extendNewRef.current) params.set("new", "1");
     fetch(`/api/review/queue?${params}`, { signal: controller.signal, cache: "no-store" })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
-      .then((data: { queue: StudyQueueItem[]; totalDue: number }) => {
+      .then((data: { queue: StudyQueueItem[]; totalDue: number; remainingNew?: number }) => {
         if (controller.signal.aborted) return;
         const carried = carryRef.current;
         carryRef.current = [];
@@ -119,6 +122,7 @@ export function useStudyQueue({
         chooseCurrent(combined, at, null);
         setQueue(combined);
         setTotalDue(data.totalDue);
+        setRemainingNew(data.remainingNew ?? 0);
         setBatchSize(data.queue.length);
       })
       .catch(() => {
@@ -143,7 +147,9 @@ export function useStudyQueue({
     setReviewed(0);
     setBackLater(0);
     carryRef.current = [];
+    extendNewRef.current = false;
     setTotalDue(0);
+    setRemainingNew(0);
     setBatchSize(0);
     advancedAtRef.current = null;
     currentKeyRef.current = null;
@@ -262,12 +268,19 @@ export function useStudyQueue({
     loadQueue();
   }, [loadQueue, queue]);
 
+  const learnMoreNewWords = useCallback(() => {
+    extendNewRef.current = true;
+    advancedAtRef.current = null;
+    loadQueue();
+  }, [loadQueue]);
+
   return {
     queue,
     current: queue && readyIndex >= 0 ? queue[readyIndex] : undefined,
     nextDueAt,
     nowMs,
     totalDue,
+    remainingNew,
     batchSize,
     waiting: Math.max(totalDue - batchSize, 0),
     breakUntil,
@@ -281,5 +294,6 @@ export function useStudyQueue({
     submitRating,
     setHard,
     continueAfterBreak,
+    learnMoreNewWords,
   };
 }
