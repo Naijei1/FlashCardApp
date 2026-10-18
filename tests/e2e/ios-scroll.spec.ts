@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import {
   expectNoHorizontalOverflow,
   expectStudyFitsViewport,
@@ -31,49 +31,84 @@ for (const route of ROUTES) {
   });
 }
 
+const CLINIC_MODES = ["Recognition", "Write Chinese", "Write Pinyin"] as const;
+type ClinicMode = (typeof CLINIC_MODES)[number];
+
+function clinicModeBadge(page: Page) {
+  return page.locator(".rounded-full").filter({ hasText: /^(Recognition|Write Chinese|Write Pinyin)$/ }).first();
+}
+
+async function visibleClinicMode(page: Page): Promise<ClinicMode> {
+  const badge = clinicModeBadge(page);
+  await expect(badge).toBeVisible();
+  const label = (await badge.innerText()).trim();
+  expect(CLINIC_MODES, label).toContain(label);
+  return label as ClinicMode;
+}
+
+async function advanceClinicPrompt(page: Page, current: ClinicMode) {
+  if (current === "Recognition") {
+    if (await page.getByRole("button", { name: "Show answer" }).isVisible()) {
+      await page.getByRole("button", { name: "Show answer" }).click();
+    }
+  } else {
+    await page.getByRole("button", { name: "Don't know" }).click();
+  }
+  await expect(page.getByRole("button", { name: /^Retry/ })).toBeVisible();
+  await page.getByRole("button", { name: /^Retry/ }).click();
+}
+
 test("Mistake Clinic session locks the viewport and keeps write prompts in view", async ({ page }, info) => {
   await page.goto("/clinic");
-  await expect(page.locator(".rounded-full").filter({ hasText: "Recognition" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Show answer" })).toBeVisible();
-  await expectStudyFitsViewport(page);
-  await screenshot(page, `${info.project.name}-clinic-review`);
+  // After random next-card picking, the three seeded clinic skills can appear in any order.
+  const remaining = new Set<ClinicMode>(CLINIC_MODES);
 
-  await page.getByRole("button", { name: "Show answer" }).click();
-  await expect(page.getByRole("button", { name: /^Retry/ })).toBeVisible();
-  await expectStudyFitsViewport(page);
-  await page.getByRole("button", { name: /^Retry/ }).click();
+  while (remaining.size > 0) {
+    const mode = await visibleClinicMode(page);
+    expect(remaining.has(mode), `already finished ${mode}`).toBe(true);
+    remaining.delete(mode);
 
-  const input = page.locator("#clinic-input");
-  await expect(input).toBeVisible();
-  await expect(page.locator(".eyebrow")).toHaveText("Write Chinese");
-  await expectStudyFitsViewport(page);
-  const fontSize = await input.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-  expect(fontSize).toBeGreaterThanOrEqual(16);
-  await input.focus();
-  await simulateSoftKeyboard(page);
-  await expect.poll(async () => (await layoutMetrics(page)).keyboardOpen).toBe(true);
-  await expect.poll(async () => (await layoutMetrics(page)).scrollY).toBe(0);
-  await expectStudyFitsViewport(page);
-  const shell = await page.locator(".study-shell").boundingBox();
-  const box = await input.boundingBox();
-  expect(shell).toBeTruthy();
-  expect(box).toBeTruthy();
-  expect(box!.y).toBeGreaterThanOrEqual(shell!.y - 8);
-  expect(box!.y + box!.height).toBeLessThanOrEqual(shell!.y + shell!.height + 8);
-  await screenshot(page, `${info.project.name}-clinic-write-keyboard`);
+    if (mode === "Recognition") {
+      await expect(page.getByRole("button", { name: "Show answer" })).toBeVisible();
+      await expectStudyFitsViewport(page);
+      await screenshot(page, `${info.project.name}-clinic-review`);
+      await page.getByRole("button", { name: "Show answer" }).click();
+      await expect(page.getByRole("button", { name: /^Retry/ })).toBeVisible();
+      await expectStudyFitsViewport(page);
+    } else {
+      const input = page.locator("#clinic-input");
+      await expect(input).toBeVisible();
+      await expect(page.locator(".eyebrow")).toHaveText(mode);
+      await expectStudyFitsViewport(page);
+      if (mode === "Write Chinese") {
+        const fontSize = await input.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+        expect(fontSize).toBeGreaterThanOrEqual(16);
+      }
+      await input.focus();
+      await simulateSoftKeyboard(page);
+      await expect.poll(async () => (await layoutMetrics(page)).keyboardOpen).toBe(true);
+      await expect.poll(async () => (await layoutMetrics(page)).scrollY).toBe(0);
+      if (mode === "Write Chinese") {
+        await expectStudyFitsViewport(page);
+        const shell = await page.locator(".study-shell").boundingBox();
+        const box = await input.boundingBox();
+        expect(shell).toBeTruthy();
+        expect(box).toBeTruthy();
+        expect(box!.y).toBeGreaterThanOrEqual(shell!.y - 8);
+        expect(box!.y + box!.height).toBeLessThanOrEqual(shell!.y + shell!.height + 8);
+        await screenshot(page, `${info.project.name}-clinic-write-keyboard`);
+      } else {
+        await expect.poll(async () => (await layoutMetrics(page)).immersive).toBe(true);
+        expect((await layoutMetrics(page)).scrollY).toBe(0);
+        await screenshot(page, `${info.project.name}-clinic-pinyin-keyboard`);
+      }
+    }
 
-  await page.getByRole("button", { name: "Don't know" }).click();
-  await expect(page.getByRole("button", { name: /^Retry/ })).toBeVisible();
-  await page.getByRole("button", { name: /^Retry/ }).click();
-
-  await expect(page.locator(".eyebrow")).toHaveText("Write Pinyin");
-  await expect(input).toBeVisible();
-  await input.focus();
-  await simulateSoftKeyboard(page);
-  await expect.poll(async () => (await layoutMetrics(page)).keyboardOpen).toBe(true);
-  await expect.poll(async () => (await layoutMetrics(page)).immersive).toBe(true);
-  expect((await layoutMetrics(page)).scrollY).toBe(0);
-  await screenshot(page, `${info.project.name}-clinic-pinyin-keyboard`);
+    if (remaining.size > 0) {
+      await advanceClinicPrompt(page, mode);
+      await expect(clinicModeBadge(page)).not.toHaveText(mode);
+    }
+  }
 });
 
 test("browse search field stays 16px and does not zoom the layout", async ({ page }) => {
