@@ -395,7 +395,7 @@ it.each(["write", "pinyin"] as const)("offers Learn more new words in %s only wh
   expect(container.textContent).toContain("Learn more new words");
 
   await click("Learn more new words");
-  expect(container.textContent).toContain("谢谢");
+  expect(container.textContent).toContain(mode === "write" ? "xiè xiè" : "谢谢");
   expect(container.querySelector("#write-input")).toBeTruthy();
   const continueUrls = fetchMock.mock.calls
     .map(([url]) => String(url))
@@ -460,16 +460,16 @@ it.each(["write", "pinyin"] as const)("lets an already-capped %s session keep go
   expect(container.textContent).toContain("Today's new words are done");
   expect(container.textContent).toContain("Learn more new words");
   await click("Learn more new words");
-  expect(container.textContent).toContain("老师");
-  expect(container.textContent).not.toContain("同学");
+  expect(container.textContent).toContain(mode === "write" ? "lǎo shī" : "老师");
+  expect(container.textContent).not.toContain(mode === "write" ? "tóng xué" : "同学");
   if (mode === "write") await typeAnswer("老师");
   else await typeAnswer("lao3 shi1");
   await click("Check answer");
   await click("Easy");
   expect(container.textContent).toContain("Learn more new words");
   await click("Learn more new words");
-  expect(container.textContent).toContain("同学");
-  expect(container.textContent).not.toContain("老师");
+  expect(container.textContent).toContain(mode === "write" ? "tóng xué" : "同学");
+  expect(container.textContent).not.toContain(mode === "write" ? "lǎo shī" : "老师");
   expect(loads).toBe(3);
 });
 
