@@ -22,9 +22,12 @@ export async function GET(request: Request) {
   if (!set) return notFound("deck not found");
   const now = new Date();
   const cards = set.cards.map((card) => cardForMode(card, mode));
-  // Regular sessions introduce at most a day's worth of new words per skill;
-  // "Learn new words" is the explicit way to go beyond that.
-  const newLimit = Math.max(0, DAILY_WORD_GOAL - introducedToday(cards, now, appTimeZone()));
+  // Regular sessions introduce at most a day's worth of new words per skill.
+  // Recognition uses ?new=1 from the deck shortcut. Writing modes use the same
+  // flag from "Learn more new words" to load another day's-sized batch.
+  const newLimit = newOnly
+    ? mode === "review" ? undefined : DAILY_WORD_GOAL
+    : Math.max(0, DAILY_WORD_GOAL - introducedToday(cards, now, appTimeZone()));
   const data = buildStudyQueue(cards, { mode, sideFor: set.sideFor, now, newOnly, newLimit });
   return NextResponse.json(data, {
     headers: { "Cache-Control": "private, no-store, max-age=0" },

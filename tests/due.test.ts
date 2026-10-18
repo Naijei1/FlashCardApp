@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildQueue, countsByDeck, isDue, isNew, totalCounts } from "@/lib/due";
+import { buildQueue, countsByDeck, eligibleCards, isDue, isNew, totalCounts } from "@/lib/due";
 import { applyRating, emptyCardState, Rating } from "@/lib/fsrs";
 import type { Card, StoredFsrs } from "@/lib/types";
 
@@ -78,6 +78,9 @@ describe("new word allowance", () => {
     const queue = buildQueue(cards, NOW, { random: () => 0, newLimit: 5 });
     expect(queue.map((card) => card.id).sort()).toEqual(["n00", "n01", "n02", "n03", "n04"]);
     expect(buildQueue(cards, NOW, { newLimit: 0 })).toEqual([]);
+    expect(eligibleCards(cards, NOW, 5).remainingNew).toBe(15);
+    expect(eligibleCards(cards, NOW, 0).remainingNew).toBe(20);
+    expect(eligibleCards(cards, NOW).remainingNew).toBe(0);
   });
 
   it("still fills the batch with reviews when no new words are allowed", () => {

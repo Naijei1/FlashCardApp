@@ -69,9 +69,14 @@ describe("automatic Pinyin readings", () => {
     const before = JSON.stringify(cards);
     const result = buildStudyQueue(cards, { mode: "pinyin", sideFor: () => "front", now: NOW });
     expect(result.totalDue).toBe(30);
+    expect(result.remainingNew).toBe(0);
     expect(result.queue).toHaveLength(25);
     expect(result.queue.every((item) => item.pinyin?.syllables.join(" ") === "nǐ hǎo")).toBe(true);
     expect(JSON.stringify(cards)).toBe(before);
+    const capped = buildStudyQueue(cards, { mode: "pinyin", sideFor: () => "front", now: NOW, newLimit: 11 });
+    expect(capped.totalDue).toBe(11);
+    expect(capped.remainingNew).toBe(19);
+    expect(capped.queue).toHaveLength(11);
   });
 });
 

@@ -82,8 +82,9 @@ function clinicWeakCards(now: Date): Card[] {
     updatedAt: stamp,
     fsrs: fresh,
   });
-  // Dedicated modes so the clinic queue is recognition → write → pinyin.
-  // Review: lapses + relearning + failures ≈ 36–40. Write failures = 24. Pinyin failures = 15.
+  // Dedicated skills so the clinic seed covers recognition, write, and pinyin.
+  // Serving order is random. Review: lapses + relearning + failures ≈ 36–40.
+  // Write failures = 24. Pinyin failures = 15.
   return [
     {
       ...base("e2e-clinic-review", "忘记", "to forget"),

@@ -87,6 +87,7 @@ export type StudyQueueOptions = {
 export function buildStudyQueue(cards: Card[], options: StudyQueueOptions): {
   queue: StudyQueueItem[];
   totalDue: number;
+  remainingNew: number;
 } {
   const { mode, sideFor, now = new Date(), newOnly = false } = options;
   const details = new Map<Card, StudyDetails>();
@@ -96,11 +97,12 @@ export function buildStudyQueue(cards: Card[], options: StudyQueueOptions): {
     if (detail) details.set(card, detail);
   }
   const data = buildReviewQueueData([...details.keys()], now, {
-    newLimit: newOnly ? undefined : options.newLimit,
+    newLimit: options.newLimit,
     random: options.random,
   });
   return {
     totalDue: data.totalDue,
+    remainingNew: data.remainingNew,
     queue: data.queue.map(({ card }) => ({ card, ...details.get(card) })),
   };
 }

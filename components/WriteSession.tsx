@@ -153,7 +153,7 @@ export default function WriteSession({
   });
 
   const status = (
-    <QueueStatus study={study} backHref={backHref} copy={{
+    <QueueStatus study={study} backHref={backHref} onLearnMore={study.learnMoreNewWords} copy={{
       noun: mode === "pinyin" ? "Pinyin" : "writing",
       verb: "wrote",
       empty: mode === "pinyin"

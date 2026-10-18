@@ -140,9 +140,11 @@ it("limits regular sessions to a day's new words while Learn new words stays ope
   const regular = await (await GET(new Request("https://example.com/api/review/queue?deckId=deck"))).json();
   expect(regular.totalDue).toBe(7);
   expect(regular.queue).toHaveLength(7);
+  expect(regular.remainingNew).toBe(19);
   const learn = await (await GET(new Request("https://example.com/api/review/queue?deckId=deck&new=1"))).json();
   expect(learn.totalDue).toBe(26);
   expect(learn.queue).toHaveLength(25);
+  expect(learn.remainingNew).toBe(0);
 });
 
 it("honors Learn new words in writing modes", async () => {
@@ -153,4 +155,34 @@ it("honors Learn new words in writing modes", async () => {
   mocks.listCards.mockResolvedValue([written, second]);
   const data = await (await GET(new Request("https://example.com/api/review/queue?deckId=deck&mode=write&new=1"))).json();
   expect(data.queue.map((item: { card: { id: string } }) => item.card.id)).toEqual(["c"]);
+});
+
+it("lets writing modes keep introducing daily-sized batches after the cap", async () => {
+  const now = new Date();
+  const fresh = Array.from({ length: 20 }, (_, i) => ({
+    id: `w${i}`, deckId: "deck", front: `word ${i}`, back: `字${i}`,
+    fsrs: emptyCardState(now), createdAt: now.toISOString(), updatedAt: now.toISOString(),
+  }));
+  const { rateMode } = await import("@/lib/modes");
+  const { DAILY_WORD_GOAL } = await import("@/lib/practice");
+  const introduced = fresh.slice(0, DAILY_WORD_GOAL).map((card) => rateMode(card, "write", 3, now).card);
+  mocks.listCards.mockResolvedValue([...introduced, ...fresh.slice(DAILY_WORD_GOAL)]);
+  const regular = await (await GET(new Request("https://example.com/api/review/queue?deckId=deck&mode=write"))).json();
+  expect(regular.queue).toHaveLength(0);
+  expect(regular.totalDue).toBe(0);
+  expect(regular.remainingNew).toBe(9);
+  const more = await (await GET(new Request("https://example.com/api/review/queue?deckId=deck&mode=write&new=1"))).json();
+  const moreIds = more.queue.map((item: { card: { id: string } }) => item.card.id);
+  const introducedIds = new Set(introduced.map((card) => card.id));
+  expect(moreIds).toHaveLength(9);
+  expect(moreIds.every((id: string) => !introducedIds.has(id))).toBe(true);
+  expect(more.remainingNew).toBe(0);
+
+  mocks.listCards.mockResolvedValue(fresh);
+  const firstDay = await (await GET(new Request("https://example.com/api/review/queue?deckId=deck&mode=pinyin"))).json();
+  expect(firstDay.queue).toHaveLength(DAILY_WORD_GOAL);
+  expect(firstDay.remainingNew).toBe(9);
+  const extra = await (await GET(new Request("https://example.com/api/review/queue?deckId=deck&mode=pinyin&new=1"))).json();
+  expect(extra.queue).toHaveLength(DAILY_WORD_GOAL);
+  expect(extra.remainingNew).toBe(9);
 });

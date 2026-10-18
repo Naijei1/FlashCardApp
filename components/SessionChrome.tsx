@@ -20,6 +20,7 @@ export function SessionScreen({
   onRetry,
   note,
   backLabel = "← Back",
+  action,
 }: {
   backHref: string;
   title: string;
@@ -29,7 +30,9 @@ export function SessionScreen({
   onRetry?: () => void;
   note?: string;
   backLabel?: string;
+  action?: ReactNode;
 }) {
+  const secondaryBack = !!(onRetry || action);
   return (
     <div className="study-frame mx-auto flex max-w-md flex-col items-center justify-center gap-3 px-6 pt-safe pb-safe text-center">
       <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
@@ -41,7 +44,8 @@ export function SessionScreen({
           Try again
         </button>
       )}
-      <Link href={backHref} className={onRetry ? "btn btn-ghost" : "btn btn-primary mt-2"}>
+      {action}
+      <Link href={backHref} className={secondaryBack ? "btn btn-ghost" : "btn btn-primary mt-2"}>
         {backLabel}
       </Link>
     </div>
@@ -70,16 +74,18 @@ export function QueueStatus({
   study,
   backHref,
   copy,
+  onLearnMore,
 }: {
   study: StudyQueueState;
   backHref: string;
   copy: { noun: string; verb: string; empty: string };
+  onLearnMore?: () => void;
 }) {
   const { queue, syncState, resolveSyncFailures, reviewed } = study;
   const note = backLaterText(study.backLater);
-  const screen = (title: string, body: string, onRetry?: () => void, backLabel?: string) => (
+  const screen = (title: string, body: string, onRetry?: () => void, backLabel?: string, action?: ReactNode) => (
     <SessionScreen backHref={backHref} title={title} body={body} syncState={syncState}
-      onRetrySaves={resolveSyncFailures} onRetry={onRetry} note={note} backLabel={backLabel} />
+      onRetrySaves={resolveSyncFailures} onRetry={onRetry} note={note} backLabel={backLabel} action={action} />
   );
   if (study.loadError) return screen("Something went wrong", `Could not load the ${copy.noun} queue.`, study.loadQueue);
   if (study.breakUntil > 0) {
@@ -103,10 +109,25 @@ export function QueueStatus({
       : `Preparing your ${copy.noun} queue.`);
   }
   if (queue.length === 0) {
-    const title = reviewed === 0 ? "Nothing due"
+    const canLearnMore = !!onLearnMore && study.remainingNew > 0;
+    const title = reviewed === 0
+      ? canLearnMore ? "Today's new words are done" : "Nothing due"
       : syncState.failedCount > 0 ? "Reviews need attention"
         : syncState.pendingCount > 0 ? "Saving reviews…" : "Session complete";
-    return screen(title, reviewed > 0 ? `You ${copy.verb} ${plural(reviewed, "card")}.` : copy.empty);
+    const body = reviewed > 0
+      ? `You ${copy.verb} ${plural(reviewed, "card")}.${
+        canLearnMore ? " More new words are ready when you want them."
+          : onLearnMore ? " No more new words left to start." : ""
+      }`
+      : canLearnMore
+        ? "You've reached today's new-word limit for this skill. Learn more new words, or come back tomorrow."
+        : copy.empty;
+    const action = canLearnMore ? (
+      <button type="button" onClick={onLearnMore} className="btn btn-primary mt-2">
+        Learn more new words
+      </button>
+    ) : undefined;
+    return screen(title, body, undefined, undefined, action);
   }
   if (!study.current && study.nextDueAt !== null) {
     // Nothing else is waiting, so the user may stay for the last steps or leave;

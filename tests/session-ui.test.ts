@@ -349,6 +349,130 @@ it("ignores a Pencil tap on Check answer while Scribble is still inserting text"
   expect(container.textContent).toContain("Correct");
 });
 
+function reviewPosts() {
+  return fetchMock.mock.calls.filter(([url]) => url === "/api/review");
+}
+
+function studyDetailsFor(target: Card, mode: ReviewMode) {
+  const cards = [target].map((item) => cardForMode(item, mode));
+  return buildStudyQueue(cards, { mode, sideFor: () => "front", now: new Date() }).queue[0];
+}
+
+it.each(["write", "pinyin"] as const)("offers Learn more new words in %s only when the daily cap hid unstarted cards", async (mode) => {
+  const extra: Card = { ...card, id: "extra", front: "谢谢", back: "thank you" };
+  let extraCard = extra;
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url === "/api/review") {
+      const body = JSON.parse(init!.body as string);
+      expect(body).toEqual(expect.objectContaining({
+        mode, cardId: body.cardId, deckId: "deck", rating: body.rating, reviewedAt: expect.any(String),
+      }));
+      if (body.cardId === card.id) card = rateMode(card, body.mode, body.rating, new Date(body.reviewedAt)).card;
+      if (body.cardId === extraCard.id) extraCard = rateMode(extraCard, body.mode, body.rating, new Date(body.reviewedAt)).card;
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    }
+    const params = new URL(url, "https://example.com").searchParams;
+    expect(params.get("mode")).toBe(mode);
+    if (params.get("new") === "1") {
+      return { ok: true, json: async () => ({ queue: [studyDetailsFor(extraCard, mode)], totalDue: 1, remainingNew: 0 }) };
+    }
+    return { ok: true, json: async () => ({ queue: [studyDetailsFor(card, mode)], totalDue: 1, remainingNew: 4 }) };
+  });
+
+  await render(createElement(WriteSession, { deckId: "deck", chineseLang: "zh-CN", backHref: "/", mode }));
+  expect(container.textContent).not.toContain("Learn more new words");
+  if (mode === "write") await typeAnswer("你好");
+  else await typeAnswer("ni3 hao3");
+  await click("Check answer");
+  const postsBefore = reviewPosts().length;
+  await click("Easy");
+  expect(reviewPosts()).toHaveLength(postsBefore + 1);
+  const firstReview = JSON.parse(reviewPosts()[0][1]!.body as string);
+  expect(firstReview).toMatchObject({ mode, cardId: "card", deckId: "deck", rating: 4 });
+  expect(firstReview.reviewedAt).toEqual(expect.any(String));
+  expect(container.textContent).toContain("Session complete");
+  expect(container.textContent).toContain("More new words are ready when you want them.");
+  expect(container.textContent).toContain("Learn more new words");
+
+  await click("Learn more new words");
+  expect(container.textContent).toContain(mode === "write" ? "xiè xiè" : "谢谢");
+  expect(container.querySelector("#write-input")).toBeTruthy();
+  const continueUrls = fetchMock.mock.calls
+    .map(([url]) => String(url))
+    .filter((url) => url.includes("/api/review/queue") && url.includes("new=1"));
+  expect(continueUrls.length).toBeGreaterThan(0);
+  if (mode === "write") await typeAnswer("谢谢");
+  else await typeAnswer("xie4 xie");
+  await click("Check answer");
+  await click("Easy");
+  expect(reviewPosts()).toHaveLength(2);
+  expect(JSON.parse(reviewPosts()[1][1]!.body as string)).toMatchObject({
+    mode, cardId: "extra", deckId: "deck", rating: 4,
+  });
+  expect(container.textContent).toContain("Session complete");
+  expect(container.textContent).toContain("No more new words left to start.");
+  expect(container.textContent).not.toContain("Learn more new words");
+  expect(cardForMode(card, mode).fsrs.reps).toBe(1);
+  expect(cardForMode(extraCard, mode).fsrs.reps).toBe(1);
+});
+
+it.each(["write", "pinyin"] as const)("hides Learn more new words in %s when the deck has no unstarted cards", async (mode) => {
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url === "/api/review") {
+      const body = JSON.parse(init!.body as string);
+      card = rateMode(card, body.mode, body.rating, new Date(body.reviewedAt)).card;
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    }
+    return { ok: true, json: async () => ({ queue: [studyDetailsFor(card, mode)], totalDue: 1, remainingNew: 0 }) };
+  });
+  await render(createElement(WriteSession, { deckId: "deck", chineseLang: "zh-CN", backHref: "/", mode }));
+  if (mode === "write") await typeAnswer("你好");
+  else await typeAnswer("ni3 hao3");
+  await click("Check answer");
+  await click("Easy");
+  expect(container.textContent).toContain("Session complete");
+  expect(container.textContent).toContain("No more new words left to start.");
+  expect(container.textContent).not.toContain("Learn more new words");
+  expect(JSON.parse(reviewPosts()[0][1]!.body as string)).toMatchObject({ mode, cardId: "card", rating: 4 });
+});
+
+it.each(["write", "pinyin"] as const)("lets an already-capped %s session keep going and skip duplicates", async (mode) => {
+  const next: Card = { ...card, id: "next", front: "老师", back: "teacher" };
+  const later: Card = { ...card, id: "later", front: "同学", back: "classmate" };
+  let loads = 0;
+  fetchMock.mockImplementation(async (url: string) => {
+    if (url === "/api/review") return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    loads += 1;
+    const params = new URL(url, "https://example.com").searchParams;
+    if (loads === 1) {
+      expect(params.get("new")).toBeNull();
+      return { ok: true, json: async () => ({ queue: [], totalDue: 0, remainingNew: 2 }) };
+    }
+    expect(params.get("new")).toBe("1");
+    const item = loads === 2 ? next : later;
+    return { ok: true, json: async () => ({
+      queue: [studyDetailsFor(item, mode)],
+      totalDue: 1,
+      remainingNew: loads === 2 ? 1 : 0,
+    }) };
+  });
+  await render(createElement(WriteSession, { deckId: "deck", chineseLang: "zh-CN", backHref: "/", mode }));
+  expect(container.textContent).toContain("Today's new words are done");
+  expect(container.textContent).toContain("Learn more new words");
+  await click("Learn more new words");
+  expect(container.textContent).toContain(mode === "write" ? "lǎo shī" : "老师");
+  expect(container.textContent).not.toContain(mode === "write" ? "tóng xué" : "同学");
+  if (mode === "write") await typeAnswer("老师");
+  else await typeAnswer("lao3 shi1");
+  await click("Check answer");
+  await click("Easy");
+  expect(container.textContent).toContain("Learn more new words");
+  await click("Learn more new words");
+  expect(container.textContent).toContain(mode === "write" ? "tóng xué" : "同学");
+  expect(container.textContent).not.toContain(mode === "write" ? "lǎo shī" : "老师");
+  expect(loads).toBe(3);
+});
+
 it("swipes between words in Normal Review without flipping the card", async () => {
   const StudySession = (await import("@/components/StudySession")).default;
   const other = { ...card, id: "other", front: "谢谢", back: "thank you" };
