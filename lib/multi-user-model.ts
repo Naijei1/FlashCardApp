@@ -2,8 +2,13 @@ import { emptyCardState, currentRetentionSchedule } from "./fsrs";
 import type { Role } from "./principal";
 import type { Card, CardSource, Deck, StoredFsrs } from "./types";
 
-export const LEGACY_OWNER_USER_ID = "user_legacy_nj277";
-export const LEGACY_OWNER_EMAIL = "nj277@cornell.edu";
+/**
+ * Opaque id for the pre-multi-user study history. It is not an email and it
+ * does not encode the admin address. Progress is claimed by LEGACY_OWNER_EMAIL.
+ */
+export const LEGACY_OWNER_USER_ID = "user_legacy_owner";
+/** Verified Gmail that should claim the migrated study progress. Not an admin. */
+export const LEGACY_OWNER_EMAIL = "naijeiwow@gmail.com";
 
 export type { CardSource };
 

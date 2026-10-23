@@ -60,10 +60,20 @@ function legacyFixture(): MigrationItem[] {
 }
 
 describe("migration dry run", () => {
-  it("refuses the production table even if a remote apply is requested", () => {
+  it("refuses the production table unless the production override is explicit", () => {
     expect(assertMigrationTarget({ tableName: "flashcards", endpoint: "http://localhost:8000" }).ok).toBe(false);
-    expect(assertMigrationTarget({ tableName: "flashcards", allowRemote: true }).ok).toBe(false);
+    expect(assertMigrationTarget({ tableName: "flashcards", allowRemote: true, apply: true, backedUp: true }).ok).toBe(
+      false
+    );
+    expect(assertMigrationTarget({ tableName: "flashcards", allowProduction: true }).ok).toBe(true);
+    expect(
+      assertMigrationTarget({ tableName: "flashcards", allowProduction: true, apply: true, backedUp: false }).ok
+    ).toBe(false);
+    expect(
+      assertMigrationTarget({ tableName: "flashcards", allowProduction: true, apply: true, backedUp: true }).ok
+    ).toBe(true);
     expect(assertMigrationTarget({ tableName: "flashcards-copy", endpoint: "http://localhost:8000" }).ok).toBe(true);
+    expect(assertMigrationTarget({ tableName: "flashcards-copy", allowProduction: true }).ok).toBe(false);
     expect(assertMigrationTarget({ tableName: "flashcards-copy" }).ok).toBe(false);
   });
 

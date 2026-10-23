@@ -108,36 +108,57 @@ The edit form does not save until the admin chooses:
 
 All current decks become global. Deck and card ids do not change. FSRS,
 modes, practice, hard markers, and review version are copied onto `PROGRESS#`
-items for the placeholder user `user_legacy_nj277`. A claim item
-`CLAIM#email#<email>` points at that id. The default email is
-`nj277@cornell.edu`. The first Google sign-in whose **verified** email matches
-the claim adopts that user id and writes `AUTH#google#<sub>`. After that, only
-the subject matches. A different Google subject with the same email does not
-receive the progress.
+items for the placeholder user `user_legacy_owner`. That id is opaque. It is
+not derived from an email. A claim item `CLAIM#email#<email>` points at it.
+The default email is `naijeiwow@gmail.com` (`LEGACY_OWNER_EMAIL`). The first
+Google sign-in whose **verified** email matches the claim adopts that user id
+and writes `AUTH#google#<sub>`. After that, only the subject matches. A
+different Google subject with the same email does not receive the progress.
 
-The script is `npm run migrate:multi-user`. It prints a backup reminder, dry
-runs unless `--apply --i-backed-up` are both set, and reports before/after
-counts. It refuses `TABLE_NAME=flashcards` with no override, and it refuses a
-real AWS endpoint unless `MIGRATION_ALLOW_REMOTE=1` (still not `flashcards`).
-Do not run it against production from this change. Apply it yourself to a
-copied table, check the counts, then apply to production only after a backup.
-
-`cornell.edu` may not be a Google account (campus Microsoft sign-in is
-common). Fallback: set `LEGACY_OWNER_EMAIL` to a personal Gmail **before the
-first apply**, then sign in with that verified Gmail. Adding a Microsoft
+`nj277@cornell.edu` is the admin account. Put it in `ADMIN_EMAILS`. Do not use
+it as `LEGACY_OWNER_EMAIL`. Cornell addresses are often Microsoft accounts, so
+the study history is claimed by the personal Gmail instead. Adding a Microsoft
 provider later is an Auth.js provider plus an `AUTH#microsoft#<sub>` link to
 the same app user id; it is not wired in this change. Do not put the study
 Gmail in `ADMIN_EMAILS` or that account becomes the admin and cannot study.
+
+The script is `npm run migrate:multi-user`. Package type is CommonJS, so the
+script must not use top-level await; `tsx` would otherwise fail to load it.
+It prints a backup reminder, dry runs unless `--apply --i-backed-up` are both
+set, and reports before/after counts. It never deletes or overwrites.
+
+`TABLE_NAME=flashcards` is refused unless `MIGRATION_ALLOW_PRODUCTION=1`.
+That flag allows a dry run against production and treats the remote endpoint
+as intentional for that table only. A write still requires `--apply` and
+`--i-backed-up` as well. `MIGRATION_ALLOW_REMOTE=1` does not unlock
+`flashcards`. It only allows some other table name when `DYNAMODB_ENDPOINT`
+is unset.
+
+```bash
+# copy, dry run
+MIGRATION_ALLOW_REMOTE=1 TABLE_NAME=flashcards-copy npm run migrate:multi-user
+
+# production dry run, then production apply after a backup
+MIGRATION_ALLOW_PRODUCTION=1 npm run migrate:multi-user
+MIGRATION_ALLOW_PRODUCTION=1 npm run migrate:multi-user -- --apply --i-backed-up
+```
+
+A copy that was already applied with the earlier id `user_legacy_nj277` keeps
+those rows. Re-applying with the current id adds a second placeholder. It does
+not rewrite the first one. Production should be applied once, with
+`user_legacy_owner`.
 
 Suggested order:
 
 1. Back up `flashcards`.
 2. Restore a copy and dry-run, then apply, against the copy.
 3. Create the Google OAuth client and Amplify env vars below.
-4. Deploy with `AUTH_MODE=google` and `DATA_MODE=multi-user` only after the
+4. Dry-run production with `MIGRATION_ALLOW_PRODUCTION=1`, then apply with
+   `--apply --i-backed-up` after the backup looks right.
+5. Deploy with `AUTH_MODE=google` and `DATA_MODE=multi-user` only after the
    production apply. Leaving the flags unset keeps today's password app.
-5. Sign in once with the verified claim email. Use a different verified Google
-   email for the admin.
+6. Sign in once with the verified Gmail `naijeiwow@gmail.com`. Sign in as
+   `nj277@cornell.edu` only for the admin account.
 
 ### Environment variables
 
@@ -157,9 +178,15 @@ Google multi-user mode:
 - `AUTH_GOOGLE_ID` (Google OAuth client id)
 - `AUTH_GOOGLE_SECRET` (Google OAuth client secret)
 - `AUTH_URL` (the site origin, such as `https://main.d3otcaeyemrjvk.amplifyapp.com`)
-- `ADMIN_EMAILS` (comma-separated verified Google emails for admins only)
+- `ADMIN_EMAILS` (comma-separated verified Google emails for admins only;
+  `nj277@cornell.edu`)
 - `TABLE_NAME`, `APP_REGION`, `APP_TIME_ZONE`
-- Optional `LEGACY_OWNER_EMAIL` for the migration script only
+- Optional `LEGACY_OWNER_EMAIL` for the migration script only (default
+  `naijeiwow@gmail.com`)
+- `MIGRATION_ALLOW_REMOTE=1` to dry-run or apply a non-production table with
+  no `DYNAMODB_ENDPOINT`
+- `MIGRATION_ALLOW_PRODUCTION=1` to dry-run or, with `--apply --i-backed-up`,
+  write the production table `flashcards`
 
 Amplify still does not pass console env vars into the SSR runtime. `npm run
 env:production` hex-encodes `AUTH_SECRET` and `AUTH_GOOGLE_SECRET` into
