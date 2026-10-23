@@ -9,6 +9,7 @@ export default function ModeLink({
   badge,
   kicker,
   primary = false,
+  prefetch = false,
 }: {
   href: string;
   title: string;
@@ -16,11 +17,13 @@ export default function ModeLink({
   badge?: number;
   kicker?: string;
   primary?: boolean;
+  /** Prefetch the route shell. Leave off for pages that load every card. */
+  prefetch?: boolean;
 }) {
   return (
     <Link
       href={href}
-      prefetch={false}
+      prefetch={prefetch}
       aria-label={`${title}. ${detail}`}
       className={`pressable group flex min-h-20 items-center gap-3 rounded-2xl px-5 py-4 ${
         primary

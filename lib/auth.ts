@@ -2,10 +2,19 @@ import { SignJWT, jwtVerify } from "jose";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
-import { SESSION_COOKIE } from "./constants";
+import { sessionIsCurrent } from "./auth-store";
+import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "./constants";
 
-export { SESSION_COOKIE };
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+export { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS };
+
+export type SessionPrincipal = {
+  userId: string;
+  sessionId: string;
+  sessionVersion: number;
+};
+
+const USER_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const SESSION_ID = /^[A-Za-z0-9_-]{16,128}$/;
 
 function privateEnv(name: "APP_PASSWORD" | "SESSION_SECRET"): string | undefined {
   const encoded = process.env[`${name}_HEX`];
@@ -34,21 +43,50 @@ export function checkPassword(input: string): boolean {
   return timingSafeEqual(a, b);
 }
 
-export async function signSession(): Promise<string> {
-  return new SignJWT({})
+export async function signSession(claims: SessionPrincipal): Promise<string> {
+  return new SignJWT({ sid: claims.sessionId, sv: claims.sessionVersion })
     .setProtectedHeader({ alg: "HS256" })
+    .setSubject(claims.userId)
     .setIssuedAt()
     .setExpirationTime(`${SESSION_MAX_AGE_SECONDS}s`)
     .sign(secretKey());
 }
 
-export async function verifySessionToken(token: string): Promise<boolean> {
+/** Signature, expiry, and claim shape. Revocation is checked in getSession. */
+export async function readSessionClaims(token: string): Promise<SessionPrincipal | null> {
   try {
-    await jwtVerify(token, secretKey());
-    return true;
+    const { payload } = await jwtVerify(token, secretKey());
+    const userId = payload.sub;
+    const sessionId = payload.sid;
+    const sessionVersion = payload.sv;
+    if (typeof userId !== "string" || !USER_ID.test(userId)) return null;
+    if (typeof sessionId !== "string" || !SESSION_ID.test(sessionId)) return null;
+    if (typeof sessionVersion !== "number" || !Number.isSafeInteger(sessionVersion) || sessionVersion < 1) {
+      return null;
+    }
+    return { userId, sessionId, sessionVersion };
   } catch {
-    return false;
+    return null;
   }
+}
+
+export async function verifySessionToken(token: string): Promise<boolean> {
+  return (await readSessionClaims(token)) !== null;
+}
+
+/**
+ * Valid signature is not enough: the session row must still exist and its
+ * version must match. Logout deletes the row; log out everywhere bumps the
+ * version so other browsers fail too.
+ */
+export async function getSession(): Promise<SessionPrincipal | null> {
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  const claims = await readSessionClaims(token);
+  if (!claims) return null;
+  const active = await sessionIsCurrent(claims.userId, claims.sessionId, claims.sessionVersion);
+  return active ? claims : null;
 }
 
 export const sessionCookieOptions = {
@@ -59,10 +97,7 @@ export const sessionCookieOptions = {
   maxAge: SESSION_MAX_AGE_SECONDS,
 };
 
-/** True when the request carries a valid session cookie. */
+/** True when the request carries a signed session that has not been revoked. */
 export async function isAuthenticated(): Promise<boolean> {
-  const store = await cookies();
-  const token = store.get(SESSION_COOKIE)?.value;
-  if (!token) return false;
-  return verifySessionToken(token);
+  return (await getSession()) !== null;
 }

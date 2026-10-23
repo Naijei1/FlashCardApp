@@ -69,6 +69,42 @@ isAdmin
 
 Never accept `userId` or role from request bodies.
 
+### Session revocation already in the shared-password app
+
+Logout and “log out everywhere” are implemented before Cognito, using the same
+user partition this design expects. The current principal is `shared` (the
+pre-Cognito account that migration should attach to Naijei’s regular user, not
+the admin):
+
+```txt
+PK = USER#<userId>
+SK = AUTH
+sessionVersion
+
+PK = USER#<userId>
+SK = SESSION#<sessionId>
+sessionVersion
+expiresAt
+ttl
+```
+
+A JWT carries `sub` (user id), `sid` (session id), and `sv` (session version).
+Logout deletes that session row. Log out everywhere adds 1 to `sessionVersion`,
+which rejects every existing token for that user even if other session rows
+remain until TTL. Cognito migration can keep this shape and substitute the
+Cognito `sub` for `shared`.
+
+Login rate-limit rows are not user progress:
+
+```txt
+PK = AUTH#LOGIN
+SK = ATTEMPT#<sha256>
+failures
+windowStartedAt
+blockedUntil
+ttl
+```
+
 ### Roles
 
 Use either Cognito groups or app metadata synchronized from Cognito.

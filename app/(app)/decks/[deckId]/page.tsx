@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import WarmStudyQueue from "@/components/WarmStudyQueue";
+import { reviewQueueUrl } from "@/components/studyQueueCache";
 import AddCardForm from "@/components/AddCardForm";
 import CardList from "@/components/CardList";
 import CardPagination from "@/components/CardPagination";
@@ -69,6 +71,7 @@ export default async function DeckPage({
 
   return (
     <div className="space-y-8 py-6">
+      <WarmStudyQueue url={reviewQueueUrl(deckId, "review")} />
       <header className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <p className="eyebrow">{EYEBROW[deckId] ?? "Lesson"}</p>
@@ -94,21 +97,21 @@ export default async function DeckPage({
         </div>
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
           <div className="sm:col-span-2 xl:col-span-4">
-            <ModeLink primary href={`/review/${deckId}`} kicker="Recommended"
+            <ModeLink primary prefetch href={`/review/${deckId}`} kicker="Recommended"
               title="Spaced Repetition"
               detail={`${status(counts.due, counts.newCards)} · daily review with up to ${DAILY_WORD_GOAL} new`}
               badge={counts.due} />
           </div>
           {counts.newCards > 0 && (
-            <ModeLink href={`/review/${deckId}?new=1`} kicker="Shortcut" title="Learn new words"
+            <ModeLink prefetch href={`/review/${deckId}?new=1`} kicker="Shortcut" title="Learn new words"
               detail={`Start ${plural(counts.newCards, "unseen word")}`} />
           )}
           <ModeLink href={`/study/${deckId}`} title="Normal Review"
             detail="Flip freely — doesn’t affect scheduling" />
-          <ModeLink href={`/write/${deckId}`} title="Write Chinese"
+          <ModeLink prefetch href={`/write/${deckId}`} title="Write Chinese"
             detail={`Pinyin → characters · ${status(writeCounts.due, writeCounts.newCards)}`}
             badge={writeCounts.due} />
-          <ModeLink href={`/pinyin/${deckId}`} title="Write Pinyin"
+          <ModeLink prefetch href={`/pinyin/${deckId}`} title="Write Pinyin"
             detail={`Characters → pinyin · ${status(pinyinCounts.due, pinyinCounts.newCards)}`}
             badge={pinyinCounts.due} />
         </div>

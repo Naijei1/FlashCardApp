@@ -155,7 +155,7 @@ function RecognitionPrompt({
       <div key={card.id} onClick={() => setRevealed(true)} className="flashcard flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 basis-1/2 flex-col items-center justify-center gap-3 overflow-y-auto px-6 py-6 text-center">
           <div className="flex items-center gap-2">
-            <span lang={frontLang} className="selectable text-5xl leading-tight font-medium break-words sm:text-6xl">{prompt}</span>
+            <span lang={frontLang} className={frontLang.startsWith("zh") ? "hanzi selectable break-words" : "selectable text-5xl leading-tight font-medium break-words sm:text-6xl"}>{prompt}</span>
             <TtsButton text={prompt} lang={frontLang} />
           </div>
           {pinyin && (
@@ -171,7 +171,7 @@ function RecognitionPrompt({
           {revealed ? (
             <div key={card.id} className="reveal-in flex flex-col items-center gap-3">
               <div className="flex items-center gap-2">
-                <span lang={pinyin ? "zh-Latn-pinyin" : backLang} className="selectable text-3xl break-words text-foreground/90">
+                <span lang={pinyin ? "zh-Latn-pinyin" : backLang} className={pinyin ? "pinyin selectable break-words" : "selectable text-3xl break-words text-foreground/90"}>
                   {pinyin ? pinyin.syllables.join(" ") : card.back}
                 </span>
                 {!pinyin && <TtsButton text={card.back} lang={backLang} />}
@@ -265,7 +265,7 @@ function WritingPrompt({
       <div key={item.card.id} className="study-scroll flashcard flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-6 sm:px-8">
         <p className="eyebrow text-center">{item.mode === "pinyin" ? "Write Pinyin" : "Write Chinese"}</p>
         <div className="mt-3 text-center">
-          <span lang={item.mode === "pinyin" ? "zh-CN" : "zh-Latn-pinyin"} className="selectable text-4xl font-medium break-words sm:text-5xl">
+          <span lang={item.mode === "pinyin" ? "zh-CN" : "zh-Latn-pinyin"} className={item.mode === "pinyin" ? "hanzi selectable break-words" : "pinyin selectable break-words"}>
             {prompt.prompt}
           </span>
           {item.mode === "write" && item.pinyin && (
@@ -321,7 +321,7 @@ function WritingPrompt({
                 ))}</span></p>
               )}
               <div className="flex items-center gap-2">
-                <span lang={answerLang} className={`selectable break-words ${item.mode === "pinyin" ? "text-3xl" : "text-4xl"}`}>
+                <span lang={answerLang} className={item.mode === "pinyin" ? "pinyin selectable break-words" : "hanzi-text selectable text-4xl break-words sm:text-5xl"}>
                   {result.expected.map((char, index) => (
                     <span key={index} className={result.correct || char.ok ? "" : "rounded bg-green-500/15 text-green-700 dark:text-green-400"}>{char.char}</span>
                   ))}

@@ -11,11 +11,11 @@ import {
 import { cardForMode, rateMode } from "@/lib/modes";
 import type { ReviewMode } from "@/lib/types";
 import { Rating, type Grade } from "@/lib/fsrs";
+import { MAX_FUTURE_REVIEW_SKEW_MS, reviewTimestampError } from "@/lib/review-time";
 
 const GRADES: number[] = [Rating.Again, Rating.Hard, Rating.Good, Rating.Easy];
 const CLIENT_REVIEW_ID = /^[A-Za-z0-9_-]{12,100}$/;
 const MAX_WRITE_ATTEMPTS = 5;
-const MAX_CLOCK_SKEW_MS = 5 * 60_000;
 
 function conflict(message: string): NextResponse {
   return NextResponse.json({ error: message }, { status: 409 });
@@ -47,6 +47,8 @@ export async function POST(request: Request) {
       "cardId, deckId, clientReviewId, reviewedAt, and rating (1-4) are required"
     );
   }
+  const stale = reviewTimestampError(reviewedAt);
+  if (stale) return badRequest(stale);
 
   const requested: ReviewReceipt = {
     clientReviewId,
@@ -82,7 +84,7 @@ export async function POST(request: Request) {
       : Number.NEGATIVE_INFINITY;
     const clientReviewTime = Math.min(
       Date.parse(reviewedAt),
-      Date.now() + MAX_CLOCK_SKEW_MS
+      Date.now() + MAX_FUTURE_REVIEW_SKEW_MS
     );
     const effectiveReviewTime = new Date(
       Math.max(clientReviewTime, previousReview + 1)

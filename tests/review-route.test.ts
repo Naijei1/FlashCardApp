@@ -33,7 +33,7 @@ vi.mock("@/lib/api", () => ({
 
 import { POST } from "@/app/api/review/route";
 
-const REVIEWED_AT = "2026-09-03T14:00:00.000Z";
+const REVIEWED_AT = new Date(Date.now() - 60_000).toISOString();
 const CLIENT_REVIEW_ID = "review_id_123456";
 
 function request(overrides: Record<string, unknown> = {}): Request {
@@ -76,6 +76,23 @@ describe("POST /api/review", () => {
 
     expect(response.status).toBe(400);
     expect(dbMocks.getReviewReceipt).not.toHaveBeenCalled();
+  });
+
+  it("rejects a review timestamp older than the offline queue window", async () => {
+    const reviewedAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+    const response = await POST(request({ reviewedAt }));
+    expect(response.status).toBe(400);
+    expect(dbMocks.getCardForReview).not.toHaveBeenCalled();
+    expect(dbMocks.commitReview).not.toHaveBeenCalled();
+  });
+
+  it("accepts a review timestamp from a long offline queue", async () => {
+    const reviewedAt = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
+    dbMocks.getCardForReview.mockResolvedValue({ card: card(), version: 1 });
+    dbMocks.commitReview.mockResolvedValue({ status: "committed" });
+    const response = await POST(request({ reviewedAt }));
+    expect(response.status).toBe(200);
+    expect(dbMocks.commitReview.mock.calls[0][0].reviewedAt).toBe(reviewedAt);
   });
 
   it("turns a committed-but-lost-response retry into a lean success", async () => {
