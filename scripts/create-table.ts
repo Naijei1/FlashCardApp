@@ -6,6 +6,7 @@ import {
   CreateTableCommand,
   DynamoDBClient,
   ListTablesCommand,
+  UpdateTimeToLiveCommand,
 } from "@aws-sdk/client-dynamodb";
 
 loadEnvConfig(process.cwd());
@@ -38,6 +39,22 @@ async function main() {
   } catch (error) {
     if (error instanceof Error && error.name === "ResourceInUseException") {
       console.log(`Table ${tableName} already exists`);
+    } else {
+      throw error;
+    }
+  }
+  try {
+    await client.send(
+      new UpdateTimeToLiveCommand({
+        TableName: tableName,
+        TimeToLiveSpecification: { AttributeName: "ttl", Enabled: true },
+      })
+    );
+    console.log(`Enabled TTL on ${tableName} (attribute ttl)`);
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "";
+    if (name === "ValidationException") {
+      console.log(`TTL already enabled on ${tableName}`);
     } else {
       throw error;
     }

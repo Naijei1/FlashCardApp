@@ -10,6 +10,7 @@ import { responseError } from "@/lib/response-error";
 import { IconPencil } from "./icons";
 import TtsButton from "./TtsButton";
 import { DEFAULT_FRONT_LANG } from "@/lib/languages";
+import { hasChinese } from "@/lib/write";
 
 function dueLabel(card: Card): string {
   const diff = new Date(card.fsrs.due).getTime() - Date.now();
@@ -244,17 +245,18 @@ export default function CardRow({
   }
 
   return (
-    <article className="card flex items-center gap-2 py-2.5 pr-1.5 pl-4">
+    <article className="card flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:py-2.5 sm:pr-1.5 sm:pl-4">
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="truncate text-lg font-medium">{card.front}</span>
+          <span className={`truncate text-lg font-medium ${hasChinese(card.front) ? "hanzi-text" : ""}`}>{card.front}</span>
           <span aria-hidden="true" className="text-muted">
             →
           </span>
-          <span className="truncate text-muted">{card.back}</span>
+          <span className={`truncate text-muted ${hasChinese(card.back) ? "hanzi-text" : ""}`}>{card.back}</span>
         </div>
         {card.notes && <div className="truncate text-sm text-muted">{card.notes}</div>}
       </div>
+      <div className="flex items-center gap-1">
       {viewerRole !== "admin" && <HardWordButton key={`${card.deckId}:${card.id}:${!!card.hard}`} card={card} />}
       <time dateTime={card.fsrs.due} className={`w-14 shrink-0 rounded-full px-2 py-0.5 text-center text-xs tabular-nums ${
         dueLabel(card) === "due" ? "bg-accent/10 font-medium text-accent" : "text-muted"
@@ -277,6 +279,7 @@ export default function CardRow({
         </button>
       )}
       {saveError && !editing && <p role="alert" className="text-xs text-red-500">{saveError}</p>}
+      </div>
     </article>
   );
 }

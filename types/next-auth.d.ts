@@ -5,6 +5,8 @@ declare module "next-auth" {
     appUserId?: string;
     role?: Role;
     emailVerified?: boolean;
+    sessionId?: string;
+    sessionVersion?: number;
   }
 }
 
@@ -13,5 +15,7 @@ declare module "next-auth/jwt" {
     appUserId?: string;
     role?: Role;
     emailVerified?: boolean;
+    sessionId?: string;
+    sessionVersion?: number;
   }
 }

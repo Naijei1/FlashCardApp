@@ -7,10 +7,11 @@ background and is superseded wherever it disagrees, especially on the identity
 provider, deck visibility, migration, weekly releases, and admin stats.
 
 Open pull request #9 (`cursor/multi-user-phases-1-3-9752`) is an earlier Cognito
-draft. Do not merge it with this work. There was no open pull request for auth
-rate limiting, session revocation, fonts, or performance to build on; the
-shared-password login limiter and the current session cookie stay in place
-until `AUTH_MODE=google`.
+draft. Do not merge it with this work. Pull request #13
+(`cursor/durable-auth-and-performance-73bb`) is merged into this branch: DynamoDB
+login limits, server-side session revocation, the 30-day `reviewedAt` bound,
+login contrast, self-hosted Noto fonts, and the study-queue performance work.
+Merge #13 before this pull request so `main` takes that diff first.
 
 ### Auth
 
@@ -33,6 +34,31 @@ a deploy cannot lock the live site out before Google OAuth exists.
   streak, last review time. `GET /api/admin/users/:id/cards` is 403 for
   everyone, including admins. Responses are passed through an allowlist so a
   directory row cannot leak card fields.
+
+Shared-password and Google sessions use the same DynamoDB rows. They do not
+overlap progress (`PROGRESS#`), profiles, or hidden cards:
+
+```txt
+PK = USER#<userId>   SK = AUTH                  sessionVersion
+PK = USER#<userId>   SK = SESSION#<sessionId>   expiresAt, ttl
+```
+
+The password principal stays `shared` until cutover. Google sessions use the
+stable app user id (`user_...`), never the email and never the Google `sub`.
+Logout deletes that `SESSION#` row. Log out everywhere adds 1 to
+`sessionVersion`, so every browser and the installed app for that user fails
+the check even if other session rows remain until TTL. A Google token without
+a session id and version is treated as signed out.
+
+Login failures share one limiter, including a Google sign-in whose email
+Google has not verified:
+
+```txt
+PK = AUTH#LOGIN   SK = ATTEMPT#<sha256 of the last X-Forwarded-For hop>
+```
+
+A block refuses the next password attempt with 429 and refuses the Google
+callback until the window passes. A successful sign-in clears the row.
 
 ### Data
 
@@ -238,6 +264,43 @@ isAdmin
 ```
 
 Never accept `userId` or role from request bodies.
+
+### Session revocation already in the shared-password app
+
+The agreed implementation above keeps this key shape for the shared password
+and for Google. Logout and “log out everywhere” use the same
+user partition this design expects. The current principal is `shared` (the
+pre-Cognito account that migration should attach to Naijei’s regular user, not
+the admin):
+
+```txt
+PK = USER#<userId>
+SK = AUTH
+sessionVersion
+
+PK = USER#<userId>
+SK = SESSION#<sessionId>
+sessionVersion
+expiresAt
+ttl
+```
+
+A JWT carries `sub` (user id), `sid` (session id), and `sv` (session version).
+Logout deletes that session row. Log out everywhere adds 1 to `sessionVersion`,
+which rejects every existing token for that user even if other session rows
+remain until TTL. Cognito migration can keep this shape and substitute the
+Cognito `sub` for `shared`.
+
+Login rate-limit rows are not user progress:
+
+```txt
+PK = AUTH#LOGIN
+SK = ATTEMPT#<sha256>
+failures
+windowStartedAt
+blockedUntil
+ttl
+```
 
 ### Roles
 

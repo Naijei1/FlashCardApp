@@ -3,9 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NextRequest } from "next/server";
-import { signSession, SESSION_COOKIE } from "@/lib/auth";
-import { middleware } from "@/middleware";
+import { readSessionClaims, signSession } from "@/lib/auth";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -57,16 +55,15 @@ describe("production environment", () => {
     }
   });
 
-  it("uses the same encoded secret for server sessions and login redirects", async () => {
+  it("uses the encoded secret for revocable server sessions", async () => {
     vi.stubEnv("SESSION_SECRET", "");
     vi.stubEnv("SESSION_SECRET_HEX", Buffer.from('session"\\$#\u5bc6'.repeat(4)).toString("hex"));
-    const token = await signSession();
-    const request = new NextRequest("https://example.com/login", {
-      headers: { cookie: `${SESSION_COOKIE}=${token}` },
-    });
-    const response = await middleware(request);
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("https://example.com/");
+    const claims = {
+      userId: "shared",
+      sessionId: "session-id-123456",
+      sessionVersion: 1,
+    };
+    expect(await readSessionClaims(await signSession(claims))).toEqual(claims);
   });
 
   it("hex-encodes Google OAuth secrets for a multi-user build", () => {

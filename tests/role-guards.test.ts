@@ -12,7 +12,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/app-session", () => ({ getAppSession: mocks.session }));
-vi.mock("@/lib/dynamo", () => ({ doc: { send: mocks.send }, tableName: () => "test-table" }));
+vi.mock("@/lib/dynamo", () => ({
+  doc: { send: mocks.send },
+  getDocClient: () => ({ send: mocks.send }),
+  tableName: () => "test-table",
+}));
 vi.mock("@/lib/db", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/db")>();
   return {
@@ -63,7 +67,7 @@ function reviewRequest() {
       deckId: "deck-1",
       rating: 3,
       clientReviewId: "review_id_123456",
-      reviewedAt: "2026-09-03T14:00:00.000Z",
+      reviewedAt: "2026-10-23T14:00:00.000Z",
     }),
   });
 }

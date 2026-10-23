@@ -193,7 +193,7 @@ describe("atomic review persistence", () => {
 });
 
 describe("all-card queries", () => {
-  it("queries deck partitions with at most four workers and never scans", async () => {
+  it("queries deck partitions with a bounded number of workers and never scans", async () => {
     let active = 0;
     let maxActive = 0;
     awsMocks.send.mockImplementation(
@@ -223,13 +223,13 @@ describe("all-card queries", () => {
       }
     );
     const db = await loadDb();
-    const decks = Array.from({ length: 6 }, (_, index) => ({ id: `deck-${index}` }));
+    const decks = Array.from({ length: 10 }, (_, index) => ({ id: `deck-${index}` }));
 
     const cards = await db.listAllCards(decks);
 
-    expect(cards).toHaveLength(6);
-    expect(maxActive).toBe(4);
-    expect(awsMocks.send).toHaveBeenCalledTimes(6);
+    expect(cards).toHaveLength(10);
+    expect(maxActive).toBe(8);
+    expect(awsMocks.send).toHaveBeenCalledTimes(10);
     expect(
       awsMocks.send.mock.calls.some((call) => call[0].constructor.name === "ScanCommand")
     ).toBe(false);

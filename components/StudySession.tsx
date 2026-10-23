@@ -100,7 +100,7 @@ export default function StudySession({
       <div key={`${card.id}-${index}`} {...swipe.handlers} onClick={() => { if (!swipe.consumeClick()) setRevealed((r) => !r); }}
         className="swipeable flashcard flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 basis-1/2 items-center justify-center gap-2 overflow-y-auto px-6 py-6 text-center">
-          <span lang={frontLang} className="selectable text-5xl leading-tight font-medium break-words sm:text-6xl">
+          <span lang={frontLang} className={frontLang.startsWith("zh") ? "hanzi selectable break-words" : "selectable text-5xl leading-tight font-medium break-words sm:text-6xl"}>
             {card.front}
           </span>
           <TtsButton text={card.front} lang={frontLang} />
@@ -109,7 +109,7 @@ export default function StudySession({
           {revealed ? (
             <div key={`${card.id}-${index}`} className="reveal-in flex flex-col items-center gap-3">
               <div className="flex items-center gap-2">
-                <span lang={backLang} className="selectable text-3xl break-words text-foreground/90">
+                <span lang={backLang} className={backLang.startsWith("zh") ? "hanzi selectable break-words" : "selectable text-3xl break-words text-foreground/90"}>
                   {card.back}
                 </span>
                 <TtsButton text={card.back} lang={backLang} />

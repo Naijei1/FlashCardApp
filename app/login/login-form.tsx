@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { responseError } from "@/lib/response-error";
 
-export default function PasswordLogin() {
+export default function LoginForm() {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -35,7 +35,7 @@ export default function PasswordLogin() {
     <main className="flex min-h-dvh items-center justify-center px-6 pt-safe pb-safe">
       <form onSubmit={submit} className="w-full max-w-xs space-y-4">
         <div className="text-center">
-          <div className="text-5xl">学</div>
+          <div className="hanzi-text text-5xl leading-tight">学</div>
           <h1 className="mt-3 text-xl font-semibold">Chinese Flashcards</h1>
         </div>
         <label className="block">
@@ -47,10 +47,10 @@ export default function PasswordLogin() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
-            className="input py-3 text-lg"
+            className="input min-h-12 py-3 text-lg"
           />
         </label>
-        {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
+        {error && <p role="alert" className="form-error">{error}</p>}
         <button
           type="submit"
           disabled={busy || !password}

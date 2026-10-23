@@ -56,10 +56,15 @@ Tailwind CSS; data lives in a single DynamoDB table.
   reading recognized for those characters takes precedence over the default.
   Write Chinese excludes these romanization annotations from the expected
   answer. The dictionary runs only on the server.
-- **Auth**: single password (`APP_PASSWORD`) until `AUTH_MODE=google`. Google
+- **Auth**: single password (`APP_PASSWORD`) until `AUTH_MODE=google`. The
+  30-day session is checked against DynamoDB and can be revoked on logout.
+  Login failures are counted in DynamoDB across Amplify instances. Google
   sign-in, per-user progress, and admin weekly decks are described in
   `docs/multi-user-design.md`. Leave `DATA_MODE` unset to keep reading the
   original card items.
+- **Type**: self-hosted Noto Sans (Latin and pinyin tone marks) plus subset
+  Noto Sans SC and Noto Serif SC covering the HSK character set. Other hanzi
+  fall back to PingFang SC, Noto Sans CJK, Microsoft YaHei, or Songti SC.
 - **Keyboard shortcuts** (desktop): Space = reveal, 1–4 = Again/Hard/Good/Easy,
   ←/→ = previous/next in study mode.
 
@@ -160,13 +165,29 @@ version so its policy includes both `dynamodb:UpdateItem` and
 
 In the Amplify app:
 
-- **Hosting → Environment variables** — add:
+- **Hosting → Environment variables** — add (no new variables for rate
+  limiting or session revocation; both use `TABLE_NAME`):
   - `APP_PASSWORD` — pick a strong password of at least 12 characters
   - `SESSION_SECRET` — `openssl rand -hex 32`
   - `TABLE_NAME` — `flashcards`
   - `APP_REGION` — `us-east-1` (env var names starting with `AWS_` are
     reserved by Amplify, hence the custom name)
   - `APP_TIME_ZONE` — your IANA timezone, for example `America/New_York`
+- **DynamoDB TTL** — enable once on the existing table so login-attempt and
+  session rows expire. Card and progress items do not set `ttl` and are left
+  alone:
+
+```bash
+aws dynamodb update-time-to-live \
+  --table-name flashcards \
+  --time-to-live-specification "Enabled=true, AttributeName=ttl" \
+  --region us-east-1
+```
+
+The compute role already allows `GetItem`, `PutItem`, `UpdateItem`, and
+`DeleteItem` on `flashcards`. Those actions cover the new auth rows. Deploying
+this version signs everyone out once: older cookies have no session id, and
+study data is not rewritten.
 - **App settings → IAM roles → Compute role** — attach
   `flashcards-amplify-compute`.
 
@@ -197,6 +218,14 @@ Single DynamoDB table (`PK`/`SK`):
 | Review log | `LOGS` | `<reviewISO>#<cardId>#<clientReviewId>` |
 | Review receipt | `REVIEW_REQUESTS` | `<clientReviewId>` |
 | Review stats | `META` | `STATS` |
+| Account auth | `USER#<userId>` | `AUTH` |
+| Server session | `USER#<userId>` | `SESSION#<sessionId>` |
+| Login attempts | `AUTH#LOGIN` | `ATTEMPT#<sha256>` |
+
+The shared-password principal is `userId = shared`. Session and attempt items
+store a numeric `ttl` (Unix seconds) for DynamoDB's table TTL. They are not
+card or progress records. `npm run db:create` enables that TTL on a new or
+local table; production needs the `update-time-to-live` command above.
 
 Cards store their FSRS state inline (`due`, `stability`, `difficulty`,
 `state`, …) as ISO strings. All-card views query deck partitions with bounded

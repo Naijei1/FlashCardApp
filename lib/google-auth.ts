@@ -1,10 +1,20 @@
+import { headers } from "next/headers";
 import NextAuth from "next-auth";
+import type { JWT } from "next-auth/jwt";
+import type { Session } from "next-auth";
 import Google from "next-auth/providers/google";
 import { resolveGoogleUser } from "./accounts";
+import { beginSession, limitSharedLogin, sessionIsCurrent } from "./auth-store";
+import { clientAddressKey } from "./login-limit";
 import { roleForVerifiedEmail } from "./multi-user-model";
 import type { AppSession } from "./principal";
 
 type GoogleAuth = ReturnType<typeof NextAuth>;
+
+export type GoogleAuthState = AppSession & {
+  sessionId: string;
+  sessionVersion: number;
+};
 
 let cached: GoogleAuth | null = null;
 
@@ -25,6 +35,68 @@ function googleIdentity(profile: unknown, account: { provider?: string; provider
   return { sub, email, emailVerified: record.email_verified === true };
 }
 
+type GoogleAccount = { provider?: string; providerAccountId?: string } | null | undefined;
+
+/**
+ * Same DynamoDB attempt row as the shared password. An unverified Google email
+ * counts as a failure. A block refuses the callback until the window passes.
+ */
+export async function googleSignIn(args: {
+  account?: GoogleAccount;
+  profile?: unknown;
+}): Promise<boolean | string> {
+  if (args.account?.provider !== "google") return false;
+  const identity = googleIdentity(args.profile, args.account);
+  const verified = identity?.emailVerified === true;
+  const headerList = await headers();
+  let result;
+  try {
+    result = await limitSharedLogin(clientAddressKey(headerList), Date.now(), async () => verified);
+  } catch (error) {
+    console.error("Google sign-in rate limit failed", error instanceof Error ? error.name : "unknown");
+    return "/login?error=TryAgain";
+  }
+  if (result.status === "blocked") return "/login?error=TooManyAttempts";
+  if (result.status !== "allowed") return false;
+  return true;
+}
+
+/** Issues a revocable SESSION# row for the app user id, not the Google subject. */
+export async function googleJwt(args: {
+  token: JWT;
+  account?: GoogleAccount;
+  profile?: unknown;
+}): Promise<JWT> {
+  const token = args.token;
+  if (args.account && args.profile) {
+    const identity = googleIdentity(args.profile, args.account);
+    if (identity?.emailVerified) {
+      const user = await resolveGoogleUser(identity);
+      const issued = await beginSession(user.userId);
+      token.appUserId = user.userId;
+      token.email = user.email;
+      token.emailVerified = true;
+      token.sessionId = issued.sessionId;
+      token.sessionVersion = issued.sessionVersion;
+    }
+  }
+  const email = typeof token.email === "string" ? token.email : "";
+  token.role = roleForVerifiedEmail(email, token.emailVerified === true);
+  return token;
+}
+
+export async function googleSession(args: { session: Session; token: JWT }): Promise<Session> {
+  const next = args.session as Session & Partial<GoogleAuthState>;
+  const token = args.token;
+  next.appUserId = typeof token.appUserId === "string" ? token.appUserId : undefined;
+  next.emailVerified = token.emailVerified === true;
+  next.role = token.role === "admin" ? "admin" : "user";
+  next.sessionId = typeof token.sessionId === "string" ? token.sessionId : undefined;
+  next.sessionVersion = typeof token.sessionVersion === "number" ? token.sessionVersion : undefined;
+  if (next.user && typeof token.email === "string") next.user.email = token.email;
+  return next;
+}
+
 export function googleAuth(): GoogleAuth {
   if (cached) return cached;
   hydrate("AUTH_SECRET");
@@ -40,47 +112,18 @@ export function googleAuth(): GoogleAuth {
       }),
     ],
     callbacks: {
-      async signIn({ account, profile }) {
-        if (account?.provider !== "google") return false;
-        const identity = googleIdentity(profile, account);
-        // Open signup, but only for an address Google has verified.
-        return identity?.emailVerified === true;
-      },
-      async jwt({ token, account, profile }) {
-        if (account && profile) {
-          const identity = googleIdentity(profile, account);
-          if (!identity?.emailVerified) return token;
-          const user = await resolveGoogleUser(identity);
-          token.appUserId = user.userId;
-          token.email = user.email;
-          token.emailVerified = true;
-        }
-        const email = typeof token.email === "string" ? token.email : "";
-        token.role = roleForVerifiedEmail(email, token.emailVerified === true);
-        return token;
-      },
-      async session({ session, token }) {
-        const next = session as typeof session & {
-          appUserId?: string;
-          role?: "admin" | "user";
-          emailVerified?: boolean;
-        };
-        next.appUserId = typeof token.appUserId === "string" ? token.appUserId : undefined;
-        next.emailVerified = token.emailVerified === true;
-        next.role = token.role === "admin" ? "admin" : "user";
-        if (next.user && typeof token.email === "string") next.user.email = token.email;
-        return next;
-      },
+      signIn: googleSignIn,
+      jwt: googleJwt,
+      session: googleSession,
     },
   });
   return cached;
 }
 
-export async function readGoogleSession(): Promise<AppSession | null> {
-  const session = await googleAuth().auth();
-  if (!session) return null;
-  const extra = session as typeof session & { appUserId?: string; emailVerified?: boolean };
+function stateFromSession(session: Session): GoogleAuthState | null {
+  const extra = session as Session & Partial<GoogleAuthState>;
   if (!extra.appUserId || extra.emailVerified !== true) return null;
+  if (typeof extra.sessionId !== "string" || typeof extra.sessionVersion !== "number") return null;
   const email = session.user?.email ?? "";
   return {
     userId: extra.appUserId,
@@ -88,7 +131,24 @@ export async function readGoogleSession(): Promise<AppSession | null> {
     role: roleForVerifiedEmail(email, true),
     emailVerified: true,
     authMode: "google",
+    sessionId: extra.sessionId,
+    sessionVersion: extra.sessionVersion,
   };
+}
+
+/** Auth.js claims only. Logout uses this so a revoked browser can still be signed out. */
+export async function readGoogleAuthState(): Promise<GoogleAuthState | null> {
+  const session = await googleAuth().auth();
+  if (!session) return null;
+  return stateFromSession(session);
+}
+
+export async function readGoogleSession(): Promise<AppSession | null> {
+  const state = await readGoogleAuthState();
+  if (!state) return null;
+  const current = await sessionIsCurrent(state.userId, state.sessionId, state.sessionVersion);
+  if (!current) return null;
+  return state;
 }
 
 export async function signInWithGoogleProvider(): Promise<void> {

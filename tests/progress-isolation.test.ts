@@ -70,7 +70,11 @@ it("does not apply learner progress when an admin previews content", () => {
 });
 
 const mocks = vi.hoisted(() => ({ send: vi.fn(), session: vi.fn() }));
-vi.mock("@/lib/dynamo", () => ({ doc: { send: mocks.send }, tableName: () => "test-table" }));
+vi.mock("@/lib/dynamo", () => ({
+  doc: { send: mocks.send },
+  getDocClient: () => ({ send: mocks.send }),
+  tableName: () => "test-table",
+}));
 vi.mock("@/lib/app-session", () => ({ getAppSession: mocks.session }));
 
 beforeEach(() => {
