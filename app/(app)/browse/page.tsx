@@ -1,6 +1,7 @@
 import CardList from "@/components/CardList";
 import CardPagination from "@/components/CardPagination";
 import SearchForm from "@/components/SearchForm";
+import { getAppSession } from "@/lib/app-session";
 import { listAllCards, listDecks } from "@/lib/db";
 import { plural } from "@/lib/plural";
 
@@ -17,6 +18,7 @@ export default async function BrowsePage({
   searchParams: Promise<{ q?: string; page?: string }>;
 }) {
   const { q = "", page: pageParam } = await searchParams;
+  const viewerRole = (await getAppSession())?.role === "admin" ? "admin" : "user";
   const decks = await listDecks();
   const cards = await listAllCards(decks);
 
@@ -49,7 +51,7 @@ export default async function BrowsePage({
           Card results
         </h2>
         {shown.length === 0 && <p className="card p-4 text-sm text-muted">No cards found.</p>}
-        <CardList cards={shown} decks={decks} showDeckNames />
+        <CardList cards={shown} decks={decks} showDeckNames viewerRole={viewerRole} />
       </section>
       <CardPagination
         basePath="/browse"

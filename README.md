@@ -56,10 +56,12 @@ Tailwind CSS; data lives in a single DynamoDB table.
   reading recognized for those characters takes precedence over the default.
   Write Chinese excludes these romanization annotations from the expected
   answer. The dictionary runs only on the server.
-- **Auth**: single password (`APP_PASSWORD`) checked server-side; 30-day
-  HttpOnly session cookie signed with `SESSION_SECRET`. Login failures are
-  counted in DynamoDB (shared across Amplify instances) and sessions can be
-  revoked on logout.
+- **Auth**: single password (`APP_PASSWORD`) until `AUTH_MODE=google`. The
+  30-day session is checked against DynamoDB and can be revoked on logout.
+  Login failures are counted in DynamoDB across Amplify instances. Google
+  sign-in, per-user progress, and admin weekly decks are described in
+  `docs/multi-user-design.md`. Leave `DATA_MODE` unset to keep reading the
+  original card items.
 - **Type**: self-hosted Noto Sans (Latin and pinyin tone marks) plus subset
   Noto Sans SC and Noto Serif SC covering the HSK character set. Other hanzi
   fall back to PingFang SC, Noto Sans CJK, Microsoft YaHei, or Songti SC.

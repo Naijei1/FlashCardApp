@@ -20,14 +20,29 @@ const NAV = [
   { href: "/settings", label: "Settings", Icon: IconSettings },
 ];
 
+const ADMIN_NAV = [
+  { href: "/", label: "Home", Icon: IconHome },
+  { href: "/admin/upload", label: "Upload", Icon: IconImport },
+  { href: "/admin/users", label: "Learners", Icon: IconStats },
+  { href: "/browse", label: "Browse", Icon: IconSearch },
+  { href: "/settings", label: "Settings", Icon: IconSettings },
+];
+
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" || pathname.startsWith("/decks/") : pathname.startsWith(href);
 }
 
 function noop() {}
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
+export default function AppShell({
+  children,
+  role = "user",
+}: {
+  children: React.ReactNode;
+  role?: "admin" | "user";
+}) {
   const pathname = usePathname();
+  const nav = role === "admin" ? ADMIN_NAV : NAV;
   // Study screens use their own full-screen layout with no nav chrome.
   const immersive =
     pathname.startsWith("/study/") ||
@@ -72,7 +87,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             Flashcards
           </Link>
           <nav aria-label="Primary navigation" className="space-y-1.5">
-            {NAV.map((item) => {
+            {nav.map((item) => {
               const active = isActive(pathname, item.href);
               return (
                 <Link
@@ -116,7 +131,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         className="nav-dock-wrap pointer-events-none fixed inset-x-0 bottom-0 z-20 px-safe pb-[max(0.75rem,env(safe-area-inset-bottom))] [--gutter:0.75rem] md:hidden"
       >
         <div className="nav-dock pointer-events-auto mx-auto flex max-w-md gap-1 rounded-[1.75rem] p-1.5">
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const active = isActive(pathname, item.href);
             return (
               <Link

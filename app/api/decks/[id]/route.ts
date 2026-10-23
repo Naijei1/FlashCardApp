@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { badRequest, notFound, requireAuth } from "@/lib/api";
+import { accessErrorResponse, badRequest, notFound, requireAuth } from "@/lib/api";
 import { deleteDeck, getDeck, putDeck } from "@/lib/db";
 import { isSupportedLanguage } from "@/lib/languages";
 import { isRecord, MAX_DECK_NAME_LENGTH } from "@/lib/validation";
@@ -45,6 +45,8 @@ export async function PATCH(request: Request, { params }: Context) {
   try {
     await putDeck(deck);
   } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
     if (error instanceof Error && error.name === "ConditionalCheckFailedException") {
       return NextResponse.json(
         { error: "This deck changed or is being deleted. Refresh and try again." },
@@ -60,6 +62,12 @@ export async function DELETE(_request: Request, { params }: Context) {
   const denied = await requireAuth();
   if (denied) return denied;
   const { id } = await params;
-  await deleteDeck(id);
+  try {
+    await deleteDeck(id);
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    throw error;
+  }
   return NextResponse.json({ ok: true });
 }

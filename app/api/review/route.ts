@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { badRequest, notFound, requireAuth } from "@/lib/api";
+import { badRequest, notFound, requireRegularUser } from "@/lib/api";
 import {
   commitReview,
   getDeck,
@@ -22,7 +22,7 @@ function conflict(message: string): NextResponse {
 }
 
 export async function POST(request: Request) {
-  const denied = await requireAuth();
+  const denied = await requireRegularUser();
   if (denied) return denied;
   const body = await request.json().catch(() => null);
   const cardId = typeof body?.cardId === "string" ? body.cardId : "";

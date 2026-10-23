@@ -8,18 +8,7 @@ import {
   signSession,
 } from "@/lib/auth";
 import { SHARED_USER_ID } from "@/lib/constants";
-
-function clientKey(request: Request): string {
-  // CloudFront appends the viewer address to any incoming X-Forwarded-For
-  // value, so the last entry cannot be replaced by a caller-supplied prefix.
-  const forwarded = request.headers
-    .get("x-forwarded-for")
-    ?.split(",")
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .at(-1);
-  return (forwarded || request.headers.get("x-real-ip") || "unknown").slice(0, 128);
-}
+import { clientAddressKey } from "@/lib/login-limit";
 
 function blockedResponse(retryAfter: number) {
   return NextResponse.json(
@@ -30,7 +19,7 @@ function blockedResponse(retryAfter: number) {
 
 export async function POST(request: Request) {
   const now = Date.now();
-  const key = clientKey(request);
+  const key = clientAddressKey(request.headers);
   let result;
   try {
     result = await limitSharedLogin(key, now, async () => {

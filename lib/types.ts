@@ -1,3 +1,6 @@
+export type CardSource = "global" | "private";
+export type DeckReleaseStatus = "draft" | "scheduled" | "published";
+
 export type Deck = {
   id: string;
   name: string;
@@ -8,6 +11,13 @@ export type Deck = {
   chineseSide?: "front" | "back";
   createdAt: string;
   updatedAt: string;
+  source?: CardSource;
+  /** Absent on legacy and migrated decks, which are already released. */
+  status?: DeckReleaseStatus;
+  /** Display label such as week 3. Visibility uses releaseAt, not a scheduler. */
+  releaseWeek?: number;
+  releaseAt?: string;
+  archivedAt?: string;
 };
 
 /** FSRS card state, JSON-safe (dates as ISO strings). */
@@ -39,6 +49,8 @@ export type Card = {
   hard?: boolean;
   modes?: Partial<Record<"write" | "pinyin", { fsrs: StoredFsrs; practice?: Card["practice"] }>>;
   practice?: { failures: number; successes: number; correctStreak: number; firstStudiedAt?: string };
+  source?: CardSource;
+  contentVersion?: number;
 };
 
 export type DeckCounts = {

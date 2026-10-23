@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { badRequest, notFound, requireAuth } from "@/lib/api";
+import { accessErrorResponse, badRequest, notFound, requireAuth } from "@/lib/api";
 import { buildCards } from "@/lib/cards";
 import { batchPutCards, getDeck } from "@/lib/db";
 import type { Card } from "@/lib/types";
@@ -85,6 +85,8 @@ export async function POST(request: Request) {
   try {
     await batchPutCards(cards, { skipExisting: true });
   } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
     if (error instanceof Error && error.name === "DeckUnavailableError") {
       return NextResponse.json(
         { error: "This deck is being deleted. Refresh and try again." },

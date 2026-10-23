@@ -27,6 +27,20 @@ export type LoginLimitResult =
   | { status: "rejected" }
   | { status: "blocked"; retryAfterSeconds: number };
 
+/**
+ * CloudFront appends the viewer address to any incoming X-Forwarded-For value,
+ * so the last entry cannot be replaced by a caller-supplied prefix.
+ */
+export function clientAddressKey(headerList: { get(name: string): string | null }): string {
+  const forwarded = headerList
+    .get("x-forwarded-for")
+    ?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .at(-1);
+  return (forwarded || headerList.get("x-real-ip") || "unknown").slice(0, 128);
+}
+
 const WRITE_ATTEMPTS = 6;
 
 function blockSeconds(failures: number): number {

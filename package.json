@@ -16,6 +16,7 @@
     "db:seed": "tsx scripts/seed-local.ts",
     "typecheck": "tsc --noEmit",
     "db:create": "tsx scripts/create-table.ts",
+    "migrate:multi-user": "tsx scripts/migrate-multi-user.ts",
     "env:production": "node scripts/write-production-env.mjs"
   },
   "dependencies": {
@@ -24,6 +25,7 @@
     "@next/env": "15.5.24",
     "jose": "^6.2.10",
     "next": "15.5.24",
+    "next-auth": "^5.0.0-beta.32",
     "pinyin-pro": "3.29.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -31,12 +33,12 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.56.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "@playwright/test": "^1.56.1",
     "eslint-config-next": "15.5.24",
     "jsdom": "^26.1.0",
     "tailwindcss": "^4",

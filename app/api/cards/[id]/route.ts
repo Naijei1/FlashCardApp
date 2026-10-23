@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { badRequest, notFound, requireAuth } from "@/lib/api";
+import { accessErrorResponse, badRequest, notFound, requireAuth } from "@/lib/api";
+import { getAppSession } from "@/lib/app-session";
+import { usesMultiUserData } from "@/lib/flags";
 import { deleteCard, getCard, getDeck, moveCard, putCard } from "@/lib/db";
 import {
   isRecord,
@@ -35,6 +37,7 @@ export async function PATCH(request: Request, { params }: Context) {
   if (!deckId) return badRequest("deckId is required");
   const card = await getCard(deckId, id);
   if (!card) return notFound("card not found");
+  const previous = { front: card.front, back: card.back, notes: card.notes };
 
   if (typeof body.front === "string") {
     const front = body.front.trim();
@@ -59,12 +62,39 @@ export async function PATCH(request: Request, { params }: Context) {
     typeof body.moveToDeckId === "string" && body.moveToDeckId !== deckId
       ? body.moveToDeckId
       : null;
+  if (usesMultiUserData() && card.source === "global") {
+    const session = await getAppSession();
+    if (session?.role !== "admin") {
+      return NextResponse.json({ error: "admin only" }, { status: 403 });
+    }
+    const editKind = body.editKind;
+    if (editKind !== "typo" && editKind !== "meaning") {
+      return badRequest("Choose whether this is a typo fix or a meaning change");
+    }
+    if (editKind === "meaning") {
+      if (moveToDeckId) return badRequest("A meaning change stays in this deck and creates a new card");
+      try {
+        const { replaceGlobalCardMeaning } = await import("@/lib/multi-user-store");
+        const created = await replaceGlobalCardMeaning(
+          { ...card, front: previous.front, back: previous.back, notes: previous.notes },
+          { front: card.front, back: card.back, notes: card.notes }
+        );
+        return NextResponse.json(created);
+      } catch (error) {
+        const access = accessErrorResponse(error);
+        if (access) return access;
+        throw error;
+      }
+    }
+  }
   if (moveToDeckId) {
     if (!(await getDeck(moveToDeckId))) return notFound("target deck not found");
     try {
       const moved = await moveCard(card, moveToDeckId);
       return NextResponse.json(moved);
     } catch (error) {
+      const access = accessErrorResponse(error);
+      if (access) return access;
       if (isWriteConflict(error)) return writeConflict();
       throw error;
     }
@@ -72,6 +102,8 @@ export async function PATCH(request: Request, { params }: Context) {
   try {
     await putCard(card);
   } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
     if (isWriteConflict(error)) return writeConflict();
     throw error;
   }
@@ -84,6 +116,12 @@ export async function DELETE(request: Request, { params }: Context) {
   const { id } = await params;
   const deckId = new URL(request.url).searchParams.get("deckId");
   if (!deckId) return badRequest("deckId query param is required");
-  await deleteCard(deckId, id);
+  try {
+    await deleteCard(deckId, id);
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    throw error;
+  }
   return NextResponse.json({ ok: true });
 }

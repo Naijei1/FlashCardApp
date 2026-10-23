@@ -5,8 +5,12 @@ import { reviewQueueUrl } from "@/components/studyQueueCache";
 import AddCardForm from "@/components/AddCardForm";
 import CardList from "@/components/CardList";
 import CardPagination from "@/components/CardPagination";
+import DeckReleaseControls from "@/components/DeckReleaseControls";
 import DeckSettings from "@/components/DeckSettings";
+import HiddenCards from "@/components/HiddenCards";
 import ModeLink from "@/components/ModeLink";
+import { getAppSession } from "@/lib/app-session";
+import { usesMultiUserData } from "@/lib/flags";
 import { listDecks } from "@/lib/db";
 import { totalCounts } from "@/lib/due";
 import { appTimeZone } from "@/lib/forecast";
@@ -38,6 +42,7 @@ export default async function DeckPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const [{ deckId }, { page: pageParam }] = await Promise.all([params, searchParams]);
+  const viewerRole = (await getAppSession())?.role === "admin" ? "admin" : "user";
   const preloadedDecks = isVirtualDeck(deckId) ? await listDecks() : undefined;
   const [set, decks] = await Promise.all([
     loadStudySet(deckId, preloadedDecks),
@@ -81,10 +86,10 @@ export default async function DeckPage({
             {deckId === ALL_DECK && ` · ${plural(decks.length, "deck")}`}
           </p>
         </div>
-        {!virtual && <DeckSettings deck={deck} />}
+        {!virtual && (viewerRole === "admin" || deck.source !== "global") && <DeckSettings deck={deck} />}
       </header>
 
-      <section aria-labelledby="modes-heading" className="space-y-3">
+      {viewerRole !== "admin" && <section aria-labelledby="modes-heading" className="space-y-3">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
           <h2 id="modes-heading" className="eyebrow">Study modes</h2>
           <span className="text-xs text-muted">Each mode keeps its own schedule</span>
@@ -120,15 +125,23 @@ export default async function DeckPage({
             All caught up in Spaced Repetition. Next scheduled review: {nextReview}.
           </p>
         )}
-      </section>
+      </section>}
+
+      {viewerRole === "admin" && !virtual && <DeckReleaseControls deck={deck} />}
 
       {!virtual && (
         <>
           <div className="flex gap-2">
-            <Link href={`/import?deck=${deck.id}`} className="btn btn-secondary">Import CSV</Link>
+            {(viewerRole === "admin" ? deck.source !== "private" : deck.source !== "global") && (
+              <Link href={viewerRole === "admin" ? "/admin/upload" : `/import?deck=${deck.id}`} className="btn btn-secondary">
+                {viewerRole === "admin" ? "Upload CSV" : "Import CSV"}
+              </Link>
+            )}
             <a href={`/api/decks/${deck.id}/export`} className="btn btn-secondary">Export CSV</a>
           </div>
-          <AddCardForm deckId={deck.id} />
+          {(viewerRole === "admin" ? deck.source !== "private" : deck.source !== "global") && (
+            <AddCardForm deckId={deck.id} />
+          )}
         </>
       )}
 
@@ -148,7 +161,10 @@ export default async function DeckPage({
               : virtual ? "No cards yet — create a deck and add some words." : "No cards yet — add one above or import a CSV."}
           </p>
         )}
-        <CardList cards={shown} decks={decks} showDeckNames={virtual} />
+        <CardList cards={shown} decks={decks} showDeckNames={virtual} viewerRole={viewerRole} />
+        {usesMultiUserData() && viewerRole === "user" && !virtual && deck.source === "global" && (
+          <HiddenCards deckId={deck.id} />
+        )}
         <CardPagination basePath={`/decks/${deck.id}`} currentPage={page} totalPages={totalPages} />
       </section>
     </div>

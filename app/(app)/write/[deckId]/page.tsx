@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import WriteSession from "@/components/WriteSession";
+import { redirectAdminFromStudy } from "@/lib/guards";
 import { getStudyDeck } from "@/lib/study-sets";
 import { isChineseLang } from "@/lib/write";
 
@@ -8,6 +9,7 @@ export default async function WritePage({
 }: {
   params: Promise<{ deckId: string }>;
 }) {
+  await redirectAdminFromStudy();
   const { deckId } = await params;
   const deck = await getStudyDeck(deckId);
   if (!deck) notFound();

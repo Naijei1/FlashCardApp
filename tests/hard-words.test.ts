@@ -3,7 +3,7 @@ import { emptyCardState } from "@/lib/fsrs";
 const db = vi.hoisted(() => ({ getCard: vi.fn(), listCards: vi.fn(), listAllCards: vi.fn(), listDecks: vi.fn(async () => [{ id: "lesson", name: "Lesson" }]), getDeck: vi.fn(), setCardHard: vi.fn() }));
 const auth = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/db", () => db);
-vi.mock("@/lib/api", () => ({ requireAuth: auth, badRequest: (error: string) => Response.json({ error }, { status: 400 }), notFound: (error: string) => Response.json({ error }, { status: 404 }) }));
+vi.mock("@/lib/api", () => ({ requireAuth: auth, requireRegularUser: auth, badRequest: (error: string) => Response.json({ error }, { status: 400 }), notFound: (error: string) => Response.json({ error }, { status: 404 }) }));
 import { hardWords, loadStudySet, studyFlipCards } from "@/lib/study-sets";
 import { PATCH } from "@/app/api/cards/[id]/hard/route";
 const now = new Date();

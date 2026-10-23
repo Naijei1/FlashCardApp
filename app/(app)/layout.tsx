@@ -7,10 +7,10 @@ export const dynamic = "force-dynamic";
 export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  await requireSession();
+  const session = await requireSession();
   return (
     <div className={`${notoSansSc.variable} ${notoSerifSc.variable} app-zh min-h-dvh`}>
-      <AppShell>{children}</AppShell>
+      <AppShell role={session.role === "admin" ? "admin" : "user"}>{children}</AppShell>
     </div>
   );
 }

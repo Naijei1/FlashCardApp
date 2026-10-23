@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
-import { getSession, type SessionPrincipal } from "./auth";
+import { getAppSession } from "./app-session";
+import type { AppSession } from "./principal";
 
-/** For server component pages: bounce to /login when the session is missing or revoked. */
-export async function requireSession(): Promise<SessionPrincipal> {
-  const session = await getSession();
+/** Bounce to /login when the session is missing or revoked. */
+export async function requireSession(): Promise<AppSession> {
+  const session = await getAppSession();
   if (!session) redirect("/login");
   return session;
 }

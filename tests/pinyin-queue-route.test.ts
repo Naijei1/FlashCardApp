@@ -5,6 +5,7 @@ import { GET } from "@/app/api/review/queue/route";
 const mocks = vi.hoisted(() => ({ requireAuth: vi.fn(), getDeck: vi.fn(), listCards: vi.fn(), listAllCards: vi.fn(), listDecks: vi.fn() }));
 vi.mock("@/lib/api", () => ({
   requireAuth: mocks.requireAuth,
+  requireRegularUser: mocks.requireAuth,
   badRequest: (error: string) => Response.json({ error }, { status: 400 }),
   notFound: (error: string) => Response.json({ error }, { status: 404 }),
 }));

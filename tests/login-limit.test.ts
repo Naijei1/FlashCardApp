@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   LOGIN_FREE_ATTEMPTS,
   LOGIN_WINDOW_MS,
+  clientAddressKey,
   limitLogin,
   type AttemptExpectation,
   type AttemptState,
@@ -90,5 +91,10 @@ describe("durable login limiter", () => {
     const raced = await limitLogin(store, "client", 101, () => false);
     expect(raced.status).toBe("rejected");
     expect(store.state?.failures).toBe(2);
+  });
+
+  it("uses the last forwarded address, which CloudFront appends", () => {
+    expect(clientAddressKey(new Headers({ "x-forwarded-for": "1.1.1.1, 203.0.113.8" }))).toBe("203.0.113.8");
+    expect(clientAddressKey(new Headers({ "x-real-ip": "198.51.100.4" }))).toBe("198.51.100.4");
   });
 });

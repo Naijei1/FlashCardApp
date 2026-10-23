@@ -8,9 +8,14 @@ import {
   BatchWriteCommand,
   TransactWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { usesMultiUserData } from "./flags";
 import type { Card, Deck, ReviewMode } from "./types";
 import type { ReviewLog } from "ts-fsrs";
 import { getDocClient, observeDbLatency, tableName } from "./dynamo";
+
+async function multiUserStore() {
+  return import("./multi-user-store");
+}
 
 const db = getDocClient();
 
@@ -86,6 +91,7 @@ function reviewVersionOf(card: Card): number | null | undefined {
 }
 
 export async function listDecks(): Promise<Deck[]> {
+  if (usesMultiUserData()) return (await multiUserStore()).listDecksForCurrentUser();
   const items: Item[] = [];
   let startKey: Item | undefined;
   do {
@@ -110,6 +116,7 @@ export async function listDecks(): Promise<Deck[]> {
 }
 
 export async function getDeck(id: string): Promise<Deck | null> {
+  if (usesMultiUserData()) return (await multiUserStore()).getDeckForCurrentUser(id);
   const res = await db.send(
     new GetCommand({ TableName: tableName(), Key: deckKey(id), ConsistentRead: true })
   );
@@ -120,6 +127,7 @@ export async function putDeck(
   deck: Deck,
   options: { create?: boolean } = {}
 ): Promise<void> {
+  if (usesMultiUserData()) return (await multiUserStore()).putDeckForCurrentUser(deck, options);
   const { id, ...rest } = deck;
   await db.send(
     new PutCommand({
@@ -139,6 +147,7 @@ export async function listCards(
   deckId: string,
   options: { consistent?: boolean } = {}
 ): Promise<Card[]> {
+  if (usesMultiUserData()) return (await multiUserStore()).listCardsForCurrentUser(deckId, options);
   const items: Item[] = [];
   let startKey: Item | undefined;
   do {
@@ -168,6 +177,7 @@ export async function listAllCards(
   decks?: readonly Pick<Deck, "id">[],
   options: { consistent?: boolean } = {}
 ): Promise<Card[]> {
+  if (usesMultiUserData()) return (await multiUserStore()).listAllCardsForCurrentUser(decks, options);
   const sourceDecks = decks ?? (await listDecks());
   const cardsByDeck: Card[][] = new Array(sourceDecks.length);
   let nextIndex = 0;
@@ -187,6 +197,7 @@ export async function listAllCards(
 }
 
 export async function getCard(deckId: string, id: string): Promise<Card | null> {
+  if (usesMultiUserData()) return (await multiUserStore()).getCardForCurrentUser(deckId, id);
   const res = await observeDbLatency("card.get", () =>
     db.send(
       new GetCommand({
@@ -200,6 +211,7 @@ export async function getCard(deckId: string, id: string): Promise<Card | null> 
 }
 
 export async function putCard(card: Card): Promise<void> {
+  if (usesMultiUserData()) return (await multiUserStore()).putCardForCurrentUser(card);
   const { id, deckId } = card;
   const version = reviewVersionOf(card);
   const expressionAttributeNames: Record<string, string> = {
@@ -333,6 +345,7 @@ export async function batchPutCards(
   cards: Card[],
   options: { skipExisting?: boolean } = {}
 ): Promise<void> {
+  if (usesMultiUserData()) return (await multiUserStore()).batchPutCardsForCurrentUser(cards, options);
   const groups = new Map<string, Card[]>();
   for (const card of cards) {
     const group = groups.get(card.deckId) ?? [];
@@ -359,6 +372,7 @@ export async function batchPutCards(
 }
 
 export async function deleteCard(deckId: string, id: string): Promise<void> {
+  if (usesMultiUserData()) return (await multiUserStore()).deleteCardForCurrentUser(deckId, id);
   await db.send(
     new DeleteCommand({ TableName: tableName(), Key: cardKey(deckId, id) })
   );
@@ -366,6 +380,7 @@ export async function deleteCard(deckId: string, id: string): Promise<void> {
 
 /** Move = PK change, so transactionally delete + put keeping id and FSRS state. */
 export async function moveCard(card: Card, toDeckId: string): Promise<Card> {
+  if (usesMultiUserData()) return (await multiUserStore()).moveCardForCurrentUser(card, toDeckId);
   const moved: Card = { ...card, deckId: toDeckId, updatedAt: new Date().toISOString() };
   const { id, deckId, ...rest } = moved;
   const version = reviewVersionOf(card);
@@ -416,6 +431,7 @@ export async function moveCard(card: Card, toDeckId: string): Promise<Card> {
  * the deck record. Writers check the same lock in their transactions.
  */
 export async function deleteDeck(id: string): Promise<void> {
+  if (usesMultiUserData()) return (await multiUserStore()).deleteDeckForCurrentUser(id);
   try {
     await db.send(
       new UpdateCommand({
@@ -579,6 +595,7 @@ export function reviewReceiptsMatch(a: ReviewReceipt, b: ReviewReceipt): boolean
 export async function getReviewReceipt(
   clientReviewId: string
 ): Promise<ReviewReceipt | null> {
+  if (usesMultiUserData()) return (await multiUserStore()).getReviewReceiptForCurrentUser(clientReviewId);
   const res = await observeDbLatency("review.receipt.get", () =>
     db.send(
       new GetCommand({
@@ -595,6 +612,7 @@ export async function getCardForReview(
   deckId: string,
   cardId: string
 ): Promise<{ card: Card; version: number | null } | null> {
+  if (usesMultiUserData()) return (await multiUserStore()).getCardForReviewForCurrentUser(deckId, cardId);
   const card = await getCard(deckId, cardId);
   if (!card) return null;
   return { card, version: reviewVersionOf(card) ?? null };
@@ -608,6 +626,7 @@ export async function getCardForReview(
 export async function commitReview(
   review: PendingReviewWrite
 ): Promise<ReviewWriteResult> {
+  if (usesMultiUserData()) return (await multiUserStore()).commitReviewForCurrentUser(review);
   if (review.card.id !== review.cardId || review.card.deckId !== review.deckId) {
     throw new Error("Review card identity does not match the request");
   }
@@ -725,6 +744,7 @@ export async function commitReview(
 }
 
 export async function countReviewLogs(): Promise<number> {
+  if (usesMultiUserData()) return (await multiUserStore()).countReviewLogsForCurrentUser();
   await ensureReviewStats();
   const res = await observeDbLatency("review.count.get", () =>
     db.send(
@@ -740,6 +760,7 @@ export async function countReviewLogs(): Promise<number> {
 
 /** A marker update participates in the review lock, preserving concurrent reviews. */
 export async function setCardHard(deckId: string, id: string, hard: boolean) {
+  if (usesMultiUserData()) return (await multiUserStore()).setCardHardForCurrentUser(deckId, id, hard);
   await db.send(new UpdateCommand({
     TableName: tableName(), Key: cardKey(deckId, id),
     UpdateExpression: "SET #hard = :hard ADD #version :one",

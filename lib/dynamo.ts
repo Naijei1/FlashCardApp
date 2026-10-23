@@ -47,3 +47,15 @@ export function tableName(): string {
   if (!name) throw new Error("TABLE_NAME is not set");
   return name;
 }
+
+/**
+ * Card and account stores call `doc.send`. The proxy reads the shared client
+ * at call time so tests can replace `globalThis.__ddb` first.
+ */
+export const doc: DynamoDBDocumentClient = new Proxy({} as DynamoDBDocumentClient, {
+  get(_target, prop) {
+    const client = getDocClient() as unknown as Record<PropertyKey, unknown>;
+    const value = client[prop];
+    return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(client) : value;
+  },
+});

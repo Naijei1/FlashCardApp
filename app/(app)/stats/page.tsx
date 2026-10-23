@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { countReviewLogs, listAllCards, listDecks } from "@/lib/db";
+import { getAppSession } from "@/lib/app-session";
 import { countsByDeck, totalCounts } from "@/lib/due";
 import { formatInterval } from "@/lib/interval-label";
 import { appTimeZone, buildReviewForecast } from "@/lib/forecast";
@@ -13,6 +15,7 @@ const STATE_LABELS: Record<number, string> = {
 };
 
 export default async function StatsPage() {
+  if ((await getAppSession())?.role === "admin") redirect("/admin/users");
   const [decks, reviewCount] = await Promise.all([listDecks(), countReviewLogs()]);
   const cards = uniqueWords(await listAllCards(decks));
   const now = new Date();

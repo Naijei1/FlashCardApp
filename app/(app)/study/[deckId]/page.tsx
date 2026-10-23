@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import StudySession from "@/components/StudySession";
+import { redirectAdminFromStudy } from "@/lib/guards";
 import { listDecks } from "@/lib/db";
 import { isVirtualDeck, loadStudySet, studyFlipCards } from "@/lib/study-sets";
 
@@ -8,6 +9,7 @@ export default async function StudyPage({
 }: {
   params: Promise<{ deckId: string }>;
 }) {
+  await redirectAdminFromStudy();
   const { deckId } = await params;
   const preloadedDecks = isVirtualDeck(deckId) ? await listDecks() : undefined;
   const [set, decks] = await Promise.all([
