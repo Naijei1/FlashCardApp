@@ -22,10 +22,12 @@ export default function CardRow({
   card,
   decks,
   frontLang,
+  viewerRole = "user",
 }: {
   card: Card;
   decks: Deck[];
   frontLang?: string;
+  viewerRole?: "admin" | "user";
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -35,6 +37,9 @@ export default function CardRow({
   const [moveTo, setMoveTo] = useState(card.deckId);
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [editKind, setEditKind] = useState<"" | "typo" | "meaning">("");
+  const globalAdmin = card.source === "global" && viewerRole === "admin";
+  const globalLearner = card.source === "global" && viewerRole === "user";
   const committed = useRef({
     front: card.front,
     back: card.back,
@@ -58,6 +63,7 @@ export default function CardRow({
     setBack(committed.current.back);
     setNotes(committed.current.notes);
     setMoveTo(committed.current.deckId);
+    setEditKind("");
     setSaveError("");
   }
 
@@ -72,7 +78,7 @@ export default function CardRow({
   }
 
   async function save() {
-    if (busy || !front.trim() || !back.trim()) return;
+    if (busy || !front.trim() || !back.trim() || (globalAdmin && !editKind)) return;
     setBusy(true);
     setSaveError("");
     const res = await fetch(`/api/cards/${encodeURIComponent(card.id)}`, {
@@ -83,7 +89,8 @@ export default function CardRow({
         front,
         back,
         notes,
-        ...(moveTo !== card.deckId ? { moveToDeckId: moveTo } : {}),
+        ...(globalAdmin ? { editKind } : {}),
+        ...(moveTo !== card.deckId && !globalAdmin ? { moveToDeckId: moveTo } : {}),
       }),
     }).catch(() => null);
     setBusy(false);
@@ -107,6 +114,20 @@ export default function CardRow({
       setSaveError(await responseError(res, "Could not save this card. Try again."));
       if (res?.status === 409) router.refresh();
     }
+  }
+
+  async function hide() {
+    if (busy) return;
+    setBusy(true);
+    setSaveError("");
+    const res = await fetch("/api/visibility", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deckId: card.deckId, cardId: card.id, hidden: true }),
+    }).catch(() => null);
+    setBusy(false);
+    if (res?.ok) router.refresh();
+    else setSaveError(await responseError(res, "Could not hide this card."));
   }
 
   async function remove() {
@@ -159,12 +180,25 @@ export default function CardRow({
           placeholder="Notes"
           className="input"
         />
+        {globalAdmin && (
+          <fieldset className="space-y-1 text-sm">
+            <legend className="font-medium">What kind of edit is this?</legend>
+            <label className="flex items-start gap-2">
+              <input type="radio" name={`edit-${card.id}`} checked={editKind === "typo"} onChange={() => setEditKind("typo")} />
+              <span>Typo fix. Learners keep their progress on this card.</span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input type="radio" name={`edit-${card.id}`} checked={editKind === "meaning"} onChange={() => setEditKind("meaning")} />
+              <span>Meaning change. Archive this card and start a new one with no progress.</span>
+            </label>
+          </fieldset>
+        )}
         {saveError && (
           <p role="alert" className="text-sm text-red-500">
             {saveError}
           </p>
         )}
-        {decks.length > 1 && (
+        {decks.length > 1 && !globalAdmin && (
           <label className="block text-sm text-muted">
             Deck
             <select
@@ -183,7 +217,7 @@ export default function CardRow({
         <div className="flex gap-2">
           <button
             type="submit"
-            disabled={busy || !front.trim() || !back.trim()}
+            disabled={busy || !front.trim() || !back.trim() || (globalAdmin && !editKind)}
             className="btn btn-primary"
           >
             Save
@@ -221,21 +255,28 @@ export default function CardRow({
         </div>
         {card.notes && <div className="truncate text-sm text-muted">{card.notes}</div>}
       </div>
-      <HardWordButton key={`${card.deckId}:${card.id}:${!!card.hard}`} card={card} />
+      {viewerRole !== "admin" && <HardWordButton key={`${card.deckId}:${card.id}:${!!card.hard}`} card={card} />}
       <time dateTime={card.fsrs.due} className={`w-14 shrink-0 rounded-full px-2 py-0.5 text-center text-xs tabular-nums ${
         dueLabel(card) === "due" ? "bg-accent/10 font-medium text-accent" : "text-muted"
       }`}>
         {dueLabel(card)}
       </time>
       <TtsButton text={card.front} lang={frontLang || DEFAULT_FRONT_LANG} />
-      <button
-        type="button"
-        onClick={startEditing}
-        aria-label={`Edit ${card.front}`}
-        className="pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg text-muted hover:bg-surface-muted hover:text-foreground"
-      >
-        <IconPencil strokeWidth={1.8} />
-      </button>
+      {globalLearner ? (
+        <button type="button" onClick={hide} disabled={busy} className="btn btn-secondary shrink-0">
+          Hide
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={startEditing}
+          aria-label={`Edit ${card.front}`}
+          className="pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg text-muted hover:bg-surface-muted hover:text-foreground"
+        >
+          <IconPencil strokeWidth={1.8} />
+        </button>
+      )}
+      {saveError && !editing && <p role="alert" className="text-xs text-red-500">{saveError}</p>}
     </article>
   );
 }

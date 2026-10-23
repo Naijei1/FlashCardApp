@@ -25,6 +25,7 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/lib/api", () => ({
   requireAuth: vi.fn().mockResolvedValue(null),
+  requireRegularUser: vi.fn().mockResolvedValue(null),
   badRequest: (message: string) =>
     Response.json({ error: message }, { status: 400 }),
   notFound: (message: string) =>

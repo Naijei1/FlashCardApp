@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { badRequest, notFound, requireAuth } from "@/lib/api";
+import { badRequest, notFound, requireRegularUser } from "@/lib/api";
 import { getCard, listCards, setCardHard } from "@/lib/db";
 import { wordKey } from "@/lib/words";
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const denied = await requireAuth(); if (denied) return denied;
+  const denied = await requireRegularUser(); if (denied) return denied;
   const body = await request.json().catch(() => null);
   if (typeof body?.deckId !== "string" || typeof body?.hard !== "boolean") return badRequest("deckId and hard are required");
   const { id } = await params;

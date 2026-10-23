@@ -1,6 +1,8 @@
 import LogoutButton from "@/components/LogoutButton";
+import { authMode } from "@/lib/flags";
 
 export default function SettingsPage() {
+  const google = authMode() === "google";
   return (
     <div className="space-y-6 py-6">
       <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
@@ -10,7 +12,7 @@ export default function SettingsPage() {
         <p>
           <strong className="text-foreground">iPhone and iPad:</strong> open this site in
           Safari, tap Share → Add to Home Screen to install it as an app. The installed app has
-          its own login, so enter the password once there. It works in portrait, landscape,
+          its own login, so {google ? "sign in with Google once there" : "enter the password once there"}. It works in portrait, landscape,
           and Split View.
         </p>
         <p>

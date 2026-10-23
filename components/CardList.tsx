@@ -6,10 +6,12 @@ export default function CardList({
   cards,
   decks,
   showDeckNames = false,
+  viewerRole = "user",
 }: {
   cards: Card[];
   decks: Deck[];
   showDeckNames?: boolean;
+  viewerRole?: "admin" | "user";
 }) {
   const byId = new Map(decks.map((deck) => [deck.id, deck]));
   return (
@@ -21,7 +23,7 @@ export default function CardList({
               {byId.get(card.deckId)?.name ?? "Unknown deck"}
             </div>
           )}
-          <CardRow card={card} decks={decks} frontLang={byId.get(card.deckId)?.frontLanguage} />
+          <CardRow card={card} decks={decks} frontLang={byId.get(card.deckId)?.frontLanguage} viewerRole={viewerRole} />
         </li>
       ))}
     </ul>

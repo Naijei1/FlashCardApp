@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { badRequest, requireAuth } from "@/lib/api";
+import { accessErrorResponse, badRequest, requireAuth } from "@/lib/api";
 import { listDecks, putDeck } from "@/lib/db";
 import type { Deck } from "@/lib/types";
 import { isSupportedLanguage } from "@/lib/languages";
@@ -37,6 +37,12 @@ export async function POST(request: Request) {
     createdAt: now,
     updatedAt: now,
   };
-  await putDeck(deck, { create: true });
+  try {
+    await putDeck(deck, { create: true });
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    throw error;
+  }
   return NextResponse.json(deck, { status: 201 });
 }

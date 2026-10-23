@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/api";
+import { requireRegularUser } from "@/lib/api";
 import { listAllCards, listDecks } from "@/lib/db";
 import { buildMistakeClinicQueue } from "@/lib/mistake-clinic-queue";
 import { chineseSideForDeck } from "@/lib/write";
 
 export async function GET() {
-  const denied = await requireAuth();
+  const denied = await requireRegularUser();
   if (denied) return denied;
 
   const decks = await listDecks();

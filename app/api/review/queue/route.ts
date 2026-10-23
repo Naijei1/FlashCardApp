@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { badRequest, notFound, requireAuth } from "@/lib/api";
+import { badRequest, notFound, requireRegularUser } from "@/lib/api";
 import { appTimeZone } from "@/lib/forecast";
 import { cardForMode } from "@/lib/modes";
 import { buildStudyQueue } from "@/lib/pinyin-queue";
@@ -10,7 +10,7 @@ import type { ReviewMode } from "@/lib/types";
 const MODES: ReviewMode[] = ["review", "write", "pinyin"];
 
 export async function GET(request: Request) {
-  const denied = await requireAuth();
+  const denied = await requireRegularUser();
   if (denied) return denied;
   const searchParams = new URL(request.url).searchParams;
   const deckId = searchParams.get("deckId") || ALL_DECK;

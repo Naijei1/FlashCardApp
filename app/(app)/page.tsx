@@ -1,7 +1,9 @@
 import Link from "next/link";
+import AdminHome from "@/components/AdminHome";
 import ModeLink from "@/components/ModeLink";
 import NewDeckButton from "@/components/NewDeckButton";
 import WeeklyGoal from "@/components/WeeklyGoal";
+import { getAppSession } from "@/lib/app-session";
 import { listAllCards, listDecks } from "@/lib/db";
 import { countsByDeck, totalCounts } from "@/lib/due";
 import { weakWordCount } from "@/lib/mistake-clinic";
@@ -12,6 +14,7 @@ import { hardWords } from "@/lib/study-sets";
 import { uniqueWords } from "@/lib/words";
 
 export default async function HomePage() {
+  if ((await getAppSession())?.role === "admin") return <AdminHome />;
   const decks = await listDecks();
   const cards = await listAllCards(decks);
   const now = new Date();

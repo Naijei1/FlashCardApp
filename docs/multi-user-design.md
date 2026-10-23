@@ -1,4 +1,174 @@
-# Multi-user design proposal
+# Multi-user design
+
+## Agreed implementation
+
+This section is the source of truth. The Cognito proposal below is kept as
+background and is superseded wherever it disagrees, especially on the identity
+provider, deck visibility, migration, weekly releases, and admin stats.
+
+Open pull request #9 (`cursor/multi-user-phases-1-3-9752`) is an earlier Cognito
+draft. Do not merge it with this work. There was no open pull request for auth
+rate limiting, session revocation, fonts, or performance to build on; the
+shared-password login limiter and the current session cookie stay in place
+until `AUTH_MODE=google`.
+
+### Auth
+
+Auth.js (NextAuth v5) with the Google provider replaces the shared password
+when `AUTH_MODE=google`. Until that flag is set, `APP_PASSWORD` still works so
+a deploy cannot lock the live site out before Google OAuth exists.
+
+- Open signup. Anyone with a verified Google email gets a learner account.
+- Admin is not a Google group. It is `ADMIN_EMAILS`, a comma-separated
+  allowlist, and it is granted only when Google reports `email_verified`.
+  An unverified address on the allowlist is still a non-admin, and sign-in is
+  rejected until Google verifies the email.
+- The app user id is stable and is not the email and not the Google `sub`.
+  The link item is `PK=AUTH#google#<sub>`, `SK=LINK`, pointing at `userId`.
+  Later sign-ins resolve only that subject. Changing the Google email does not
+  move progress to another account.
+- The admin account is a different Google user. It cannot study, has no review
+  queue, and cannot write progress. Study routes return 403.
+- The admin sees overall per-user stats only: cards studied, review count,
+  streak, last review time. `GET /api/admin/users/:id/cards` is 403 for
+  everyone, including admins. Responses are passed through an allowlist so a
+  directory row cannot leak card fields.
+
+### Data
+
+One DynamoDB table. Card text is separate from per-user progress.
+
+- Global decks: `PK=GLOBAL#DECKS`, `SK=DECK#<deckId>`
+- Global cards: `PK=GLOBAL#DECK#<deckId>`, `SK=CARD#<cardId>`
+- Private decks: `PK=USER#<userId>#DECKS`, `SK=DECK#<deckId>`
+- Private cards: `PK=USER#<userId>#DECK#<deckId>`, `SK=CARD#<cardId>`
+- Progress: `PK=USER#<userId>`, `SK=PROGRESS#GLOBAL|PRIVATE#<deckId>#CARD#<cardId>`
+- Hidden global cards: `PK=USER#<userId>`, `SK=HIDDEN#GLOBAL#<deckId>#CARD#<cardId>`
+- Learner directory for admin totals: `PK=USERS`, `SK=USER#<userId>`
+
+No progress item means the card is new. Weekly drops do not write a progress
+row per user. New learners see every released global deck. They can hide and
+unhide global cards; hiding does not delete progress. Private decks are only
+theirs. Learners cannot edit global text.
+
+`DATA_MODE=multi-user` reads and writes the split. `DATA_MODE=legacy`, or
+unsetting `DATA_MODE`, rolls reads back to the original `DECKS` / `DECK#` /
+inline FSRS items. Migrated rows are never required for that rollback because
+the migration does not delete or overwrite them.
+
+### Weekly uploads
+
+Admin CSV flow: preview, save draft, set a release date labeled `week N`, or
+press publish now. There is no scheduler. A learner's read checks `status` and
+`releaseAt`:
+
+- `draft` is hidden
+- `scheduled` is hidden until `releaseAt` is in the past
+- `published` is visible immediately, including when publish-now overrides a
+  future date
+- migrated decks are stored as `published`
+- archived decks and cards are hidden
+
+### Admin edits
+
+The edit form does not save until the admin chooses:
+
+- Typo fix: same card id, `contentVersion` increases, every learner's progress
+  stays.
+- Meaning change: the old card gets `archivedAt` and keeps its progress for
+  history; a new card id is created with no progress.
+
+### Migration
+
+All current decks become global. Deck and card ids do not change. FSRS,
+modes, practice, hard markers, and review version are copied onto `PROGRESS#`
+items for the placeholder user `user_legacy_nj277`. A claim item
+`CLAIM#email#<email>` points at that id. The default email is
+`nj277@cornell.edu`. The first Google sign-in whose **verified** email matches
+the claim adopts that user id and writes `AUTH#google#<sub>`. After that, only
+the subject matches. A different Google subject with the same email does not
+receive the progress.
+
+The script is `npm run migrate:multi-user`. It prints a backup reminder, dry
+runs unless `--apply --i-backed-up` are both set, and reports before/after
+counts. It refuses `TABLE_NAME=flashcards` with no override, and it refuses a
+real AWS endpoint unless `MIGRATION_ALLOW_REMOTE=1` (still not `flashcards`).
+Do not run it against production from this change. Apply it yourself to a
+copied table, check the counts, then apply to production only after a backup.
+
+`cornell.edu` may not be a Google account (campus Microsoft sign-in is
+common). Fallback: set `LEGACY_OWNER_EMAIL` to a personal Gmail **before the
+first apply**, then sign in with that verified Gmail. Adding a Microsoft
+provider later is an Auth.js provider plus an `AUTH#microsoft#<sub>` link to
+the same app user id; it is not wired in this change. Do not put the study
+Gmail in `ADMIN_EMAILS` or that account becomes the admin and cannot study.
+
+Suggested order:
+
+1. Back up `flashcards`.
+2. Restore a copy and dry-run, then apply, against the copy.
+3. Create the Google OAuth client and Amplify env vars below.
+4. Deploy with `AUTH_MODE=google` and `DATA_MODE=multi-user` only after the
+   production apply. Leaving the flags unset keeps today's password app.
+5. Sign in once with the verified claim email. Use a different verified Google
+   email for the admin.
+
+### Environment variables
+
+Shared-password mode (today's default):
+
+- `APP_PASSWORD`
+- `SESSION_SECRET`
+- `TABLE_NAME`
+- `APP_REGION`
+- `APP_TIME_ZONE`
+
+Google multi-user mode:
+
+- `AUTH_MODE=google`
+- `DATA_MODE=multi-user` after migration (`legacy` rolls reads back)
+- `AUTH_SECRET` (`openssl rand -hex 32`)
+- `AUTH_GOOGLE_ID` (Google OAuth client id)
+- `AUTH_GOOGLE_SECRET` (Google OAuth client secret)
+- `AUTH_URL` (the site origin, such as `https://main.d3otcaeyemrjvk.amplifyapp.com`)
+- `ADMIN_EMAILS` (comma-separated verified Google emails for admins only)
+- `TABLE_NAME`, `APP_REGION`, `APP_TIME_ZONE`
+- Optional `LEGACY_OWNER_EMAIL` for the migration script only
+
+Amplify still does not pass console env vars into the SSR runtime. `npm run
+env:production` hex-encodes `AUTH_SECRET` and `AUTH_GOOGLE_SECRET` into
+`.env.production`, and the server decodes those `*_HEX` values before Auth.js
+starts. Keep `APP_PASSWORD` and `SESSION_SECRET` set as well if you want to
+flip `AUTH_MODE` back to shared.
+
+### Google Cloud and Amplify setup
+
+1. Google Cloud Console → APIs & Services → OAuth consent screen. External is
+   fine. Add the app name and the support email. While the app is in testing,
+   add every Google account that should sign in (the study account and the
+   admin account). Publish the consent screen before real open signup.
+2. Create an OAuth client ID of type **Web application**.
+3. Authorized JavaScript origins:
+   - `https://main.d3otcaeyemrjvk.amplifyapp.com`
+   - `http://localhost:3000` for local development
+4. Authorized redirect URIs:
+   - `https://main.d3otcaeyemrjvk.amplifyapp.com/api/auth/callback/google`
+   - `http://localhost:3000/api/auth/callback/google`
+5. Copy the client id and secret into Amplify Hosting environment variables
+   with the names above. Set `AUTH_URL` to the Amplify origin with no trailing
+   path. Redeploy so `env:production` bakes them into the server bundle.
+6. The existing Amplify compute role still needs DynamoDB read/write on
+   `flashcards`, including `PutItem`, `UpdateItem`, `DeleteItem`, `Query`,
+   `GetItem`, `BatchWriteItem`, `TransactWriteItems`, and `ConditionCheckItem`.
+   Add `dynamodb:Scan` only if you run the migration from a machine using that
+   role. Prefer running the migration from an admin workstation with a backup,
+   not from the web app.
+7. Do not merge until you have decided to cut over. Merging `main` deploys.
+   With the flags unset, the deploy keeps the shared password.
+
+---
+
+## Earlier proposal (superseded where it conflicts)
 
 This document proposes a practical multi-user design for FlashCardApp while
 keeping the current Next.js App Router, TypeScript, DynamoDB single-table, FSRS,
@@ -920,8 +1090,13 @@ Main risk: underestimating abuse/cost exposure once signup is open.
 
 ## 7. Remaining decisions
 
-The major product questions from the first draft are now answered. Remaining
-implementation decisions:
+The decisions below were the open questions in the first proposal. They are
+answered in **Agreed implementation** at the top: Auth.js with Google (not
+Cognito), admin from `ADMIN_EMAILS` plus `email_verified`, all current decks
+global, weekly release dates checked at read time, typo versus meaning edits
+enforced by the form, and admin stats without per-card progress.
+
+Historical notes:
 
 - Hosted UI directly, or Auth.js with Cognito provider?
 - Exact private deck/card caps for regular users.

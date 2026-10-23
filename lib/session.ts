@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import { isAuthenticated } from "./auth";
+import { getAppSession } from "./app-session";
 
 /** For server component pages: bounce to /login when the session is invalid. */
 export async function requireSession(): Promise<void> {
-  if (!(await isAuthenticated())) redirect("/login");
+  if (!(await getAppSession())) redirect("/login");
 }

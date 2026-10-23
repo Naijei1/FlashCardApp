@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import ReviewSession from "@/components/ReviewSession";
+import { redirectAdminFromStudy } from "@/lib/guards";
 import { listDecks } from "@/lib/db";
 import { isVirtualDeck } from "@/lib/study-sets";
 
@@ -10,6 +11,7 @@ export default async function ReviewPage({
   params: Promise<{ deckId: string }>;
   searchParams?: Promise<{ new?: string }>;
 }) {
+  await redirectAdminFromStudy();
   const { deckId } = await params;
   const newOnly = (await searchParams)?.new === "1";
   const decks = await listDecks();

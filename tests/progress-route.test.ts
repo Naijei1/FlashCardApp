@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ requireAuth: vi.fn(), listAllCards: vi.fn() }));
-vi.mock("@/lib/api", () => ({ requireAuth: mocks.requireAuth }));
+vi.mock("@/lib/api", () => ({ requireAuth: mocks.requireAuth, requireRegularUser: mocks.requireAuth }));
 vi.mock("@/lib/db", () => ({ listAllCards: mocks.listAllCards }));
 import { GET } from "@/app/api/progress/route";
 beforeEach(() => { vi.clearAllMocks(); mocks.requireAuth.mockResolvedValue(null); mocks.listAllCards.mockResolvedValue([]); });
