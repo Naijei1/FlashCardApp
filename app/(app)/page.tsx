@@ -1,7 +1,9 @@
 import Link from "next/link";
 import ModeLink from "@/components/ModeLink";
 import NewDeckButton from "@/components/NewDeckButton";
+import WarmStudyQueue from "@/components/WarmStudyQueue";
 import WeeklyGoal from "@/components/WeeklyGoal";
+import { reviewQueueUrl } from "@/components/studyQueueCache";
 import { listAllCards, listDecks } from "@/lib/db";
 import { countsByDeck, totalCounts } from "@/lib/due";
 import { weakWordCount } from "@/lib/mistake-clinic";
@@ -24,6 +26,7 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-8 py-6">
+      {canStudy && <WarmStudyQueue url={reviewQueueUrl("all", "review")} />}
       <header>
         <p className="eyebrow">学中文</p>
         <h1 className="mt-1 text-3xl font-bold tracking-tight">Chinese Flashcards</h1>
@@ -52,7 +55,7 @@ export default async function HomePage() {
           </div>
           <div className="flex flex-col gap-2 border-t border-border bg-surface-muted/50 p-4 sm:flex-row">
             {canStudy ? (
-              <Link href="/review/all" className="btn btn-primary btn-lg flex-1">Start Review</Link>
+              <Link href="/review/all" prefetch className="btn btn-primary btn-lg flex-1">Start Review</Link>
             ) : (
               <span aria-disabled="true" className="btn btn-secondary btn-lg flex-1 text-muted">Nothing due</span>
             )}
@@ -69,7 +72,7 @@ export default async function HomePage() {
             detail={`Every mode across ${plural(decks.length, "deck")}`} badge={totals.due} />
           <ModeLink href="/decks/hard-words" title="★ Hard Words"
             detail={hardCount > 0 ? `${plural(hardCount, "marked word")}` : "Mark tricky words while studying"} />
-          <ModeLink href="/clinic" title="Mistake Clinic"
+          <ModeLink href="/clinic" prefetch title="Mistake Clinic"
             detail={clinicCount > 0 ? `${plural(clinicCount, "weak word")} to drill` : "Repeated misses and hard words appear here"}
             badge={clinicCount} />
         </div>

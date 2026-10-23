@@ -182,7 +182,7 @@ export default function WriteSession({
       <div key={card.id} className="study-scroll flashcard flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-6 sm:px-8">
         <p className="eyebrow text-center">{mode === "pinyin" ? "Write Pinyin" : "Write Chinese"}</p>
         <div className="mt-3 text-center">
-          <span lang={mode === "pinyin" ? chineseLang : "zh-Latn-pinyin"} className="selectable text-4xl font-medium break-words sm:text-5xl">
+          <span lang={mode === "pinyin" ? chineseLang : "zh-Latn-pinyin"} className={mode === "pinyin" ? "hanzi selectable break-words" : "pinyin selectable break-words"}>
             {prompt.prompt}
           </span>
           {mode === "write" && pinyin && (
@@ -279,7 +279,7 @@ export default function WriteSession({
                 </>
               )}
               <div className="flex items-center gap-2">
-                <span lang={answerLang} className={`selectable break-words ${mode === "pinyin" ? "text-3xl" : "text-4xl"}`}>
+                <span lang={answerLang} className={mode === "pinyin" ? "pinyin selectable break-words" : "hanzi-text selectable text-4xl break-words sm:text-5xl"}>
                   {result.expected.map((c, i) => (
                     <span key={i} className={result.correct || c.ok ? "" : "rounded bg-green-500/15 text-green-700 dark:text-green-400"}>
                       {c.char}

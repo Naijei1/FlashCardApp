@@ -74,7 +74,7 @@ export default function ReviewSession({
       <div key={card.id} onClick={reveal} className="flashcard flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 basis-1/2 flex-col items-center justify-center gap-3 overflow-y-auto px-6 py-6 text-center">
           <div className="flex items-center gap-2">
-            <span lang={frontLang} className="selectable text-5xl leading-tight font-medium break-words sm:text-6xl">
+            <span lang={frontLang} className={frontLang.startsWith("zh") ? "hanzi selectable break-words" : "selectable text-5xl leading-tight font-medium break-words sm:text-6xl"}>
               {prompt}
             </span>
             <TtsButton text={prompt} lang={frontLang} />
@@ -93,7 +93,7 @@ export default function ReviewSession({
           {revealed ? (
             <div key={card.id} className="reveal-in flex flex-col items-center gap-3">
               <div className="flex items-center gap-2">
-                <span lang={pinyin ? "zh-Latn-pinyin" : backLang} className="selectable text-3xl break-words text-foreground/90">
+                <span lang={pinyin ? "zh-Latn-pinyin" : backLang} className={pinyin ? "pinyin selectable break-words" : "selectable text-3xl break-words text-foreground/90"}>
                   {pinyin ? pinyin.syllables.join(" ") : card.back}
                 </span>
                 {!pinyin && <TtsButton text={card.back} lang={backLang} />}

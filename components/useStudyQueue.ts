@@ -16,6 +16,7 @@ import {
 import { getBreakUntil, startBreak } from "@/lib/study-break";
 import type { Card, ReviewMode } from "@/lib/types";
 import { createReviewSync, type ReviewSyncState } from "./reviewSync";
+import { readStudyQueue, reviewQueueUrl } from "./studyQueueCache";
 
 /** Waiting longer than this for a parked learning card starts the batch break instead. */
 const LONG_WAIT_MS = 60_000;
@@ -104,26 +105,37 @@ export function useStudyQueue({
       return;
     }
     waitingToLoadRef.current = false;
+    const includeNew = newOnly || extendNewRef.current;
+    const url = reviewQueueUrl(deckId, mode, includeNew);
+    const applyLoaded = (data: { queue: StudyQueueItem[]; totalDue: number; remainingNew?: number }) => {
+      const carried = carryRef.current;
+      carryRef.current = [];
+      const loaded = new Set(data.queue.map(studyItemKey));
+      const combined = [...data.queue, ...carried.filter((item) => !loaded.has(studyItemKey(item)))];
+      const at = Date.now();
+      setNowMs(at);
+      lastShownKeyRef.current = null;
+      chooseCurrent(combined, at, null);
+      setQueue(combined);
+      setTotalDue(data.totalDue);
+      setRemainingNew(data.remainingNew ?? 0);
+      setBatchSize(data.queue.length);
+    };
+    // "Learn more" must not reuse the daily queue warmed on the previous screen.
+    if (!extendNewRef.current) {
+      const cached = readStudyQueue<{ queue: StudyQueueItem[]; totalDue: number; remainingNew?: number }>(url);
+      if (cached) {
+        applyLoaded(cached);
+        return;
+      }
+    }
     const controller = new AbortController();
     loadAbortRef.current = controller;
-    const params = new URLSearchParams({ deckId, mode });
-    if (newOnly || extendNewRef.current) params.set("new", "1");
-    fetch(`/api/review/queue?${params}`, { signal: controller.signal, cache: "no-store" })
+    fetch(url, { signal: controller.signal, cache: "no-store" })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((data: { queue: StudyQueueItem[]; totalDue: number; remainingNew?: number }) => {
         if (controller.signal.aborted) return;
-        const carried = carryRef.current;
-        carryRef.current = [];
-        const loaded = new Set(data.queue.map(studyItemKey));
-        const combined = [...data.queue, ...carried.filter((item) => !loaded.has(studyItemKey(item)))];
-        const at = Date.now();
-        setNowMs(at);
-        lastShownKeyRef.current = null;
-        chooseCurrent(combined, at, null);
-        setQueue(combined);
-        setTotalDue(data.totalDue);
-        setRemainingNew(data.remainingNew ?? 0);
-        setBatchSize(data.queue.length);
+        applyLoaded(data);
       })
       .catch(() => {
         if (!controller.signal.aborted) setLoadError(true);

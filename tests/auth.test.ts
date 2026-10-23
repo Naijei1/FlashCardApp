@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { checkPassword, signSession, verifySessionToken } from "@/lib/auth";
+import { checkPassword, readSessionClaims, signSession, verifySessionToken, type SessionPrincipal } from "@/lib/auth";
+
+const SESSION: SessionPrincipal = {
+  userId: "shared",
+  sessionId: "session-id-123456",
+  sessionVersion: 1,
+};
 
 beforeEach(() => {
   vi.stubEnv("APP_PASSWORD", "1212");
@@ -36,28 +42,39 @@ describe("checkPassword", () => {
 });
 
 describe("session tokens", () => {
-  it("verifies a freshly signed token", async () => {
-    const token = await signSession();
+  it("verifies a freshly signed token and keeps its session claims", async () => {
+    const token = await signSession(SESSION);
     expect(await verifySessionToken(token)).toBe(true);
+    expect(await readSessionClaims(token)).toEqual(SESSION);
   });
 
   it("rejects a tampered token", async () => {
-    const token = await signSession();
+    const token = await signSession(SESSION);
     expect(await verifySessionToken(token.slice(0, -2) + "xx")).toBe(false);
   });
 
   it("rejects an expired token", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-28T12:00:00Z"));
-    const token = await signSession();
+    const token = await signSession(SESSION);
     vi.setSystemTime(new Date("2026-09-29T12:00:00Z")); // 32 days later
     expect(await verifySessionToken(token)).toBe(false);
     vi.useRealTimers();
   });
 
   it("rejects a token signed with a different secret", async () => {
-    const token = await signSession();
+    const token = await signSession(SESSION);
     vi.stubEnv("SESSION_SECRET", "b".repeat(64));
+    expect(await verifySessionToken(token)).toBe(false);
+  });
+
+  it("rejects a signature-only token that cannot be revoked", async () => {
+    const { SignJWT } = await import("jose");
+    const token = await new SignJWT({})
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("30d")
+      .sign(new TextEncoder().encode("a".repeat(64)));
     expect(await verifySessionToken(token)).toBe(false);
   });
 
@@ -65,7 +82,7 @@ describe("session tokens", () => {
     const secret = 'session"\\$#\n\u5bc6'.repeat(4);
     vi.stubEnv("SESSION_SECRET", "wrong-build-time-value".repeat(2));
     vi.stubEnv("SESSION_SECRET_HEX", Buffer.from(secret, "utf8").toString("hex"));
-    const token = await signSession();
+    const token = await signSession(SESSION);
     expect(await verifySessionToken(token)).toBe(true);
   });
 });

@@ -66,7 +66,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden w-60 shrink-0 border-r border-border bg-surface/60 md:block">
         <div className="sticky top-0 flex h-dvh flex-col p-4">
           <Link href="/" className="mb-8 flex min-h-11 items-center gap-2.5 px-2 text-lg font-semibold tracking-tight">
-            <span aria-hidden="true" className="nav-active-fill flex h-10 w-10 items-center justify-center rounded-2xl text-xl">
+            <span aria-hidden="true" className="nav-active-fill hanzi-text flex h-11 w-11 items-center justify-center rounded-2xl text-xl">
               学
             </span>
             Flashcards
