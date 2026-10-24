@@ -37,11 +37,11 @@ describe("account linking", () => {
   it("uses the Google subject link instead of the email", () => {
     const plan = planAccountLink({
       sub: "google-sub-1",
-      email: "nj277@cornell.edu",
+      email: "naijeiwow@gmail.com",
       emailVerified: true,
       adminAllowlist: allow,
       existingLinkUserId: "user_existing",
-      claim: { userId: "user_legacy_nj277" },
+      claim: { userId: "user_legacy_owner" },
     });
     expect(plan).toEqual({ action: "existing", userId: "user_existing", role: "user" });
     expect(googleAuthKey("google-sub-1").PK).toBe("AUTH#google#google-sub-1");
@@ -52,19 +52,19 @@ describe("account linking", () => {
     expect(
       planAccountLink({
         sub: "google-sub-1",
-        email: "nj277@cornell.edu",
+        email: "naijeiwow@gmail.com",
         emailVerified: true,
         adminAllowlist: allow,
-        claim: { userId: "user_legacy_nj277" },
+        claim: { userId: "user_legacy_owner" },
       })
-    ).toEqual({ action: "claim", userId: "user_legacy_nj277", role: "user" });
+    ).toEqual({ action: "claim", userId: "user_legacy_owner", role: "user" });
 
     const taken = planAccountLink({
       sub: "other-sub",
-      email: "nj277@cornell.edu",
+      email: "naijeiwow@gmail.com",
       emailVerified: true,
       adminAllowlist: allow,
-      claim: { userId: "user_legacy_nj277", claimedSub: "google-sub-1" },
+      claim: { userId: "user_legacy_owner", claimedSub: "google-sub-1" },
     });
     expect(taken.action).toBe("create");
     if (taken.action === "create") expect(taken.role).toBe("user");

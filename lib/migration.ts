@@ -58,13 +58,28 @@ export function assertMigrationTarget(env: {
   tableName?: string;
   endpoint?: string;
   allowRemote?: boolean;
+  /** Set only when MIGRATION_ALLOW_PRODUCTION=1. Does not unlock other table names. */
+  allowProduction?: boolean;
+  apply?: boolean;
+  backedUp?: boolean;
 }): { ok: true } | { ok: false; reason: string } {
   if (!env.tableName) return { ok: false, reason: "TABLE_NAME is not set" };
   if (env.tableName === "flashcards") {
-    return {
-      ok: false,
-      reason: "Refusing table flashcards. Run against a copy, not production.",
-    };
+    if (!env.allowProduction) {
+      return {
+        ok: false,
+        reason:
+          "Refusing table flashcards. Set MIGRATION_ALLOW_PRODUCTION=1 to confirm this is production. A dry run is allowed with that flag. Writing also requires --apply --i-backed-up. MIGRATION_ALLOW_REMOTE=1 does not unlock this table.",
+      };
+    }
+    if (env.apply && !env.backedUp) {
+      return {
+        ok: false,
+        reason:
+          "Refusing to write table flashcards without --apply --i-backed-up, even when MIGRATION_ALLOW_PRODUCTION=1.",
+      };
+    }
+    return { ok: true };
   }
   if (!env.endpoint && !env.allowRemote) {
     return {

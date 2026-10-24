@@ -29,7 +29,7 @@ vi.mock("@/lib/auth-store", () => ({
 
 vi.mock("@/lib/accounts", () => ({
   resolveGoogleUser: vi.fn(async () => ({
-    userId: "user_legacy_nj277",
+    userId: "user_legacy_owner",
     email: "owner@gmail.com",
     role: "user",
   })),
@@ -101,9 +101,9 @@ describe("Google sessions", () => {
 
   it("stores a revocable session for the app user id, not the Google subject", async () => {
     const token = await googleJwt({ token: {} as JWT, account, profile });
-    expect(sessions.begin).toHaveBeenCalledWith("user_legacy_nj277");
+    expect(sessions.begin).toHaveBeenCalledWith("user_legacy_owner");
     expect(token).toMatchObject({
-      appUserId: "user_legacy_nj277",
+      appUserId: "user_legacy_owner",
       email: "owner@gmail.com",
       sessionId: "session-id-123456",
       sessionVersion: 2,
@@ -116,7 +116,7 @@ describe("Google sessions", () => {
       token,
     });
     expect(session).toMatchObject({
-      appUserId: "user_legacy_nj277",
+      appUserId: "user_legacy_owner",
       sessionId: "session-id-123456",
       sessionVersion: 2,
     });
@@ -125,15 +125,15 @@ describe("Google sessions", () => {
   it("hides a Google session after logout revokes it", async () => {
     authFns.auth.mockResolvedValue({
       user: { email: "owner@gmail.com" },
-      appUserId: "user_legacy_nj277",
+      appUserId: "user_legacy_owner",
       emailVerified: true,
       role: "user",
       sessionId: "session-id-123456",
       sessionVersion: 2,
     });
     sessions.current.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-    expect((await readGoogleSession())?.userId).toBe("user_legacy_nj277");
-    expect(sessions.current).toHaveBeenCalledWith("user_legacy_nj277", "session-id-123456", 2);
+    expect((await readGoogleSession())?.userId).toBe("user_legacy_owner");
+    expect(sessions.current).toHaveBeenCalledWith("user_legacy_owner", "session-id-123456", 2);
     expect(await readGoogleSession()).toBeNull();
   });
 
@@ -141,7 +141,7 @@ describe("Google sessions", () => {
     vi.stubEnv("AUTH_MODE", "google");
     authFns.auth.mockResolvedValue({
       user: { email: "owner@gmail.com" },
-      appUserId: "user_legacy_nj277",
+      appUserId: "user_legacy_owner",
       emailVerified: true,
       sessionId: "session-id-123456",
       sessionVersion: 2,
@@ -154,7 +154,7 @@ describe("Google sessions", () => {
       })
     );
     expect(response.status).toBe(200);
-    expect(sessions.revokeAll).toHaveBeenCalledWith("user_legacy_nj277");
+    expect(sessions.revokeAll).toHaveBeenCalledWith("user_legacy_owner");
     expect(sessions.revoke).not.toHaveBeenCalled();
     expect(authFns.signOut).toHaveBeenCalledWith({ redirect: false });
     expect(cookieJar.delete).toHaveBeenCalled();
