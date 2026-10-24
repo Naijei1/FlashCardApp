@@ -5,9 +5,13 @@ frontend:
       commands:
         - nvm use 22
         - npm ci --prefer-offline
-        - npm test
-        - npm run typecheck
-        - npm run lint
+        # Console AUTH_MODE and DATA_MODE must remain set for the build phase
+        # so env:production can bake them into the SSR artifact. The unit suite
+        # assumes shared-password / legacy reads. Unset only for these commands
+        # so Vitest does not import next-auth (Node cannot resolve next/server).
+        - "(unset AUTH_MODE DATA_MODE; npm test)"
+        - "(unset AUTH_MODE DATA_MODE; npm run typecheck)"
+        - "(unset AUTH_MODE DATA_MODE; npm run lint)"
     build:
       commands:
         # Amplify does not expose console env vars to the SSR runtime; bake the

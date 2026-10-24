@@ -21,6 +21,10 @@ describe("production environment", () => {
       APP_REGION: "us-east-1",
       APP_TIME_ZONE: "America/New_York",
     };
+    // An Amplify shell may export the Google cutover flags. This case is the
+    // shared-password writer, so those flags must not leak into the child.
+    delete env.AUTH_MODE;
+    delete env.DATA_MODE;
     try {
       execFileSync(process.execPath, [path.resolve("scripts/write-production-env.mjs")], {
         cwd: directory,
