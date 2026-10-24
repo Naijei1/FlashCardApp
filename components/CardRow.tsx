@@ -275,8 +275,8 @@ export default function CardRow({
       <div className="flex items-center gap-1">
       {viewerRole !== "admin" && <HardWordButton key={`${card.deckId}:${card.id}:${!!card.hard}`} card={card} />}
       {viewerRole !== "admin" && (
-        <time dateTime={card.fsrs.due} className={`w-14 shrink-0 rounded-full px-2 py-0.5 text-center text-xs tabular-nums ${
-          dueLabel(card) === "due" ? "bg-accent/10 font-medium text-accent" : "text-muted"
+        <time dateTime={card.fsrs.due} className={`w-14 shrink-0 rounded-full px-2 py-0.5 text-center text-xs font-medium tabular-nums ${
+          dueLabel(card) === "due" ? "bg-accent/10 text-accent" : "text-foreground"
         }`}>
           {dueLabel(card)}
         </time>

@@ -6,9 +6,11 @@ export default function GoogleLogin({ error }: { error?: string }) {
       ? "Google must confirm your email before you can sign in."
       : error === "TooManyAttempts"
         ? "Too many attempts. Wait a moment and try again."
-        : error
-          ? "Could not sign in with Google. Try again."
-          : "";
+        : error === "AccountDisabled"
+          ? "This account is disabled. Ask an admin to enable it."
+          : error
+            ? "Could not sign in with Google. Try again."
+            : "";
   return (
     <main className="flex min-h-dvh items-center justify-center px-6 pt-safe pb-safe">
       <form action={signInWithGoogle} className="w-full max-w-xs space-y-4 text-center">

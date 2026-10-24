@@ -9,6 +9,7 @@ import {
   TransactWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { usesMultiUserData } from "./flags";
+import type { ReleaseTeaser } from "./multi-user-model";
 import type { Card, Deck, ReviewMode } from "./types";
 import type { ReviewLog } from "ts-fsrs";
 import { getDocClient, observeDbLatency, tableName } from "./dynamo";
@@ -113,6 +114,12 @@ export async function listDecks(): Promise<Deck[]> {
     .filter((item) => typeof item.deletingAt !== "string")
     .map(toDeck)
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Next global release for a learner. Metadata only — no card text. */
+export async function nextReleaseTeaser(): Promise<ReleaseTeaser | null> {
+  if (!usesMultiUserData()) return null;
+  return (await multiUserStore()).nextReleaseTeaserForCurrentUser();
 }
 
 export async function getDeck(id: string): Promise<Deck | null> {

@@ -25,4 +25,22 @@ describe("login contrast", () => {
     expect(contrast("#44403c", "#e7e5e4")).toBeGreaterThanOrEqual(4.5);
     expect(contrast("#f5f5f4", "#57534e")).toBeGreaterThanOrEqual(4.5);
   });
+
+  it("keeps muted labels dark enough on the page background and card surfaces", () => {
+    const css = readFileSync("app/globals.css", "utf8");
+    const shell = readFileSync("components/AppShell.tsx", "utf8");
+    const ratings = readFileSync("components/RatingBar.tsx", "utf8");
+    const row = readFileSync("components/CardRow.tsx", "utf8");
+    expect(css).toContain("--muted: #57534e");
+    expect(css).toContain("--muted: #c8c2bb");
+    expect(contrast("#57534e", "#f6f5f3")).toBeGreaterThanOrEqual(7);
+    expect(contrast("#57534e", "#ffffff")).toBeGreaterThanOrEqual(7);
+    expect(contrast("#c8c2bb", "#0f0e0d")).toBeGreaterThanOrEqual(7);
+    expect(contrast("#c8c2bb", "#1a1918")).toBeGreaterThanOrEqual(7);
+    expect(contrast("#c8c2bb", "#232120")).toBeGreaterThanOrEqual(7);
+    expect(shell).toContain("lg:max-w-5xl xl:max-w-6xl");
+    expect(ratings).not.toContain("opacity-70");
+    expect(row).toContain("text-foreground");
+    expect(row).not.toContain("text-xs text-muted");
+  });
 });

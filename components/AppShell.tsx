@@ -120,7 +120,7 @@ export default function AppShell({
       {/* Content */}
       <main
         id="main-content"
-        className="mx-auto w-full max-w-3xl flex-1 px-safe pt-safe pb-[calc(7.5rem+env(safe-area-inset-bottom))] [--gutter:1rem] sm:[--gutter:1.5rem] md:pb-12 md:[--gutter:2.5rem] lg:max-w-4xl xl:max-w-5xl"
+        className="mx-auto w-full max-w-3xl flex-1 px-safe pt-safe pb-[calc(7.5rem+env(safe-area-inset-bottom))] [--gutter:1rem] sm:[--gutter:1.5rem] md:pb-12 md:[--gutter:2.5rem] lg:max-w-5xl xl:max-w-6xl"
       >
         {children}
       </main>

@@ -99,28 +99,87 @@ export async function resolveGoogleUser(identity: GoogleIdentity): Promise<Linke
   return createUser(identity.sub, email, plan.role, now);
 }
 
+const ACTIVE_STATUS = "active";
+const PENDING_CLAIM_STATUS = "pending-claim";
+
+function isConditionalCheckFailed(error: unknown): boolean {
+  return error instanceof Error && error.name === "ConditionalCheckFailedException";
+}
+
+/**
+ * Refresh email and last-seen. Promote pending-claim to active. Leave
+ * `disabled` alone so a sign-in cannot turn a blocked learner back on.
+ */
 async function touchProfile(userId: string, email: string, role: Role, now: string): Promise<void> {
   const names = { "#email": "email", "#role": "role", "#seen": "lastSeenAt", "#status": "status" };
-  const values = { ":email": email, ":role": role, ":seen": now, ":status": "active" };
-  await doc.send(
-    new UpdateCommand({
-      TableName: tableName(),
-      Key: userProfileKey(userId),
-      UpdateExpression: "SET #email = :email, #role = :role, #seen = :seen, #status = :status",
-      ExpressionAttributeNames: names,
-      ExpressionAttributeValues: values,
-    })
-  );
-  await doc.send(
-    new UpdateCommand({
-      TableName: tableName(),
-      Key: userDirectoryKey(userId),
-      UpdateExpression:
-        "SET #email = :email, #role = :role, #seen = :seen, #status = :status, userId = if_not_exists(userId, :userId)",
-      ExpressionAttributeNames: names,
-      ExpressionAttributeValues: { ...values, ":userId": userId },
-    })
-  );
+  const values = {
+    ":email": email,
+    ":role": role,
+    ":seen": now,
+    ":active": ACTIVE_STATUS,
+    ":pending": PENDING_CLAIM_STATUS,
+  };
+  const condition = "attribute_not_exists(#status) OR #status = :active OR #status = :pending";
+  const seen = "SET #email = :email, #role = :role, #seen = :seen";
+  try {
+    await doc.send(
+      new UpdateCommand({
+        TableName: tableName(),
+        Key: userProfileKey(userId),
+        UpdateExpression: `${seen}, #status = :active`,
+        ConditionExpression: condition,
+        ExpressionAttributeNames: names,
+        ExpressionAttributeValues: values,
+      })
+    );
+  } catch (error) {
+    if (!isConditionalCheckFailed(error)) throw error;
+    await doc.send(
+      new UpdateCommand({
+        TableName: tableName(),
+        Key: userProfileKey(userId),
+        UpdateExpression: seen,
+        ExpressionAttributeNames: { "#email": "email", "#role": "role", "#seen": "lastSeenAt" },
+        ExpressionAttributeValues: { ":email": email, ":role": role, ":seen": now },
+      })
+    );
+  }
+  try {
+    await doc.send(
+      new UpdateCommand({
+        TableName: tableName(),
+        Key: userDirectoryKey(userId),
+        UpdateExpression: `${seen}, #status = :active, userId = if_not_exists(userId, :userId)`,
+        ConditionExpression: condition,
+        ExpressionAttributeNames: names,
+        ExpressionAttributeValues: { ...values, ":userId": userId },
+      })
+    );
+  } catch (error) {
+    if (!isConditionalCheckFailed(error)) throw error;
+    await doc.send(
+      new UpdateCommand({
+        TableName: tableName(),
+        Key: userDirectoryKey(userId),
+        UpdateExpression: `${seen}, userId = if_not_exists(userId, :userId)`,
+        ExpressionAttributeNames: { "#email": "email", "#role": "role", "#seen": "lastSeenAt" },
+        ExpressionAttributeValues: { ":email": email, ":role": role, ":seen": now, ":userId": userId },
+      })
+    );
+  }
+}
+
+export async function isUserDisabled(userId: string): Promise<boolean> {
+  const profile = await readItem(userProfileKey(userId));
+  if (profile?.status === "disabled") return true;
+  const directory = await readItem(userDirectoryKey(userId));
+  return directory?.status === "disabled";
+}
+
+export async function isGoogleSubjectDisabled(sub: string): Promise<boolean> {
+  const link = await readItem(googleAuthKey(sub));
+  if (typeof link?.userId !== "string" || !link.userId) return false;
+  return isUserDisabled(link.userId);
 }
 
 async function accountHasProgress(userId: string): Promise<boolean> {

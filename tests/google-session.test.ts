@@ -19,6 +19,16 @@ const cookieJar = vi.hoisted(() => ({
   delete: vi.fn(),
 }));
 
+const accounts = vi.hoisted(() => ({
+  resolveGoogleUser: vi.fn(async () => ({
+    userId: "user_legacy_owner",
+    email: "owner@gmail.com",
+    role: "user" as const,
+  })),
+  isUserDisabled: vi.fn(async () => false),
+  isGoogleSubjectDisabled: vi.fn(async () => false),
+}));
+
 vi.mock("@/lib/auth-store", () => ({
   sessionIsCurrent: sessions.current,
   revokeSession: sessions.revoke,
@@ -28,11 +38,9 @@ vi.mock("@/lib/auth-store", () => ({
 }));
 
 vi.mock("@/lib/accounts", () => ({
-  resolveGoogleUser: vi.fn(async () => ({
-    userId: "user_legacy_owner",
-    email: "owner@gmail.com",
-    role: "user",
-  })),
+  resolveGoogleUser: accounts.resolveGoogleUser,
+  isUserDisabled: accounts.isUserDisabled,
+  isGoogleSubjectDisabled: accounts.isGoogleSubjectDisabled,
 }));
 
 vi.mock("next-auth", () => ({
@@ -71,6 +79,16 @@ beforeEach(() => {
   authFns.auth.mockReset();
   authFns.signOut.mockReset();
   cookieJar.delete.mockReset();
+  accounts.resolveGoogleUser.mockReset();
+  accounts.resolveGoogleUser.mockResolvedValue({
+    userId: "user_legacy_owner",
+    email: "owner@gmail.com",
+    role: "user",
+  });
+  accounts.isUserDisabled.mockReset();
+  accounts.isUserDisabled.mockResolvedValue(false);
+  accounts.isGoogleSubjectDisabled.mockReset();
+  accounts.isGoogleSubjectDisabled.mockResolvedValue(false);
   sessions.begin.mockResolvedValue({ sessionId: "session-id-123456", sessionVersion: 2 });
   sessions.limit.mockImplementation(async (_key: string, _now: number, check: () => Promise<boolean>) => {
     return (await check()) ? { status: "allowed" } : { status: "rejected" };
@@ -120,6 +138,27 @@ describe("Google sessions", () => {
       sessionId: "session-id-123456",
       sessionVersion: 2,
     });
+  });
+
+  it("refuses a disabled Google subject before a session is issued", async () => {
+    accounts.isGoogleSubjectDisabled.mockResolvedValue(true);
+    await expect(googleSignIn({ account, profile })).resolves.toBe("/login?error=AccountDisabled");
+    expect(sessions.begin).not.toHaveBeenCalled();
+  });
+
+  it("treats a current session as signed out when the user is disabled", async () => {
+    authFns.auth.mockResolvedValue({
+      user: { email: "owner@gmail.com" },
+      appUserId: "user_legacy_owner",
+      emailVerified: true,
+      role: "user",
+      sessionId: "session-id-123456",
+      sessionVersion: 2,
+    });
+    sessions.current.mockResolvedValue(true);
+    accounts.isUserDisabled.mockResolvedValue(true);
+    expect(await readGoogleSession()).toBeNull();
+    expect(accounts.isUserDisabled).toHaveBeenCalledWith("user_legacy_owner");
   });
 
   it("hides a Google session after logout revokes it", async () => {

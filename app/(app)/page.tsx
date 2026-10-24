@@ -6,14 +6,70 @@ import WarmStudyQueue from "@/components/WarmStudyQueue";
 import WeeklyGoal from "@/components/WeeklyGoal";
 import { reviewQueueUrl } from "@/components/studyQueueCache";
 import { getAppSession } from "@/lib/app-session";
-import { listAllCards, listDecks } from "@/lib/db";
+import { listAllCards, listDecks, nextReleaseTeaser } from "@/lib/db";
 import { countsByDeck, totalCounts } from "@/lib/due";
 import { weakWordCount } from "@/lib/mistake-clinic";
 import { plural } from "@/lib/plural";
 import { appTimeZone } from "@/lib/forecast";
+import { partitionStudyDecks, releaseWeekLabel, type ReleaseTeaser } from "@/lib/multi-user-model";
 import { weeklyProgress } from "@/lib/practice";
 import { hardWords } from "@/lib/study-sets";
+import type { Deck, DeckCounts } from "@/lib/types";
 import { uniqueWords } from "@/lib/words";
+
+function deckKicker(deck: Deck): string {
+  if (deck.source === "private") return "Private";
+  if (typeof deck.releaseWeek === "number") return releaseWeekLabel(deck.releaseWeek);
+  return "Shared";
+}
+
+function DeckList({
+  decks,
+  byDeck,
+  grouped,
+}: {
+  decks: Deck[];
+  byDeck: Map<string, DeckCounts>;
+  grouped: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+      {decks.map((deck) => {
+        const counts = byDeck.get(deck.id) ?? { total: 0, due: 0, newCards: 0 };
+        return (
+          <ModeLink
+            key={deck.id}
+            href={`/decks/${deck.id}`}
+            title={deck.name}
+            kicker={grouped ? deckKicker(deck) : undefined}
+            detail={`${plural(counts.total, "card")} · ${counts.due} due · ${counts.newCards} new`}
+            badge={counts.due}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function UpcomingLesson({ teaser, timeZone }: { teaser: ReleaseTeaser; timeZone: string }) {
+  const opens = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(new Date(teaser.releaseAt));
+  const when = typeof teaser.releaseWeek === "number" ? `${releaseWeekLabel(teaser.releaseWeek)} · ${opens}` : opens;
+  return (
+    <section aria-labelledby="upcoming-heading" className="card p-5">
+      <h2 id="upcoming-heading" className="eyebrow">Coming up</h2>
+      <p className="mt-2 font-semibold">{teaser.name}</p>
+      <p className="mt-1 text-sm text-muted">Opens {when}. Cards stay hidden until then.</p>
+    </section>
+  );
+}
 
 export default async function HomePage({
   searchParams,
@@ -24,14 +80,16 @@ export default async function HomePage({
   if ((await getAppSession())?.role === "admin") {
     return <AdminHome studyBlocked={adminStudy === "1"} />;
   }
-  const decks = await listDecks();
+  const [decks, teaser] = await Promise.all([listDecks(), nextReleaseTeaser()]);
   const cards = await listAllCards(decks);
   const now = new Date();
   const totals = totalCounts(cards, now);
   const byDeck = countsByDeck(cards, now);
+  const groups = partitionStudyDecks(decks);
+  const zone = appTimeZone();
   const hardCount = uniqueWords(hardWords(cards)).length;
   const clinicCount = weakWordCount(cards, { now });
-  const progress = weeklyProgress(cards, now, appTimeZone());
+  const progress = weeklyProgress(cards, now, zone);
   const canStudy = totals.due + totals.newCards > 0;
 
   return (
@@ -88,35 +146,50 @@ export default async function HomePage({
         </div>
       </section>
 
-      <section aria-labelledby="decks-heading" className="space-y-3">
-        <h2 id="decks-heading" className="eyebrow">Decks</h2>
-        {decks.length === 0 && (
-          <div className="card space-y-3 p-5">
-            <div>
-              <h3 className="font-semibold">Start with one small lesson deck</h3>
-              <p className="mt-1 text-sm text-muted">
-                Create a deck, add a few words, then tap Start Review. You can import a CSV later when you have a larger list.
-              </p>
+      {teaser && <UpcomingLesson teaser={teaser} timeZone={zone} />}
+
+      {groups ? (
+        <>
+          <section aria-labelledby="shared-heading" className="space-y-3">
+            <h2 id="shared-heading" className="eyebrow">Shared lessons</h2>
+            {groups.shared.length === 0 ? (
+              <p className="card p-4 text-sm text-muted">No shared lessons are available yet.</p>
+            ) : (
+              <DeckList decks={groups.shared} byDeck={byDeck} grouped />
+            )}
+          </section>
+          <section aria-labelledby="personal-heading" className="space-y-3">
+            <h2 id="personal-heading" className="eyebrow">Your decks</h2>
+            {groups.personal.length === 0 ? (
+              <p className="text-sm text-muted">Private decks you create stay in this list. Shared lessons stay above.</p>
+            ) : (
+              <DeckList decks={groups.personal} byDeck={byDeck} grouped />
+            )}
+            <NewDeckButton />
+          </section>
+        </>
+      ) : (
+        <section aria-labelledby="decks-heading" className="space-y-3">
+          <h2 id="decks-heading" className="eyebrow">Decks</h2>
+          {decks.length === 0 && (
+            <div className="card space-y-3 p-5">
+              <div>
+                <h3 className="font-semibold">Start with one small lesson deck</h3>
+                <p className="mt-1 text-sm text-muted">
+                  Create a deck, add a few words, then tap Start Review. You can import a CSV later when you have a larger list.
+                </p>
+              </div>
+              <ol className="grid gap-2 text-sm text-muted sm:grid-cols-3">
+                <li><span className="font-semibold text-foreground">1.</span> Create a deck</li>
+                <li><span className="font-semibold text-foreground">2.</span> Add or import cards</li>
+                <li><span className="font-semibold text-foreground">3.</span> Review daily</li>
+              </ol>
             </div>
-            <ol className="grid gap-2 text-sm text-muted sm:grid-cols-3">
-              <li><span className="font-semibold text-foreground">1.</span> Create a deck</li>
-              <li><span className="font-semibold text-foreground">2.</span> Add or import cards</li>
-              <li><span className="font-semibold text-foreground">3.</span> Review daily</li>
-            </ol>
-          </div>
-        )}
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-          {decks.map((deck) => {
-            const counts = byDeck.get(deck.id) ?? { total: 0, due: 0, newCards: 0 };
-            return (
-              <ModeLink key={deck.id} href={`/decks/${deck.id}`} title={deck.name}
-                detail={`${plural(counts.total, "card")} · ${counts.due} due · ${counts.newCards} new`}
-                badge={counts.due} />
-            );
-          })}
-        </div>
-        <NewDeckButton />
-      </section>
+          )}
+          <DeckList decks={decks} byDeck={byDeck} grouped={false} />
+          <NewDeckButton />
+        </section>
+      )}
     </div>
   );
 }
