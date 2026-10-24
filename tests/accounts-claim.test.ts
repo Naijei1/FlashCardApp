@@ -103,3 +103,48 @@ it("does not move a claim onto an account that already has progress", async () =
   });
   expect(linked.userId).toBe("user_empty");
 });
+
+it("does not set a disabled profile back to active on sign-in", async () => {
+  const { resolveGoogleUser } = await import("@/lib/accounts");
+  const updates: string[] = [];
+  mocks.send.mockImplementation(async (command: { input: Record<string, unknown> }) => {
+    const key = command.input.Key as { PK?: string } | undefined;
+    if (key?.PK === "AUTH#google#sub-1") return { Item: { userId: "user_learner" } };
+    if (typeof command.input.UpdateExpression === "string") {
+      const expression = command.input.UpdateExpression;
+      updates.push(expression);
+      if (expression.includes("#status")) {
+        const error = new Error("condition");
+        error.name = "ConditionalCheckFailedException";
+        throw error;
+      }
+      expect(JSON.stringify(command.input.ExpressionAttributeValues)).not.toContain("active");
+      return {};
+    }
+    return {};
+  });
+  const linked = await resolveGoogleUser({
+    sub: "sub-1",
+    email: "study@example.com",
+    emailVerified: true,
+  });
+  expect(linked.userId).toBe("user_learner");
+  expect(updates.some((expression) => expression.includes("#status"))).toBe(true);
+  const kept = updates.filter((expression) => !expression.includes("#status"));
+  expect(kept.length).toBeGreaterThan(0);
+  expect(kept.every((expression) => !expression.includes(":active"))).toBe(true);
+});
+
+it("blocks a learner when either the profile or the directory is disabled", async () => {
+  const { isGoogleSubjectDisabled, isUserDisabled } = await import("@/lib/accounts");
+  mocks.send.mockImplementation(async (command: { input: Record<string, unknown> }) => {
+    const key = command.input.Key as { PK?: string; SK?: string } | undefined;
+    if (key?.SK === "PROFILE") return { Item: { status: "active" } };
+    if (key?.PK === "USERS") return { Item: { status: "disabled" } };
+    if (key?.PK === "AUTH#google#sub-1") return { Item: { userId: "user_learner" } };
+    return {};
+  });
+  expect(await isUserDisabled("user_learner")).toBe(true);
+  expect(await isGoogleSubjectDisabled("sub-1")).toBe(true);
+  expect(await isGoogleSubjectDisabled("missing")).toBe(false);
+});

@@ -3,7 +3,7 @@ import NextAuth from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import type { Session } from "next-auth";
 import Google from "next-auth/providers/google";
-import { resolveGoogleUser } from "./accounts";
+import { isGoogleSubjectDisabled, isUserDisabled, resolveGoogleUser } from "./accounts";
 import { beginSession, limitSharedLogin, sessionIsCurrent } from "./auth-store";
 import { clientAddressKey } from "./login-limit";
 import { roleForVerifiedEmail } from "./multi-user-model";
@@ -58,6 +58,7 @@ export async function googleSignIn(args: {
   }
   if (result.status === "blocked") return "/login?error=TooManyAttempts";
   if (result.status !== "allowed") return false;
+  if (identity && (await isGoogleSubjectDisabled(identity.sub))) return "/login?error=AccountDisabled";
   return true;
 }
 
@@ -148,6 +149,7 @@ export async function readGoogleSession(): Promise<AppSession | null> {
   if (!state) return null;
   const current = await sessionIsCurrent(state.userId, state.sessionId, state.sessionVersion);
   if (!current) return null;
+  if (await isUserDisabled(state.userId)) return null;
   return state;
 }
 

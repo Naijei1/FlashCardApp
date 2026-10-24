@@ -34,6 +34,12 @@ a deploy cannot lock the live site out before Google OAuth exists.
   streak, last review time. `GET /api/admin/users/:id/cards` is 403 for
   everyone, including admins. Responses are passed through an allowlist so a
   directory row cannot leak card fields.
+- An admin can disable a learner. The profile and directory `status` become
+  `disabled`. Progress, hidden cards, and the Google link stay. `getAppSession`
+  reads that status and treats a disabled learner as signed out. Google sign-in
+  for that subject is refused with `AccountDisabled`. A later sign-in does not
+  set `status` back to `active`. Enabling the learner restores `active`.
+  Admin accounts cannot be disabled. Shared-password mode has no disable list.
 
 Shared-password and Google sessions use the same DynamoDB rows. They do not
 overlap progress (`PROGRESS#`), profiles, or hidden cards:
@@ -94,6 +100,9 @@ press publish now. There is no scheduler. A learner's read checks `status` and
   future date
 - migrated decks are stored as `published`
 - archived decks and cards are hidden
+- a learner's Home shows the next scheduled deck as a teaser: name, week
+  label, and release time. That teaser does not include card text and does
+  not link into the deck before it is released
 
 ### Admin edits
 

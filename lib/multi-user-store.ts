@@ -22,6 +22,7 @@ import {
   hiddenPrefix,
   isReleasedToLearners,
   isStudied,
+  nextScheduledTeaser,
   nextStudyStreak,
   planGlobalEdit,
   studiedOnFromSummary,
@@ -34,6 +35,7 @@ import {
   toAdminUserSummary,
   userDirectoryKey,
   userLogsKey,
+  userProfileKey,
   userReceiptsKey,
   userStatsKey,
   type ContentRecord,
@@ -701,6 +703,60 @@ export async function listHiddenGlobalCards(deckId: string): Promise<Array<Pick<
     hidden.push({ id: marker.cardId, deckId, front: content.front, back: content.back });
   }
   return hidden;
+}
+
+export async function nextReleaseTeaserForCurrentUser() {
+  const session = await sessionOrThrow();
+  if (session.role === "admin") return null;
+  const items = await queryItems("GLOBAL#DECKS");
+  const decks = items
+    .filter((item) => typeof item.SK === "string" && item.SK.startsWith("DECK#"))
+    .map((item) => deckFromItem(item, String(item.SK).slice("DECK#".length), "global"));
+  return nextScheduledTeaser(decks, new Date());
+}
+
+export async function setLearnerDisabled(userId: string, disabled: boolean): Promise<void> {
+  const session = await sessionOrThrow();
+  if (session.role !== "admin" || session.authMode !== "google") {
+    throw new AccessError(403, "admin only");
+  }
+  if (!userId || userId === session.userId) {
+    throw new AccessError(403, "You cannot disable your own account");
+  }
+  const profile = await getItem(userProfileKey(userId));
+  const directory = await getItem(userDirectoryKey(userId));
+  if (!profile && !directory) throw new AccessError(404, "learner not found");
+  if (profile?.role === "admin" || directory?.role === "admin") {
+    throw new AccessError(403, "Admin accounts cannot be disabled");
+  }
+  const status = disabled ? "disabled" : "active";
+  const now = new Date().toISOString();
+  const names = { "#status": "status" };
+  const values = { ":status": status, ":now": now };
+  if (profile) {
+    await doc.send(
+      new UpdateCommand({
+        TableName: tableName(),
+        Key: userProfileKey(userId),
+        UpdateExpression: "SET #status = :status, updatedAt = :now",
+        ConditionExpression: "attribute_exists(PK)",
+        ExpressionAttributeNames: names,
+        ExpressionAttributeValues: values,
+      })
+    );
+  }
+  if (directory) {
+    await doc.send(
+      new UpdateCommand({
+        TableName: tableName(),
+        Key: userDirectoryKey(userId),
+        UpdateExpression: "SET #status = :status, updatedAt = :now",
+        ConditionExpression: "attribute_exists(PK)",
+        ExpressionAttributeNames: names,
+        ExpressionAttributeValues: values,
+      })
+    );
+  }
 }
 
 export async function listAdminUserSummaries() {

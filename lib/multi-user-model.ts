@@ -42,6 +42,8 @@ export type AdminUserSummary = {
   reviewCount: number;
   currentStreak: number;
   lastReviewAt?: string;
+  /** Present only when an admin has disabled the learner. */
+  status?: "disabled";
 };
 
 const ADMIN_SUMMARY_KEYS = [
@@ -52,7 +54,54 @@ const ADMIN_SUMMARY_KEYS = [
   "reviewCount",
   "currentStreak",
   "lastReviewAt",
+  "status",
 ] as const;
+
+export type ReleaseTeaser = {
+  name: string;
+  releaseAt: string;
+  releaseWeek?: number;
+};
+
+/** Split multi-user decks for the home page. Legacy decks with no source stay ungrouped. */
+export function partitionStudyDecks<T extends { source?: string | null }>(
+  decks: readonly T[]
+): { shared: T[]; personal: T[] } | null {
+  if (!decks.some((deck) => deck.source === "global" || deck.source === "private")) return null;
+  return {
+    shared: decks.filter((deck) => deck.source !== "private"),
+    personal: decks.filter((deck) => deck.source === "private"),
+  };
+}
+
+/**
+ * Soonest future global release. Callers pass deck metadata only — card text
+ * is not part of this input and is not returned.
+ */
+export function nextScheduledTeaser(
+  decks: readonly {
+    name?: string;
+    status?: string | null;
+    releaseAt?: string | null;
+    releaseWeek?: number | null;
+    archivedAt?: string | null;
+    source?: string | null;
+  }[],
+  now: Date
+): ReleaseTeaser | null {
+  const upcoming = decks
+    .filter((deck) => !deck.archivedAt && deck.source !== "private" && deck.status === "scheduled")
+    .map((deck) => ({ deck, at: deck.releaseAt ? Date.parse(deck.releaseAt) : Number.NaN }))
+    .filter((entry) => Number.isFinite(entry.at) && entry.at > now.getTime())
+    .sort((a, b) => a.at - b.at || (a.deck.name ?? "").localeCompare(b.deck.name ?? ""));
+  const next = upcoming[0];
+  if (!next) return null;
+  return {
+    name: next.deck.name?.trim() || "Upcoming lesson",
+    releaseAt: new Date(next.at).toISOString(),
+    ...(typeof next.deck.releaseWeek === "number" ? { releaseWeek: next.deck.releaseWeek } : {}),
+  };
+}
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -358,6 +407,7 @@ export function toAdminUserSummary(row: Record<string, unknown>): AdminUserSumma
     currentStreak: numberField(row.currentStreak),
   };
   if (typeof row.lastReviewAt === "string" && row.lastReviewAt) summary.lastReviewAt = row.lastReviewAt;
+  if (row.status === "disabled") summary.status = "disabled";
   return summary;
 }
 

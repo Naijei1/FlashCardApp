@@ -53,7 +53,7 @@ export default function RatingBar({
             }`}
           >
             {r.label}
-            <span className="text-xs font-normal tabular-nums opacity-70">{intervals[r.key]}</span>
+            <span className="text-xs font-semibold tabular-nums">{intervals[r.key]}</span>
           </button>
         ))}
       </div>
