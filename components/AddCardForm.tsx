@@ -5,7 +5,7 @@ import { FormEvent, useRef, useState } from "react";
 import { isImeEnter } from "@/lib/ime";
 import { responseError } from "@/lib/response-error";
 
-export default function AddCardForm({ deckId }: { deckId: string }) {
+export default function AddCardForm({ deckId, live = false }: { deckId: string; live?: boolean }) {
   const router = useRouter();
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
@@ -20,6 +20,7 @@ export default function AddCardForm({ deckId }: { deckId: string }) {
     event.preventDefault();
     // A state update alone cannot block two submits in the same event turn.
     if (submitting.current || composing.current || !front.trim() || !back.trim()) return;
+    if (live && !window.confirm("This deck is visible to learners. Add this card to the live deck?")) return;
     submitting.current = true;
     setError("");
     setBusy(true);

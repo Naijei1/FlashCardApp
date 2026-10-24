@@ -290,6 +290,46 @@ it("retains a review when a proxy or login page responds with HTTP 200 instead o
   expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(JSON.parse(fetchMock.mock.calls[1][1].body));
 });
 
+it("keeps one account's offline queue off the next account and clears it on logout", async () => {
+  const { storage } = installBrowser(undefined, false);
+  const scope = await import("@/lib/browser-user-scope");
+  scope.bindLocalUser("user-a");
+  const { createReviewSync } = await import("@/components/reviewSync");
+  const sync = createReviewSync(vi.fn());
+  sync.push({
+    cardId: "card-1",
+    deckId: "deck-1",
+    rating: 3,
+    clientReviewId: "review_user_a_001",
+    reviewedAt: "2026-09-03T14:00:00.000Z",
+  });
+  expect(reviewKeys(storage).some((key) => key.includes("user-a"))).toBe(true);
+
+  scope.bindLocalUser("user-b");
+  expect(sync.getState().pendingCount).toBe(0);
+  expect(reviewKeys(storage).some((key) => key.includes("user-a"))).toBe(true);
+
+  scope.bindLocalUser("user-a");
+  expect(sync.getState().pendingCount).toBe(1);
+  scope.clearLocalUserData();
+  expect(sync.getState().pendingCount).toBe(0);
+  expect(reviewKeys(storage)).toHaveLength(0);
+});
+
+it("does not keep retrying a deck that is not released", async () => {
+  installBrowser();
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({ error: "deck is not available to study" }) });
+  vi.stubGlobal("fetch", fetchMock);
+  const { createReviewSync } = await import("@/components/reviewSync");
+  const sync = createReviewSync(vi.fn());
+  sync.push({ cardId: "card-1", deckId: "deck-1", rating: 3 });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(sync.getState()).toMatchObject({ pendingCount: 1, blockedCount: 1 });
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
 it("preserves a writing-mode review across an offline reload", async () => {
   const { storage } = installBrowser(undefined, false);
   const { createReviewSync } = await import("@/components/reviewSync");

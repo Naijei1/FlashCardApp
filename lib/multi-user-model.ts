@@ -281,6 +281,27 @@ export function nextDay(key: string): string {
   return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
 }
 
+/** A streak still counts today if the last study day was today or yesterday. */
+export function visibleStreak(currentStreak: number, lastStudiedOn: string | undefined, today: string): number {
+  if (!lastStudiedOn) return currentStreak;
+  if (lastStudiedOn === today || nextDay(lastStudiedOn) === today) return currentStreak;
+  return 0;
+}
+
+export function studiedOnFromSummary(
+  row: { lastStudiedOn?: unknown; lastReviewAt?: unknown },
+  timeZone: string,
+  localDate: (date: Date, zone: string) => string
+): string | undefined {
+  if (typeof row.lastStudiedOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.lastStudiedOn)) {
+    return row.lastStudiedOn;
+  }
+  if (typeof row.lastReviewAt === "string" && Number.isFinite(Date.parse(row.lastReviewAt))) {
+    return localDate(new Date(row.lastReviewAt), timeZone);
+  }
+  return undefined;
+}
+
 export function nextStudyStreak(
   current: number,
   lastStudiedOn: string | undefined,

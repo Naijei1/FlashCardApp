@@ -8,6 +8,7 @@ import {
   signSession,
 } from "@/lib/auth";
 import { SHARED_USER_ID } from "@/lib/constants";
+import { authMode } from "@/lib/flags";
 import { clientAddressKey } from "@/lib/login-limit";
 
 function blockedResponse(retryAfter: number) {
@@ -18,6 +19,12 @@ function blockedResponse(retryAfter: number) {
 }
 
 export async function POST(request: Request) {
+  if (authMode() === "google") {
+    return NextResponse.json(
+      { error: "not found" },
+      { status: 404, headers: { "Cache-Control": "no-store" } }
+    );
+  }
   const now = Date.now();
   const key = clientAddressKey(request.headers);
   let result;

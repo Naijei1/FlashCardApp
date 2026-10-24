@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { clearLocalUserData } from "@/lib/browser-user-scope";
 import { responseError } from "@/lib/response-error";
 
 export default function LogoutButton() {
@@ -18,7 +19,10 @@ export default function LogoutButton() {
       body: JSON.stringify({ everywhere }),
     }).catch(() => null);
     setBusy(null);
-    if (response?.ok) router.replace("/login");
+    if (response?.ok) {
+      clearLocalUserData();
+      router.replace("/login");
+    }
     else setError(await responseError(response, "Could not log out."));
   }
 

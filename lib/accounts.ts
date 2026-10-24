@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { GetCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { AccessError } from "./access-error";
 import { doc, tableName } from "./dynamo";
 import {
@@ -72,6 +72,23 @@ export async function resolveGoogleUser(identity: GoogleIdentity): Promise<Linke
   }
   const now = new Date().toISOString();
   if (plan.action === "existing") {
+    if (
+      claim &&
+      typeof claim.userId === "string" &&
+      !claim.claimedSub &&
+      claim.userId !== plan.userId &&
+      plan.role !== "admin"
+    ) {
+      const repaired = await repairEmptyClaim({
+        sub: identity.sub,
+        email,
+        role: plan.role,
+        emptyUserId: plan.userId,
+        claimUserId: claim.userId,
+        now,
+      });
+      if (repaired) return repaired;
+    }
     await touchProfile(plan.userId, email, plan.role, now);
     return { userId: plan.userId, email, role: plan.role };
   }
@@ -83,13 +100,13 @@ export async function resolveGoogleUser(identity: GoogleIdentity): Promise<Linke
 }
 
 async function touchProfile(userId: string, email: string, role: Role, now: string): Promise<void> {
-  const names = { "#email": "email", "#role": "role", "#seen": "lastSeenAt" };
-  const values = { ":email": email, ":role": role, ":seen": now };
+  const names = { "#email": "email", "#role": "role", "#seen": "lastSeenAt", "#status": "status" };
+  const values = { ":email": email, ":role": role, ":seen": now, ":status": "active" };
   await doc.send(
     new UpdateCommand({
       TableName: tableName(),
       Key: userProfileKey(userId),
-      UpdateExpression: "SET #email = :email, #role = :role, #seen = :seen",
+      UpdateExpression: "SET #email = :email, #role = :role, #seen = :seen, #status = :status",
       ExpressionAttributeNames: names,
       ExpressionAttributeValues: values,
     })
@@ -98,11 +115,79 @@ async function touchProfile(userId: string, email: string, role: Role, now: stri
     new UpdateCommand({
       TableName: tableName(),
       Key: userDirectoryKey(userId),
-      UpdateExpression: "SET #email = :email, #role = :role, #seen = :seen, userId = if_not_exists(userId, :userId)",
+      UpdateExpression:
+        "SET #email = :email, #role = :role, #seen = :seen, #status = :status, userId = if_not_exists(userId, :userId)",
       ExpressionAttributeNames: names,
       ExpressionAttributeValues: { ...values, ":userId": userId },
     })
   );
+}
+
+async function accountHasProgress(userId: string): Promise<boolean> {
+  const directory = await readItem(userDirectoryKey(userId));
+  const reviews = typeof directory?.reviewCount === "number" ? directory.reviewCount : 0;
+  const studied = typeof directory?.cardsStudied === "number" ? directory.cardsStudied : 0;
+  if (reviews > 0 || studied > 0) return true;
+  const res = await doc.send(
+    new QueryCommand({
+      TableName: tableName(),
+      KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
+      ExpressionAttributeValues: { ":pk": `USER#${userId}`, ":sk": "PROGRESS#" },
+      Limit: 1,
+      ConsistentRead: true,
+    })
+  );
+  return (res.Count ?? res.Items?.length ?? 0) > 0;
+}
+
+/**
+ * A failed claim can leave a brand-new empty user beside the unclaimed
+ * placeholder. Move the Google link only when that account has no progress.
+ */
+async function repairEmptyClaim(input: {
+  sub: string;
+  email: string;
+  role: Role;
+  emptyUserId: string;
+  claimUserId: string;
+  now: string;
+}): Promise<LinkedUser | null> {
+  if (await accountHasProgress(input.emptyUserId)) return null;
+  try {
+    await doc.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Update: {
+              TableName: tableName(),
+              Key: googleAuthKey(input.sub),
+              UpdateExpression: "SET userId = :claimUser, email = :email",
+              ConditionExpression: "userId = :emptyUser",
+              ExpressionAttributeValues: {
+                ":claimUser": input.claimUserId,
+                ":email": input.email,
+                ":emptyUser": input.emptyUserId,
+              },
+            },
+          },
+          {
+            Update: {
+              TableName: tableName(),
+              Key: claimKey(input.email),
+              UpdateExpression: "SET claimedSub = :sub, claimedAt = :now",
+              ConditionExpression: "attribute_exists(PK) AND attribute_not_exists(claimedSub)",
+              ExpressionAttributeValues: { ":sub": input.sub, ":now": input.now },
+            },
+          },
+        ],
+      })
+    );
+  } catch (error) {
+    if (!(error instanceof Error) || error.name !== "TransactionCanceledException") throw error;
+    return null;
+  }
+  await touchProfile(input.claimUserId, input.email, input.role, input.now);
+  return { userId: input.claimUserId, email: input.email, role: input.role };
 }
 
 async function claimPlaceholder(
@@ -111,41 +196,49 @@ async function claimPlaceholder(
   email: string,
   now: string
 ): Promise<LinkedUser | null> {
-  try {
-    await doc.send(
-      new TransactWriteCommand({
-        TransactItems: [
-          {
-            Put: {
-              TableName: tableName(),
-              Item: { ...googleAuthKey(sub), userId: plan.userId, email, linkedAt: now },
-              ConditionExpression: "attribute_not_exists(PK)",
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await doc.send(
+        new TransactWriteCommand({
+          TransactItems: [
+            {
+              Put: {
+                TableName: tableName(),
+                Item: { ...googleAuthKey(sub), userId: plan.userId, email, linkedAt: now },
+                ConditionExpression: "attribute_not_exists(PK)",
+              },
             },
-          },
-          {
-            Update: {
-              TableName: tableName(),
-              Key: claimKey(email),
-              UpdateExpression: "SET claimedSub = :sub, claimedAt = :now",
-              ConditionExpression:
-                "attribute_exists(PK) AND (attribute_not_exists(claimedSub) OR claimedSub = :sub)",
-              ExpressionAttributeValues: { ":sub": sub, ":now": now },
+            {
+              Update: {
+                TableName: tableName(),
+                Key: claimKey(email),
+                UpdateExpression: "SET claimedSub = :sub, claimedAt = :now",
+                ConditionExpression:
+                  "attribute_exists(PK) AND (attribute_not_exists(claimedSub) OR claimedSub = :sub)",
+                ExpressionAttributeValues: { ":sub": sub, ":now": now },
+              },
             },
-          },
-        ],
-      })
-    );
-  } catch (error) {
-    if (!(error instanceof Error) || error.name !== "TransactionCanceledException") throw error;
-    const link = await readItem(googleAuthKey(sub));
-    if (typeof link?.userId === "string") {
-      await touchProfile(link.userId, email, plan.role, now);
-      return { userId: link.userId, email, role: plan.role };
+          ],
+        })
+      );
+      await touchProfile(plan.userId, email, plan.role, now);
+      return { userId: plan.userId, email, role: plan.role };
+    } catch (error) {
+      if (!(error instanceof Error) || error.name !== "TransactionCanceledException") throw error;
+      const link = await readItem(googleAuthKey(sub));
+      if (typeof link?.userId === "string") {
+        await touchProfile(link.userId, email, plan.role, now);
+        return { userId: link.userId, email, role: plan.role };
+      }
+      const currentClaim = await readItem(claimKey(email));
+      const claimedSub = typeof currentClaim?.claimedSub === "string" ? currentClaim.claimedSub : "";
+      if (claimedSub && claimedSub !== sub) return null;
+      if (attempt + 1 < maxAttempts) continue;
+      throw error;
     }
-    return null;
   }
-  await touchProfile(plan.userId, email, plan.role, now);
-  return { userId: plan.userId, email, role: plan.role };
+  throw new Error("legacy claim did not complete");
 }
 
 async function createUser(sub: string, email: string, role: Role, now: string): Promise<LinkedUser> {

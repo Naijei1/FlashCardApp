@@ -1,11 +1,22 @@
 import { redirect } from "next/navigation";
 import { getAppSession } from "@/lib/app-session";
+import { appTimeZone } from "@/lib/forecast";
 import { listAdminUserSummaries } from "@/lib/multi-user-store";
 
 export default async function AdminUsersPage() {
   const session = await getAppSession();
   if (session?.role !== "admin") redirect("/");
   const users = await listAdminUserSummaries();
+  const learners = users.filter((user) => user.role !== "admin");
+  const zone = appTimeZone();
+  const reviewed = new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
   return (
     <div className="space-y-5 py-6">
       <header>
@@ -15,13 +26,19 @@ export default async function AdminUsersPage() {
           Cards studied, reviews, and streaks. Card-by-card progress stays on each learner&apos;s account.
         </p>
       </header>
-      {users.length === 0 && <p className="card p-4 text-sm text-muted">No accounts yet.</p>}
+      {users.some((user) => user.role === "admin") && (
+        <p className="text-sm text-muted">Admin accounts are separate and are not counted as learners.</p>
+      )}
+      {learners.length === 0 && <p className="card p-4 text-sm text-muted">No learner accounts yet.</p>}
       <ul className="space-y-2">
-        {users.map((user) => (
+        {learners.map((user) => (
           <li key={user.userId} className="card grid gap-2 p-4 sm:grid-cols-[1fr_auto_auto_auto]">
             <div>
               <div className="font-semibold">{user.email || "Signed in"}</div>
-              <div className="text-xs text-muted">{user.role === "admin" ? "Admin" : "Learner"}</div>
+              <div className="text-xs text-muted">
+                Learner
+                {user.lastReviewAt ? ` · last review ${reviewed.format(new Date(user.lastReviewAt))}` : " · no reviews yet"}
+              </div>
             </div>
             <div className="text-sm"><span className="tabular-nums font-semibold">{user.cardsStudied}</span> studied</div>
             <div className="text-sm"><span className="tabular-nums font-semibold">{user.reviewCount}</span> reviews</div>

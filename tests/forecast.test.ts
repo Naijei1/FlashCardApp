@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildReviewForecast, localDateKey } from "@/lib/forecast";
+import {
+  buildReviewForecast,
+  formatZonedDateTimeLocal,
+  localDateKey,
+  parseZonedDateTimeLocal,
+  reviewForecastDates,
+} from "@/lib/forecast";
+import { State } from "ts-fsrs";
 
 const ZONE = "America/New_York";
 
@@ -17,6 +24,22 @@ describe("review forecast", () => {
     expect(days[0]).toMatchObject({ key: "2026-09-02", label: "Today", count: 1 });
     expect(days[1]).toMatchObject({ key: "2026-09-03", label: "Tomorrow", count: 1 });
     expect(upcomingCount).toBe(1);
+  });
+
+  it("leaves new cards out of the review forecast", () => {
+    const dates = reviewForecastDates([
+      { fsrs: { due: "2026-10-24T12:00:00.000Z", state: State.New } },
+      { fsrs: { due: "2026-10-24T18:00:00.000Z", state: State.Review } },
+    ]);
+    expect(dates).toHaveLength(1);
+    expect(dates[0].toISOString()).toBe("2026-10-24T18:00:00.000Z");
+  });
+
+  it("reads and writes release times in America/New_York instead of a UTC slice", () => {
+    const iso = "2026-07-04T19:30:00.000Z";
+    expect(formatZonedDateTimeLocal(new Date(iso), ZONE)).toBe("2026-07-04T15:30");
+    expect(parseZonedDateTimeLocal("2026-07-04T15:30", ZONE)).toBe(iso);
+    expect("2026-07-04T19:30:00.000Z".slice(0, 16)).not.toBe("2026-07-04T15:30");
   });
 
   it("keeps dates correct across daylight-saving transitions", () => {

@@ -15,8 +15,15 @@ import { weeklyProgress } from "@/lib/practice";
 import { hardWords } from "@/lib/study-sets";
 import { uniqueWords } from "@/lib/words";
 
-export default async function HomePage() {
-  if ((await getAppSession())?.role === "admin") return <AdminHome />;
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ adminStudy?: string }>;
+}) {
+  const { adminStudy } = await searchParams;
+  if ((await getAppSession())?.role === "admin") {
+    return <AdminHome studyBlocked={adminStudy === "1"} />;
+  }
   const decks = await listDecks();
   const cards = await listAllCards(decks);
   const now = new Date();

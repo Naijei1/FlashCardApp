@@ -14,8 +14,8 @@ import { useHandwritingGuard } from "./useHandwritingGuard";
 import { useKeepInView } from "./useKeepInView";
 import { useKeyboard } from "./useKeyboard";
 import { useStudyQueue } from "./useStudyQueue";
+import { repeatMistakesStorageKey, subscribeLocalUser } from "@/lib/browser-user-scope";
 
-const REPEAT_MISTAKES_KEY = "flashcards.repeat-mistakes.v1";
 const CORRECTION_COPIES = 3;
 
 type Result = {
@@ -50,7 +50,11 @@ export default function WriteSession({
   const handwriting = useHandwritingGuard();
 
   useEffect(() => {
-    try { setRepeatMistakes(localStorage.getItem(REPEAT_MISTAKES_KEY) === "true"); } catch {}
+    const read = () => {
+      try { setRepeatMistakes(localStorage.getItem(repeatMistakesStorageKey()) === "true"); } catch {}
+    };
+    read();
+    return subscribeLocalUser(read);
   }, []);
 
   const prompt = useMemo(() => {
@@ -239,7 +243,7 @@ export default function WriteSession({
             onChange={(event) => {
               const enabled = event.target.checked;
               setRepeatMistakes(enabled);
-              try { localStorage.setItem(REPEAT_MISTAKES_KEY, String(enabled)); } catch {}
+              try { localStorage.setItem(repeatMistakesStorageKey(), String(enabled)); } catch {}
             }} />
           Write missed words correctly 3 more times
         </label>

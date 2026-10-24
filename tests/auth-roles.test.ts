@@ -1,12 +1,49 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { accountIdentity } from "@/lib/principal";
 import {
   googleAuthKey,
   planAccountLink,
   roleForVerifiedEmail,
+  studiedOnFromSummary,
+  visibleStreak,
 } from "@/lib/multi-user-model";
 
 afterEach(() => {
   delete process.env.ADMIN_EMAILS;
+});
+
+describe("account identity", () => {
+  it("shows the signed-in email and whether the account studies", () => {
+    expect(accountIdentity({
+      email: "naijeiwow@gmail.com",
+      role: "user",
+      authMode: "google",
+    })).toMatchObject({ email: "naijeiwow@gmail.com", roleLabel: "Learner" });
+    expect(accountIdentity({
+      email: "nj277@cornell.edu",
+      role: "admin",
+      authMode: "google",
+    }).roleLabel).toBe("Admin");
+    expect(accountIdentity({ email: "", role: "user", authMode: "shared" }).email).toBe("Shared password");
+  });
+});
+
+describe("streak display", () => {
+  it("drops a streak that missed yesterday", () => {
+    expect(visibleStreak(12, "2026-10-22", "2026-10-24")).toBe(0);
+    expect(visibleStreak(12, "2026-10-23", "2026-10-24")).toBe(12);
+    expect(visibleStreak(12, "2026-10-24", "2026-10-24")).toBe(12);
+    expect(visibleStreak(4, undefined, "2026-10-24")).toBe(4);
+  });
+
+  it("derives the study day from lastReviewAt when lastStudiedOn is missing", () => {
+    expect(studiedOnFromSummary(
+      { lastReviewAt: "2026-10-24T03:30:00.000Z" },
+      "America/New_York",
+      () => "2026-10-23"
+    )).toBe("2026-10-23");
+    expect(studiedOnFromSummary({ lastStudiedOn: "2026-10-24" }, "America/New_York", () => "ignored")).toBe("2026-10-24");
+  });
 });
 
 describe("admin role", () => {

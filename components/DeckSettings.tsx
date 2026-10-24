@@ -42,7 +42,10 @@ export default function DeckSettings({ deck }: { deck: Deck }) {
   }
 
   async function remove() {
-    if (!confirm(`Delete deck "${deck.name}" and all of its cards?`)) return;
+    const message = deck.source === "global"
+      ? `Hide "${deck.name}" for every learner? This week leaves study until you restore it.`
+      : `Delete deck "${deck.name}" and all of its cards?`;
+    if (!confirm(message)) return;
     setError("");
     setBusy(true);
     const res = await fetch(`/api/decks/${deck.id}`, { method: "DELETE" }).catch(() => null);

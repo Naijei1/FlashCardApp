@@ -79,6 +79,23 @@ describe("POST /api/review", () => {
     expect(dbMocks.getReviewReceipt).not.toHaveBeenCalled();
   });
 
+  it("rejects a review timestamp further ahead than clock skew", async () => {
+    const reviewedAt = new Date(Date.now() + 6 * 60 * 1000).toISOString();
+    const response = await POST(request({ reviewedAt }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "reviewedAt is in the future" });
+    expect(dbMocks.commitReview).not.toHaveBeenCalled();
+  });
+
+  it("returns a non-retryable 403 when the deck is not released", async () => {
+    dbMocks.getCardForReview.mockResolvedValue({ card: card(), version: 1 });
+    dbMocks.commitReview.mockResolvedValue({ status: "unavailable" });
+    const response = await POST(request());
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "deck is not available to study" });
+    expect(dbMocks.commitReview).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects a review timestamp older than the offline queue window", async () => {
     const reviewedAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
     const response = await POST(request({ reviewedAt }));

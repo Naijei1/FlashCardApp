@@ -1,16 +1,17 @@
+import { currentLocalUserId, studyBreakStorageKey } from "./browser-user-scope";
+
 /** Forced pause between review batches. */
 export const BREAK_MS = 5 * 60_000;
 
 const LEGACY_KEY = "study-break-until";
-const KEY_PREFIX = "study-break-until-v2";
 
 export type StudyBreakScope = {
   deckId: string;
   mode: "review" | "write" | "pinyin";
 };
 
-function keyFor({ deckId, mode }: StudyBreakScope): string {
-  return `${KEY_PREFIX}:${mode}:${encodeURIComponent(deckId)}`;
+function keyFor(scope: StudyBreakScope): string {
+  return studyBreakStorageKey(scope.mode, scope.deckId);
 }
 
 function getStorage(): Storage | null {
@@ -52,6 +53,12 @@ export function getBreakUntil(scope: StudyBreakScope, now: number = Date.now()):
     return scopedUntil;
   }
   remove(storage, key);
+
+  // A signed-in user must not inherit a break left by another account.
+  if (currentLocalUserId()) {
+    remove(storage, LEGACY_KEY);
+    return 0;
+  }
 
   // A legacy global break can only be assigned once. Migrate it to whichever
   // deck/mode the user resumes first, then remove the ambiguous global value.

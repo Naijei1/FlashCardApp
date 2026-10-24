@@ -3,7 +3,7 @@ import { listDecks } from "@/lib/db";
 import { releaseWeekLabel } from "@/lib/multi-user-model";
 import { listAdminUserSummaries } from "@/lib/multi-user-store";
 
-export default async function AdminHome() {
+export default async function AdminHome({ studyBlocked = false }: { studyBlocked?: boolean }) {
   const [decks, users] = await Promise.all([listDecks(), listAdminUserSummaries()]);
   const learners = users.filter((user) => user.role !== "admin");
   return (
@@ -11,6 +11,11 @@ export default async function AdminHome() {
       <header>
         <p className="eyebrow">Admin</p>
         <h1 className="mt-1 text-3xl font-bold tracking-tight">Content and learners</h1>
+        {studyBlocked && (
+          <p role="status" className="mt-3 max-w-2xl rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm text-foreground">
+            Study is turned off for the admin account. Open a deck to edit content, or use Learner stats for totals.
+          </p>
+        )}
         <p className="mt-2 max-w-2xl text-sm text-muted">
           This account manages global decks. It cannot study, and it only sees overall stats — cards studied, review counts, and streaks — never which card someone missed.
         </p>
