@@ -4,8 +4,14 @@
 // background. The stable clientReviewId is both the local queue identity and
 // the server idempotency key, so any request may be retried safely.
 
+import { reviewStoragePrefix, subscribeLocalUser } from "@/lib/browser-user-scope";
+
 const LEGACY_STORAGE_KEY = "flashcards.pending-reviews.v1";
-const STORAGE_KEY_PREFIX = "flashcards.pending-review.v2:";
+
+function isActiveReviewKey(key: string, prefix: string): boolean {
+  const rest = key.slice(prefix.length);
+  return rest.length > 0 && !rest.includes(":");
+}
 // Every atomic review also updates the same exact stats counter. Serializing
 // this background work avoids DynamoDB transaction conflicts without slowing
 // the optimistic study UI.
@@ -105,6 +111,12 @@ class ReviewQueue {
   private persistenceAvailable = false;
 
   constructor() {
+    subscribeLocalUser(() => {
+      this.queue = [];
+      this.readStorage();
+      this.notify();
+      this.drain();
+    });
     if (typeof window !== "undefined") {
       try {
         this.storage = window.localStorage;
@@ -201,9 +213,10 @@ class ReviewQueue {
     if (!this.storage) return;
     try {
       const restored = new Map<string, QueuedReview>();
+      const prefix = reviewStoragePrefix();
       for (let index = 0; index < this.storage.length; index++) {
         const key = this.storage.key(index);
-        if (!key?.startsWith(STORAGE_KEY_PREFIX)) continue;
+        if (!key?.startsWith(prefix) || !isActiveReviewKey(key, prefix)) continue;
         const serialized = this.storage.getItem(key);
         if (!serialized) continue;
         try {
@@ -247,7 +260,7 @@ class ReviewQueue {
     }
     try {
       this.storage.setItem(
-        `${STORAGE_KEY_PREFIX}${item.clientReviewId}`,
+        `${reviewStoragePrefix()}${item.clientReviewId}`,
         JSON.stringify(item)
       );
       this.persistenceAvailable = true;
@@ -264,7 +277,7 @@ class ReviewQueue {
       return false;
     }
     try {
-      this.storage.removeItem(`${STORAGE_KEY_PREFIX}${clientReviewId}`);
+      this.storage.removeItem(`${reviewStoragePrefix()}${clientReviewId}`);
       this.persistenceAvailable = true;
       return true;
     } catch {
@@ -296,9 +309,10 @@ class ReviewQueue {
       this.drain();
       return;
     }
-    if (!event.key.startsWith(STORAGE_KEY_PREFIX)) return;
+    const prefix = reviewStoragePrefix();
+    if (!event.key.startsWith(prefix) || !isActiveReviewKey(event.key, prefix)) return;
 
-    const clientReviewId = event.key.slice(STORAGE_KEY_PREFIX.length);
+    const clientReviewId = event.key.slice(prefix.length);
     const index = this.queue.findIndex(
       (item) => item.clientReviewId === clientReviewId
     );

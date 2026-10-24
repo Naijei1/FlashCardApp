@@ -558,7 +558,8 @@ export type ReviewWriteResult =
   | { status: "committed" }
   | { status: "duplicate"; receipt: ReviewReceipt }
   | { status: "mismatch"; receipt: ReviewReceipt }
-  | { status: "conflict" };
+  | { status: "conflict" }
+  | { status: "unavailable" };
 
 function toReviewReceipt(item: Item | undefined): ReviewReceipt | null {
   if (

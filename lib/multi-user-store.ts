@@ -24,6 +24,8 @@ import {
   isStudied,
   nextStudyStreak,
   planGlobalEdit,
+  studiedOnFromSummary,
+  visibleStreak,
   privateCardKey,
   privateDeckKey,
   progressKey,
@@ -59,7 +61,8 @@ type ReviewWriteResult =
   | { status: "committed" }
   | { status: "duplicate"; receipt: ReviewReceipt }
   | { status: "mismatch"; receipt: ReviewReceipt }
-  | { status: "conflict" };
+  | { status: "conflict" }
+  | { status: "unavailable" };
 
 type Item = Record<string, unknown>;
 
@@ -598,7 +601,12 @@ export async function replaceGlobalCardMeaning(
   return created;
 }
 
-export async function scheduleDeckRelease(deckId: string, releaseWeek: number, releaseAt: string): Promise<Deck> {
+export async function scheduleDeckRelease(
+  deckId: string,
+  releaseWeek: number,
+  releaseAt: string,
+  options: { confirmHide?: boolean } = {}
+): Promise<Deck> {
   const session = await sessionOrThrow();
   if (session.role !== "admin") throw new AccessError(403, "admin only");
   if (!Number.isInteger(releaseWeek) || releaseWeek < 1) {
@@ -607,6 +615,12 @@ export async function scheduleDeckRelease(deckId: string, releaseWeek: number, r
   if (!Number.isFinite(Date.parse(releaseAt))) throw new AccessError(403, "release date is invalid");
   const deck = await loadDeck(session, deckId);
   if (!deck || deck.source !== "global") throw new AccessError(404, "deck not found");
+  if (isReleasedToLearners(deck, new Date()) && !options.confirmHide) {
+    throw new AccessError(
+      403,
+      "This deck is already visible. Confirm before hiding it until a new date."
+    );
+  }
   const updatedAt = new Date().toISOString();
   await doc.send(
     new UpdateCommand({
@@ -695,7 +709,19 @@ export async function listAdminUserSummaries() {
     throw new AccessError(403, "admin only");
   }
   const rows = await queryItems("USERS", "USER#", true);
-  return rows.map((row) => toAdminUserSummary(row)).sort((a, b) => a.email.localeCompare(b.email));
+  const zone = appTimeZone();
+  const today = localDateKey(new Date(), zone);
+  return rows
+    .map((row) => {
+      const summary = toAdminUserSummary(row);
+      summary.currentStreak = visibleStreak(
+        summary.currentStreak,
+        studiedOnFromSummary(row, zone, localDateKey),
+        today
+      );
+      return summary;
+    })
+    .sort((a, b) => a.email.localeCompare(b.email));
 }
 
 function reviewReceiptOf(review: PendingReviewWrite): ReviewReceipt {
@@ -761,13 +787,34 @@ function logFields(cardId: string, log: ReviewLog) {
   };
 }
 
+function cancellationCodes(error: unknown): string[] {
+  if (!error || typeof error !== "object" || !("CancellationReasons" in error)) return [];
+  const reasons = (error as { CancellationReasons?: unknown }).CancellationReasons;
+  if (!Array.isArray(reasons)) return [];
+  return reasons.map((reason) =>
+    reason && typeof reason === "object" && "Code" in reason && typeof (reason as { Code?: unknown }).Code === "string"
+      ? (reason as { Code: string }).Code
+      : ""
+  );
+}
+
 export async function commitReviewForCurrentUser(review: PendingReviewWrite): Promise<ReviewWriteResult> {
   const session = await sessionOrThrow();
   assertLearner(session);
   if (review.card.id !== review.cardId || review.card.deckId !== review.deckId) {
     throw new Error("Review card identity does not match the request");
   }
-  const deck = await loadDeck(session, review.deckId);
+  const serverNow = new Date();
+  const globalItem = await getItem(globalDeckKey(review.deckId));
+  let deck: Deck | null = null;
+  if (globalItem && typeof globalItem.archivedAt !== "string") {
+    deck = deckFromItem(globalItem, review.deckId, "global");
+    if (!isReleasedToLearners(deck, serverNow)) return { status: "unavailable" };
+  } else {
+    const privateItem = await getItem(privateDeckKey(session.userId, review.deckId));
+    if (!privateItem || typeof privateItem.archivedAt === "string") return { status: "conflict" };
+    deck = deckFromItem(privateItem, review.deckId, "private");
+  }
   if (!deck?.source) return { status: "conflict" };
   const source = deck.source;
   const progress = progressKey(session.userId, source, review.deckId, review.cardId);
@@ -816,7 +863,7 @@ export async function commitReviewForCurrentUser(review: PendingReviewWrite): Pr
                     ExpressionAttributeValues: {
                       ":published": "published",
                       ":scheduled": "scheduled",
-                      ":now": review.reviewedAt,
+                      ":now": serverNow.toISOString(),
                     },
                   }
                 : {}),
@@ -883,7 +930,7 @@ export async function commitReviewForCurrentUser(review: PendingReviewWrite): Pr
               TableName: tableName(),
               Key: userDirectoryKey(session.userId),
               UpdateExpression:
-                "SET userId = if_not_exists(userId, :userId), email = if_not_exists(email, :email), #role = if_not_exists(#role, :role), currentStreak = :streak, lastReviewAt = :at ADD reviewCount :one, cardsStudied :studied",
+                "SET userId = if_not_exists(userId, :userId), email = if_not_exists(email, :email), #role = if_not_exists(#role, :role), currentStreak = :streak, lastStudiedOn = :day, lastReviewAt = :at ADD reviewCount :one, cardsStudied :studied",
               ExpressionAttributeNames: { "#role": "role" },
               ExpressionAttributeValues: {
                 ":userId": session.userId,
@@ -892,6 +939,7 @@ export async function commitReviewForCurrentUser(review: PendingReviewWrite): Pr
                 ":one": 1,
                 ":studied": studiedDelta,
                 ":streak": streak.currentStreak,
+                ":day": streak.lastStudiedOn,
                 ":at": review.reviewedAt,
               },
             },
@@ -903,7 +951,15 @@ export async function commitReviewForCurrentUser(review: PendingReviewWrite): Pr
   } catch (error) {
     if (!(error instanceof Error) || error.name !== "TransactionCanceledException") throw error;
     const existing = await getReviewReceiptForCurrentUser(review.clientReviewId);
-    if (!existing) return { status: "conflict" };
+    if (!existing) {
+      const fresh = await getItem(globalDeckKey(review.deckId));
+      if (fresh && typeof fresh.archivedAt !== "string") {
+        const visible = deckFromItem(fresh, review.deckId, "global");
+        if (!isReleasedToLearners(visible, new Date())) return { status: "unavailable" };
+      }
+      if (cancellationCodes(error)[1] === "ConditionalCheckFailed") return { status: "unavailable" };
+      return { status: "conflict" };
+    }
     const same =
       existing.clientReviewId === receipt.clientReviewId &&
       existing.cardId === receipt.cardId &&
@@ -940,23 +996,27 @@ export async function setCardHardForCurrentUser(deckId: string, id: string, hard
   const existing = await getItem(key);
   if (!existing) {
     const createdAt = typeof content.createdAt === "string" ? content.createdAt : new Date().toISOString();
-    await doc.send(
-      new PutCommand({
-        TableName: tableName(),
-        Item: {
-          ...key,
-          source: deck.source,
-          deckId,
-          cardId: id,
-          fsrs: emptyCardState(new Date(createdAt)),
-          hard,
-          reviewVersion: 1,
-          updatedAt: new Date().toISOString(),
-        },
-        ConditionExpression: "attribute_not_exists(PK)",
-      })
-    );
-    return;
+    try {
+      await doc.send(
+        new PutCommand({
+          TableName: tableName(),
+          Item: {
+            ...key,
+            source: deck.source,
+            deckId,
+            cardId: id,
+            fsrs: emptyCardState(new Date(createdAt)),
+            hard,
+            reviewVersion: 1,
+            updatedAt: new Date().toISOString(),
+          },
+          ConditionExpression: "attribute_not_exists(PK)",
+        })
+      );
+      return;
+    } catch (error) {
+      if (!(error instanceof Error) || error.name !== "ConditionalCheckFailedException") throw error;
+    }
   }
   await doc.send(
     new UpdateCommand({

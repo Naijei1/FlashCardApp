@@ -6,5 +6,5 @@ import { authMode } from "./flags";
 export async function redirectAdminFromStudy(): Promise<void> {
   if (authMode() !== "google") return;
   const session = await getAppSession();
-  if (session?.role === "admin") redirect("/");
+  if (session?.role === "admin") redirect("/?adminStudy=1");
 }

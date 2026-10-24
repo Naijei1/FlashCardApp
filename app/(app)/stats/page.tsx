@@ -3,7 +3,7 @@ import { countReviewLogs, listAllCards, listDecks } from "@/lib/db";
 import { getAppSession } from "@/lib/app-session";
 import { countsByDeck, totalCounts } from "@/lib/due";
 import { formatInterval } from "@/lib/interval-label";
-import { appTimeZone, buildReviewForecast } from "@/lib/forecast";
+import { appTimeZone, buildReviewForecast, reviewForecastDates } from "@/lib/forecast";
 import { uniqueWords } from "@/lib/words";
 import { State } from "ts-fsrs";
 
@@ -27,10 +27,11 @@ export default async function StatsPage() {
     byState.set(card.fsrs.state, (byState.get(card.fsrs.state) ?? 0) + 1);
   }
 
+  const zone = appTimeZone();
   const { days: forecast, upcomingCount: in7Days } = buildReviewForecast(
-    cards.map((card) => new Date(card.fsrs.due)),
+    reviewForecastDates(cards),
     now,
-    appTimeZone()
+    zone
   );
   const maxForecast = Math.max(1, ...forecast.map((f) => f.count));
 
@@ -84,6 +85,10 @@ export default async function StatsPage() {
             </div>
           ))}
         </div>
+        <p className="mt-3 text-xs text-muted">
+          Today is every scheduled review for this local day in {zone}, including ones later today.
+          Due now is only what is ready this moment. New words are counted separately.
+        </p>
       </section>
 
       <section className="card p-5">

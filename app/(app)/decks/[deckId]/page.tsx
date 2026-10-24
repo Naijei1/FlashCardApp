@@ -14,6 +14,7 @@ import { usesMultiUserData } from "@/lib/flags";
 import { listDecks } from "@/lib/db";
 import { totalCounts } from "@/lib/due";
 import { appTimeZone } from "@/lib/forecast";
+import { isReleasedToLearners } from "@/lib/multi-user-model";
 import { cardForMode } from "@/lib/modes";
 import { studyDetails } from "@/lib/pinyin-queue";
 import { plural } from "@/lib/plural";
@@ -127,7 +128,13 @@ export default async function DeckPage({
         )}
       </section>}
 
-      {viewerRole === "admin" && !virtual && <DeckReleaseControls deck={deck} />}
+      {viewerRole === "admin" && !virtual && (
+        <DeckReleaseControls
+          deck={deck}
+          timeZone={appTimeZone()}
+          released={isReleasedToLearners(deck, now)}
+        />
+      )}
 
       {!virtual && (
         <>
@@ -140,7 +147,10 @@ export default async function DeckPage({
             <a href={`/api/decks/${deck.id}/export`} className="btn btn-secondary">Export CSV</a>
           </div>
           {(viewerRole === "admin" ? deck.source !== "private" : deck.source !== "global") && (
-            <AddCardForm deckId={deck.id} />
+            <AddCardForm
+              deckId={deck.id}
+              live={deck.source === "global" && isReleasedToLearners(deck, now)}
+            />
           )}
         </>
       )}

@@ -111,6 +111,12 @@ export async function POST(request: Request) {
     if (result.status === "mismatch") {
       return conflict("clientReviewId was already used for a different review");
     }
+    if (result.status === "unavailable") {
+      return NextResponse.json(
+        { error: "deck is not available to study" },
+        { status: 403, headers: { "Cache-Control": "no-store" } }
+      );
+    }
     // An optimistic version race: strongly re-read and recompute from the
     // winning state. The idempotency log still guarantees at-most-once apply.
     if (!(await getDeck(deckId))) return notFound("deck not found");

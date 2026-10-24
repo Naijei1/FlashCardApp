@@ -11,9 +11,11 @@ const MAX_IMPORT_ROWS = 2_000;
 
 export default function ImportWizard({
   decks,
+  sharedDecks = [],
   initialDeckId,
 }: {
   decks: Deck[];
+  sharedDecks?: Deck[];
   initialDeckId?: string;
 }) {
   const [fileName, setFileName] = useState("");
@@ -93,10 +95,34 @@ export default function ImportWizard({
 
   if (decks.length === 0) {
     return (
-      <p className="text-muted">
-        Create a deck on the <Link href="/" className="text-accent underline">home page</Link>{" "}
-        first, then import into it.
-      </p>
+      <div className="space-y-4 text-sm text-muted">
+        {sharedDecks.length > 0 ? (
+          <>
+            <p>
+              Shared lessons are read-only. Import goes into a private deck.
+              Open a lesson below, or create a private deck on the home page.
+            </p>
+            <ul className="space-y-2">
+              {sharedDecks.map((deck) => (
+                <li key={deck.id}>
+                  <Link
+                    href={`/decks/${deck.id}`}
+                    className="font-medium text-accent underline"
+                    aria-current={deck.id === initialDeckId ? "page" : undefined}
+                  >
+                    {deck.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p>Create a deck on the home page first, then import into it.</p>
+        )}
+        <Link href="/" className="btn btn-secondary">
+          {sharedDecks.length > 0 ? "Create a private deck" : "Home"}
+        </Link>
+      </div>
     );
   }
 

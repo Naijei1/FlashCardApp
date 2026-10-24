@@ -15,7 +15,7 @@ export default function GoogleLogin({ error }: { error?: string }) {
         <div className="hanzi-text text-5xl leading-tight">学</div>
         <h1 className="text-xl font-semibold">Chinese Flashcards</h1>
         <p className="text-sm text-muted">
-          Sign in with Google. New accounts can study right away. The admin account manages weekly decks and does not study.
+          Sign in with Google. New accounts can study right away.
         </p>
         {message && <p role="alert" className="text-sm text-red-500">{message}</p>}
         <button type="submit" className="btn btn-primary btn-lg w-full">

@@ -156,3 +156,142 @@ it("writes progress under the signed-in user and refuses the admin", async () =>
     expect(items).not.toContain(`USER#${userId === "user-a" ? "user-b" : "user-a"}`);
   }
 });
+
+function learnerReview(reviewedAt: string): PendingReviewWrite {
+  return {
+    clientReviewId: "review_id_123456",
+    cardId: "card-1",
+    deckId: "deck-1",
+    rating: 3,
+    reviewedAt,
+    mode: "review",
+    expectedVersion: null,
+    card: {
+      ...content,
+      id: "card-1",
+      fsrs: emptyCardState(new Date(content.createdAt)),
+      updatedAt: reviewedAt,
+    },
+    log: {
+      review: new Date(reviewedAt),
+      due: new Date("2026-09-04T14:00:00.000Z"),
+      rating: 3,
+      state: 0,
+      stability: 1,
+      difficulty: 5,
+      elapsed_days: 0,
+      scheduled_days: 1,
+    },
+  } as unknown as PendingReviewWrite;
+}
+
+it("compares a global release to server time, not the client reviewedAt", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-24T15:00:00.000Z"));
+  try {
+    const { commitReviewForCurrentUser } = await import("@/lib/multi-user-store");
+    mocks.session.mockResolvedValue({
+      userId: "user-a",
+      email: "user-a@example.com",
+      role: "user",
+      emailVerified: true,
+      authMode: "google",
+    });
+    const writes: Array<Record<string, unknown>> = [];
+    mocks.send.mockImplementation(async (command: { input: Record<string, unknown> }) => {
+      const key = command.input.Key as { PK?: string } | undefined;
+      if (key?.PK === "GLOBAL#DECKS") {
+        return {
+          Item: {
+            PK: "GLOBAL#DECKS",
+            SK: "DECK#deck-1",
+            name: "Lesson",
+            source: "global",
+            status: "published",
+            createdAt: content.createdAt,
+            updatedAt: content.updatedAt,
+          },
+        };
+      }
+      if (command.input.TransactItems) {
+        writes.push(command.input);
+        return {};
+      }
+      return {};
+    });
+    const reviewedAt = "2026-10-24T14:00:00.000Z";
+    expect(await commitReviewForCurrentUser(learnerReview(reviewedAt))).toEqual({ status: "committed" });
+    const body = JSON.stringify(writes);
+    expect(body).toContain("2026-10-24T15:00:00.000Z");
+    expect(body).not.toContain(`"releaseAt <= :now"`);
+    const deckCheck = JSON.stringify(
+      (writes[0].TransactItems as Array<{ ConditionCheck?: { ExpressionAttributeValues?: Record<string, string> } }>)
+        .map((item) => item.ConditionCheck?.ExpressionAttributeValues)
+        .find((values) => values?.[":now"])
+    );
+    expect(deckCheck).toContain("2026-10-24T15:00:00.000Z");
+    expect(deckCheck).not.toContain(reviewedAt);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("rejects a review of a deck that is not released yet", async () => {
+  const { commitReviewForCurrentUser } = await import("@/lib/multi-user-store");
+  mocks.session.mockResolvedValue({
+    userId: "user-a",
+    email: "user-a@example.com",
+    role: "user",
+    emailVerified: true,
+    authMode: "google",
+  });
+  mocks.send.mockImplementation(async (command: { input: Record<string, unknown> }) => {
+    const key = command.input.Key as { PK?: string } | undefined;
+    if (key?.PK === "GLOBAL#DECKS") {
+      return {
+        Item: {
+          name: "Lesson",
+          source: "global",
+          status: "scheduled",
+          releaseAt: "2099-01-01T00:00:00.000Z",
+        },
+      };
+    }
+    if (command.input.TransactItems) throw new Error("should not write");
+    return {};
+  });
+  expect(await commitReviewForCurrentUser(learnerReview("2026-10-24T14:00:00.000Z"))).toEqual({
+    status: "unavailable",
+  });
+});
+
+it("turns a hard-mark create race into an update", async () => {
+  const { setCardHardForCurrentUser } = await import("@/lib/multi-user-store");
+  mocks.session.mockResolvedValue({
+    userId: "user-a",
+    email: "user-a@example.com",
+    role: "user",
+    emailVerified: true,
+    authMode: "google",
+  });
+  mocks.send.mockImplementation(async (command: { input: Record<string, unknown> }) => {
+    const key = command.input.Key as { PK?: string; SK?: string } | undefined;
+    if (key?.PK === "GLOBAL#DECKS") {
+      return { Item: { name: "Lesson", source: "global", status: "published" } };
+    }
+    if (key?.SK?.startsWith("CARD#")) {
+      return { Item: { front: "你", back: "you", createdAt: content.createdAt } };
+    }
+    if (command.input.ConditionExpression === "attribute_not_exists(PK)") {
+      const error = new Error("exists");
+      error.name = "ConditionalCheckFailedException";
+      throw error;
+    }
+    return {};
+  });
+  await setCardHardForCurrentUser("deck-1", "card-1", true);
+  const updates = mocks.send.mock.calls.filter((call) =>
+    String((call[0] as { input: { UpdateExpression?: string } }).input.UpdateExpression ?? "").includes("#hard")
+  );
+  expect(updates).toHaveLength(1);
+});

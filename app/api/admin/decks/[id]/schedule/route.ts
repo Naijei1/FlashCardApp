@@ -24,7 +24,9 @@ export async function POST(request: Request, { params }: Context) {
   const { id } = await params;
   try {
     const { scheduleDeckRelease } = await import("@/lib/multi-user-store");
-    const deck = await scheduleDeckRelease(id, releaseWeek, releaseAt);
+    const deck = await scheduleDeckRelease(id, releaseWeek, releaseAt, {
+      confirmHide: body.confirmHide === true,
+    });
     return NextResponse.json({ ...deck, releaseLabel: releaseWeekLabel(releaseWeek) });
   } catch (error) {
     const access = accessErrorResponse(error);

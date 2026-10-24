@@ -41,6 +41,7 @@ const CLAIMS = {
 };
 
 beforeEach(() => {
+  vi.stubEnv("AUTH_MODE", "");
   vi.stubEnv("APP_PASSWORD", "1212");
   vi.stubEnv("SESSION_SECRET", "a".repeat(64));
   vi.stubEnv("APP_PASSWORD_HEX", "");
@@ -88,6 +89,18 @@ describe("server-side session revocation", () => {
 });
 
 describe("POST /api/auth/login", () => {
+  it("does not share the password limiter when Google auth is on", async () => {
+    vi.stubEnv("AUTH_MODE", "google");
+    const response = await login(new Request("http://localhost/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "1212" }),
+    }));
+    expect(response.status).toBe(404);
+    expect(sessions.limit).not.toHaveBeenCalled();
+    expect(sessions.begin).not.toHaveBeenCalled();
+  });
+
   it("returns 429 from the shared limiter and does not create a session", async () => {
     sessions.limit.mockResolvedValue({ status: "blocked", retryAfterSeconds: 4 });
     const response = await login(new Request("http://localhost/api/auth/login", {

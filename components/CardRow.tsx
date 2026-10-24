@@ -39,6 +39,7 @@ export default function CardRow({
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [editKind, setEditKind] = useState<"" | "typo" | "meaning">("");
+  const [expanded, setExpanded] = useState(false);
   const globalAdmin = card.source === "global" && viewerRole === "admin";
   const globalLearner = card.source === "global" && viewerRole === "user";
   const committed = useRef({
@@ -133,7 +134,10 @@ export default function CardRow({
 
   async function remove() {
     if (busy) return;
-    if (!confirm(`Delete card "${card.front}"?`)) return;
+    const message = card.source === "global"
+      ? `Hide "${card.front}" for every learner? It leaves study until you restore it.`
+      : `Delete card "${card.front}"?`;
+    if (!confirm(message)) return;
     setBusy(true);
     setSaveError("");
     const res = await fetch(`/api/cards/${encodeURIComponent(card.id)}?deckId=${encodeURIComponent(card.deckId)}`, {
@@ -247,22 +251,36 @@ export default function CardRow({
   return (
     <article className="card flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:py-2.5 sm:pr-1.5 sm:pl-4">
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className={`truncate text-lg font-medium ${hasChinese(card.front) ? "hanzi-text" : ""}`}>{card.front}</span>
-          <span aria-hidden="true" className="text-muted">
-            →
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="block w-full min-w-0 text-left"
+          title={`${card.front} → ${card.back}`}
+          aria-expanded={expanded}
+        >
+          <span className="flex items-baseline gap-2">
+            <span className={`${expanded ? "whitespace-normal break-words" : "truncate"} text-lg font-medium ${hasChinese(card.front) ? "hanzi-text" : ""}`}>{card.front}</span>
+            <span aria-hidden="true" className="text-muted">
+              →
+            </span>
+            <span className={`${expanded ? "whitespace-normal break-words" : "truncate"} text-muted ${hasChinese(card.back) ? "hanzi-text" : ""}`}>{card.back}</span>
           </span>
-          <span className={`truncate text-muted ${hasChinese(card.back) ? "hanzi-text" : ""}`}>{card.back}</span>
-        </div>
-        {card.notes && <div className="truncate text-sm text-muted">{card.notes}</div>}
+        </button>
+        {card.notes && (
+          <div className={`${expanded ? "whitespace-normal break-words" : "truncate"} text-sm text-muted`} title={card.notes}>
+            {card.notes}
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-1">
       {viewerRole !== "admin" && <HardWordButton key={`${card.deckId}:${card.id}:${!!card.hard}`} card={card} />}
-      <time dateTime={card.fsrs.due} className={`w-14 shrink-0 rounded-full px-2 py-0.5 text-center text-xs tabular-nums ${
-        dueLabel(card) === "due" ? "bg-accent/10 font-medium text-accent" : "text-muted"
-      }`}>
-        {dueLabel(card)}
-      </time>
+      {viewerRole !== "admin" && (
+        <time dateTime={card.fsrs.due} className={`w-14 shrink-0 rounded-full px-2 py-0.5 text-center text-xs tabular-nums ${
+          dueLabel(card) === "due" ? "bg-accent/10 font-medium text-accent" : "text-muted"
+        }`}>
+          {dueLabel(card)}
+        </time>
+      )}
       <TtsButton text={card.front} lang={frontLang || DEFAULT_FRONT_LANG} />
       {globalLearner ? (
         <button type="button" onClick={hide} disabled={busy} className="btn btn-secondary shrink-0">
