@@ -9,6 +9,7 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import type { ReviewLog } from "ts-fsrs";
 import { AccessError } from "./access-error";
+import { syncCharacterIndexes } from "./character-index";
 import { getAppSession } from "./app-session";
 import { doc, tableName } from "./dynamo";
 import { emptyCardState } from "./fsrs";
@@ -354,6 +355,7 @@ export async function putCardForCurrentUser(card: Card): Promise<void> {
     names["#notes"] = "notes";
     update += " REMOVE #notes";
   }
+  const existing = await getItem(key);
   await doc.send(
     new UpdateCommand({
       TableName: tableName(),
@@ -364,6 +366,17 @@ export async function putCardForCurrentUser(card: Card): Promise<void> {
       ExpressionAttributeValues: values,
     })
   );
+  await syncCharacterIndexes(deck.source === "private" ? { kind: "private", userId: session.userId } : { kind: "global" }, [
+    {
+      deckId: card.deckId,
+      cardId: card.id,
+      front: card.front,
+      back: card.back,
+      updatedAt: card.updatedAt,
+      previousFront: typeof existing?.front === "string" ? existing.front : "",
+      previousBack: typeof existing?.back === "string" ? existing.back : "",
+    },
+  ]);
 }
 
 function contentPut(card: Card, key: { PK: string; SK: string }, source: "global" | "private") {
@@ -404,8 +417,11 @@ export async function batchPutCardsForCurrentUser(
       deck.source === "private"
         ? privateCardKey(session.userId, card.deckId, card.id)
         : globalCardKey(card.deckId, card.id);
+    const scope = deck.source === "private" ? { kind: "private" as const, userId: session.userId } : { kind: "global" as const };
+    let already: Item[] = [];
     if (options.skipExisting) {
       const existing = await Promise.all(pending.map((card) => getItem(keyFor(card))));
+      already = existing.filter((item): item is Item => !!item);
       pending = pending.filter((_, index) => !existing[index]);
     }
     for (let index = 0; index < pending.length; index += 24) {
@@ -432,6 +448,27 @@ export async function batchPutCardsForCurrentUser(
         })
       );
     }
+    await syncCharacterIndexes(scope, [
+      ...pending.map((card) => ({
+        deckId: card.deckId,
+        cardId: card.id,
+        front: card.front,
+        back: card.back,
+        updatedAt: card.updatedAt,
+      })),
+      ...already.flatMap((item) => {
+        if (typeof item.front !== "string" || typeof item.back !== "string" || typeof item.SK !== "string") return [];
+        return [
+          {
+            deckId,
+            cardId: item.SK.slice("CARD#".length),
+            front: item.front,
+            back: item.back,
+            updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : new Date().toISOString(),
+          },
+        ];
+      }),
+    ]);
   }
 }
 
@@ -462,7 +499,21 @@ export async function deleteCardForCurrentUser(deckId: string, id: string): Prom
   const key = deck.source === "private"
     ? privateCardKey(session.userId, deckId, id)
     : globalCardKey(deckId, id);
+  const existing = await getItem(key);
   await archiveKey(key);
+  if (typeof existing?.front === "string" && typeof existing.back === "string") {
+    await syncCharacterIndexes(deck.source === "private" ? { kind: "private", userId: session.userId } : { kind: "global" }, [
+      {
+        deckId,
+        cardId: id,
+        front: "",
+        back: "",
+        updatedAt: typeof existing.updatedAt === "string" ? existing.updatedAt : new Date().toISOString(),
+        previousFront: existing.front,
+        previousBack: existing.back,
+      },
+    ]);
+  }
 }
 
 export async function deleteDeckForCurrentUser(id: string): Promise<void> {
@@ -542,6 +593,17 @@ export async function moveCardForCurrentUser(card: Card, toDeckId: string): Prom
     );
   }
   await doc.send(new TransactWriteCommand({ TransactItems: transact }));
+  await syncCharacterIndexes({ kind: "private", userId: session.userId }, [
+    {
+      deckId: moved.deckId,
+      cardId: moved.id,
+      front: moved.front,
+      back: moved.back,
+      updatedAt: moved.updatedAt,
+      previousFront: card.front,
+      previousBack: card.back,
+    },
+  ]);
   return moved;
 }
 
@@ -600,6 +662,26 @@ export async function replaceGlobalCardMeaning(
       ],
     })
   );
+  const previousFront = typeof current.front === "string" ? current.front : card.front;
+  const previousBack = typeof current.back === "string" ? current.back : card.back;
+  await syncCharacterIndexes({ kind: "global" }, [
+    {
+      deckId: card.deckId,
+      cardId: card.id,
+      front: "",
+      back: "",
+      updatedAt: now,
+      previousFront,
+      previousBack,
+    },
+    {
+      deckId: created.deckId,
+      cardId: created.id,
+      front: created.front,
+      back: created.back,
+      updatedAt: created.updatedAt,
+    },
+  ]);
   return created;
 }
 

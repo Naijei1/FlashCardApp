@@ -5,6 +5,7 @@ import { previewIntervals } from "@/lib/fsrs";
 import { checkPinyinAnswer, numberedPinyin } from "@/lib/pinyin";
 import { isImeEnter } from "@/lib/ime";
 import { checkAnswer, diffChars, toWritePrompt, type DiffChar } from "@/lib/write";
+import CharacterText from "./CharacterText";
 import HardWordButton from "./HardWordButton";
 import { IconCheck, IconX } from "./icons";
 import RatingBar from "./RatingBar";
@@ -186,9 +187,9 @@ export default function WriteSession({
       <div key={card.id} className="study-scroll flashcard flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-6 sm:px-8">
         <p className="eyebrow text-center">{mode === "pinyin" ? "Write Pinyin" : "Write Chinese"}</p>
         <div className="mt-3 text-center">
-          <span lang={mode === "pinyin" ? chineseLang : "zh-Latn-pinyin"} className={mode === "pinyin" ? "hanzi selectable break-words" : "pinyin selectable break-words"}>
-            {prompt.prompt}
-          </span>
+          <CharacterText text={prompt.prompt} lang={mode === "pinyin" ? chineseLang : "zh-Latn-pinyin"}
+            deckId={card.deckId} cardId={card.id}
+            className={mode === "pinyin" ? "hanzi selectable break-words" : "pinyin selectable break-words"} />
           {mode === "write" && pinyin && (
             <div className="mt-2 flex flex-col items-center gap-1">
               <button type="button" onClick={() => setShowEnglish((visible) => !visible)} className="btn btn-ghost text-sm">
@@ -283,13 +284,9 @@ export default function WriteSession({
                 </>
               )}
               <div className="flex items-center gap-2">
-                <span lang={answerLang} className={mode === "pinyin" ? "pinyin selectable break-words" : "hanzi-text selectable text-4xl break-words sm:text-5xl"}>
-                  {result.expected.map((c, i) => (
-                    <span key={i} className={result.correct || c.ok ? "" : "rounded bg-green-500/15 text-green-700 dark:text-green-400"}>
-                      {c.char}
-                    </span>
-                  ))}
-                </span>
+                <CharacterText text={result.expected.map((part) => part.char).join("")} lang={answerLang} deckId={card.deckId} cardId={card.id}
+                  className={mode === "pinyin" ? "pinyin selectable break-words" : "hanzi-text selectable text-4xl break-words sm:text-5xl"}
+                  decorate={(_, index) => result.correct || result.expected[index]?.ok ? undefined : "rounded bg-green-500/15 text-green-700 dark:text-green-400"} />
                 <TtsButton text={mode === "pinyin" ? prompt.prompt : prompt.answer} lang={chineseLang} />
               </div>
               {mode === "pinyin" && pinyin && (
@@ -302,7 +299,9 @@ export default function WriteSession({
               {mode === "write" && pinyin && !showEnglish && (
                 <p className="selectable text-base text-muted">{pinyin.meaning}</p>
               )}
-              {prompt.notes && <p className="selectable text-sm text-muted">{prompt.notes}</p>}
+              {prompt.notes && (
+                <CharacterText text={prompt.notes} deckId={card.deckId} cardId={card.id} className="selectable text-sm text-muted" />
+              )}
             </div>
           ) : (
             <span className="text-xs text-muted">

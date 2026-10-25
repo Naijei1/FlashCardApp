@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { DEFAULT_BACK_LANG, DEFAULT_FRONT_LANG } from "@/lib/languages";
+import CharacterText from "./CharacterText";
 import HardWordButton from "./HardWordButton";
 import RatingBar from "./RatingBar";
 import { QueueStatus, SessionHeader } from "./SessionChrome";
@@ -74,9 +75,8 @@ export default function ReviewSession({
       <div key={card.id} onClick={reveal} className="flashcard flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 basis-1/2 flex-col items-center justify-center gap-3 overflow-y-auto px-6 py-6 text-center">
           <div className="flex items-center gap-2">
-            <span lang={frontLang} className={frontLang.startsWith("zh") ? "hanzi selectable break-words" : "selectable text-5xl leading-tight font-medium break-words sm:text-6xl"}>
-              {prompt}
-            </span>
+            <CharacterText text={prompt} lang={frontLang} deckId={card.deckId} cardId={card.id}
+              className={frontLang.startsWith("zh") ? "hanzi selectable break-words" : "selectable text-5xl leading-tight font-medium break-words sm:text-6xl"} />
             <TtsButton text={prompt} lang={frontLang} />
           </div>
           {pinyin && (
@@ -93,12 +93,14 @@ export default function ReviewSession({
           {revealed ? (
             <div key={card.id} className="reveal-in flex flex-col items-center gap-3">
               <div className="flex items-center gap-2">
-                <span lang={pinyin ? "zh-Latn-pinyin" : backLang} className={pinyin ? "pinyin selectable break-words" : "selectable text-3xl break-words text-foreground/90"}>
-                  {pinyin ? pinyin.syllables.join(" ") : card.back}
-                </span>
+                <CharacterText text={pinyin ? pinyin.syllables.join(" ") : card.back} lang={pinyin ? "zh-Latn-pinyin" : backLang}
+                  deckId={card.deckId} cardId={card.id}
+                  className={pinyin ? "pinyin selectable break-words" : "selectable text-3xl break-words text-foreground/90"} />
                 {!pinyin && <TtsButton text={card.back} lang={backLang} />}
               </div>
-              {card.notes && <p className="selectable text-base text-muted">{card.notes}</p>}
+              {card.notes && (
+                <CharacterText text={card.notes} deckId={card.deckId} cardId={card.id} className="selectable text-base text-muted" />
+              )}
             </div>
           ) : (
             <span className="text-sm text-muted">

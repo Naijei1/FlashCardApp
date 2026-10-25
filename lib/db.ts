@@ -1,3 +1,4 @@
+import { syncCharacterIndexes } from "./character-index";
 import { currentRetentionSchedule } from "./fsrs";
 import {
   QueryCommand,
@@ -217,7 +218,10 @@ export async function getCard(deckId: string, id: string): Promise<Card | null> 
   return res.Item ? toCard(res.Item) : null;
 }
 
-export async function putCard(card: Card): Promise<void> {
+export async function putCard(
+  card: Card,
+  options?: { previous?: Pick<Card, "front" | "back"> }
+): Promise<void> {
   if (usesMultiUserData()) return (await multiUserStore()).putCardForCurrentUser(card);
   const { id, deckId } = card;
   const version = reviewVersionOf(card);
@@ -264,6 +268,17 @@ export async function putCard(card: Card): Promise<void> {
       ExpressionAttributeValues: expressionAttributeValues,
     })
   );
+  await syncCharacterIndexes({ kind: "legacy" }, [
+    {
+      deckId,
+      cardId: id,
+      front: card.front,
+      back: card.back,
+      updatedAt: card.updatedAt,
+      previousFront: options?.previous?.front ?? card.front,
+      previousBack: options?.previous?.back ?? card.back,
+    },
+  ]);
 }
 
 type BatchRequest = Record<string, unknown>;
@@ -314,6 +329,16 @@ async function createCardChunk(
           })
         )
       );
+      await syncCharacterIndexes(
+        { kind: "legacy" },
+        pending.map((card) => ({
+          deckId: card.deckId,
+          cardId: card.id,
+          front: card.front,
+          back: card.back,
+          updatedAt: card.updatedAt,
+        }))
+      );
       return;
     } catch (error) {
       if (!(error instanceof Error) || error.name !== "TransactionCanceledException") {
@@ -338,6 +363,22 @@ async function createCardChunk(
             })
           )
         )
+      );
+      await syncCharacterIndexes(
+        { kind: "legacy" },
+        existing.flatMap((res, index) => {
+          const item = res.Item;
+          if (!item || typeof item.front !== "string" || typeof item.back !== "string") return [];
+          return [
+            {
+              deckId: pending[index].deckId,
+              cardId: pending[index].id,
+              front: item.front,
+              back: item.back,
+              updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : pending[index].updatedAt,
+            },
+          ];
+        })
       );
       pending = pending.filter((_, index) => !existing[index].Item);
     }
@@ -380,9 +421,22 @@ export async function batchPutCards(
 
 export async function deleteCard(deckId: string, id: string): Promise<void> {
   if (usesMultiUserData()) return (await multiUserStore()).deleteCardForCurrentUser(deckId, id);
+  const existing = await getCard(deckId, id);
   await db.send(
     new DeleteCommand({ TableName: tableName(), Key: cardKey(deckId, id) })
   );
+  if (!existing) return;
+  await syncCharacterIndexes({ kind: "legacy" }, [
+    {
+      deckId,
+      cardId: id,
+      front: "",
+      back: "",
+      updatedAt: existing.updatedAt,
+      previousFront: existing.front,
+      previousBack: existing.back,
+    },
+  ]);
 }
 
 /** Move = PK change, so transactionally delete + put keeping id and FSRS state. */
@@ -430,6 +484,17 @@ export async function moveCard(card: Card, toDeckId: string): Promise<Card> {
       ],
     })
   );
+  await syncCharacterIndexes({ kind: "legacy" }, [
+    {
+      deckId: moved.deckId,
+      cardId: moved.id,
+      front: moved.front,
+      back: moved.back,
+      updatedAt: moved.updatedAt,
+      previousFront: card.front,
+      previousBack: card.back,
+    },
+  ]);
   return moved;
 }
 
@@ -458,6 +523,18 @@ export async function deleteDeck(id: string): Promise<void> {
   const cards = await listCards(id, { consistent: true });
   await batchWrite(
     cards.map((card) => ({ DeleteRequest: { Key: cardKey(card.deckId, card.id) } }))
+  );
+  await syncCharacterIndexes(
+    { kind: "legacy" },
+    cards.map((card) => ({
+      deckId: card.deckId,
+      cardId: card.id,
+      front: "",
+      back: "",
+      updatedAt: card.updatedAt,
+      previousFront: card.front,
+      previousBack: card.back,
+    }))
   );
   try {
     await db.send(

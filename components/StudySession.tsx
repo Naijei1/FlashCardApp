@@ -6,6 +6,7 @@ import { shuffle } from "@/lib/due";
 import { DEFAULT_BACK_LANG, DEFAULT_FRONT_LANG } from "@/lib/languages";
 import type { StudyFlipCard } from "@/lib/study-sets";
 import { wordKey } from "@/lib/words";
+import CharacterText from "./CharacterText";
 import HardWordButton from "./HardWordButton";
 import TtsButton from "./TtsButton";
 import { useKeyboard } from "./useKeyboard";
@@ -100,21 +101,21 @@ export default function StudySession({
       <div key={`${card.id}-${index}`} {...swipe.handlers} onClick={() => { if (!swipe.consumeClick()) setRevealed((r) => !r); }}
         className="swipeable flashcard flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 basis-1/2 items-center justify-center gap-2 overflow-y-auto px-6 py-6 text-center">
-          <span lang={frontLang} className={frontLang.startsWith("zh") ? "hanzi selectable break-words" : "selectable text-5xl leading-tight font-medium break-words sm:text-6xl"}>
-            {card.front}
-          </span>
+          <CharacterText text={card.front} lang={frontLang} deckId={card.deckId} cardId={card.id}
+            className={frontLang.startsWith("zh") ? "hanzi selectable break-words" : "selectable text-5xl leading-tight font-medium break-words sm:text-6xl"} />
           <TtsButton text={card.front} lang={frontLang} />
         </div>
         <div className="flex min-h-0 flex-1 basis-1/2 flex-col items-center justify-center gap-3 overflow-y-auto border-t border-dashed border-border px-6 py-6 text-center">
           {revealed ? (
             <div key={`${card.id}-${index}`} className="reveal-in flex flex-col items-center gap-3">
               <div className="flex items-center gap-2">
-                <span lang={backLang} className={backLang.startsWith("zh") ? "hanzi selectable break-words" : "selectable text-3xl break-words text-foreground/90"}>
-                  {card.back}
-                </span>
+                <CharacterText text={card.back} lang={backLang} deckId={card.deckId} cardId={card.id}
+                  className={backLang.startsWith("zh") ? "hanzi selectable break-words" : "selectable text-3xl break-words text-foreground/90"} />
                 <TtsButton text={card.back} lang={backLang} />
               </div>
-              {card.notes && <p className="selectable text-base text-muted">{card.notes}</p>}
+              {card.notes && (
+                <CharacterText text={card.notes} deckId={card.deckId} cardId={card.id} className="selectable text-base text-muted" />
+              )}
             </div>
           ) : (
             <span className="text-sm text-muted">

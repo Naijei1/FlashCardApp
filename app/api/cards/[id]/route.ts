@@ -100,7 +100,7 @@ export async function PATCH(request: Request, { params }: Context) {
     }
   }
   try {
-    await putCard(card);
+    await putCard(card, { previous });
   } catch (error) {
     const access = accessErrorResponse(error);
     if (access) return access;

@@ -10,6 +10,7 @@ import {
   IconSettings,
   IconStats,
 } from "./icons";
+import { CharacterLookupProvider } from "./CharacterLookup";
 import { scrollDocumentToTop, useViewportLock } from "./useViewportLock";
 
 const NAV = [
@@ -65,10 +66,15 @@ export default function AppShell({
   if (immersive) {
     // Size the frame to the visual viewport. Children use h-full + safe-area
     // padding so the page is never taller than the screen (iOS bounce).
-    return <div className="study-shell">{children}</div>;
+    return (
+      <CharacterLookupProvider>
+        <div className="study-shell">{children}</div>
+      </CharacterLookupProvider>
+    );
   }
 
   return (
+    <CharacterLookupProvider>
     <div className="min-h-dvh max-w-full overflow-x-clip md:flex">
       <a
         href="#main-content"
@@ -150,5 +156,6 @@ export default function AppShell({
         </div>
       </nav>
     </div>
+    </CharacterLookupProvider>
   );
 }
