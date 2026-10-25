@@ -11,6 +11,10 @@ export const metadata: Metadata = {
     title: "Flashcards",
     statusBarStyle: "default",
   },
+  // Next emits mobile-web-app-capable. Older iOS still reads the Apple name.
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {

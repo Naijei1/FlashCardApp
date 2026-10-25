@@ -31,6 +31,13 @@ export type LoginLimitResult =
  * CloudFront appends the viewer address to any incoming X-Forwarded-For value,
  * so the last entry cannot be replaced by a caller-supplied prefix.
  */
+/** Seconds left on an active block, or null when this key may try again. */
+export function retryAfterBlock(state: AttemptState | null, now: number): number | null {
+  if (!state || now - state.windowStartedAt >= LOGIN_WINDOW_MS) return null;
+  if (state.blockedUntil <= now) return null;
+  return Math.max(1, Math.ceil((state.blockedUntil - now) / 1000));
+}
+
 export function clientAddressKey(headerList: { get(name: string): string | null }): string {
   const forwarded = headerList
     .get("x-forwarded-for")

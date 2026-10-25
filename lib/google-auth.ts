@@ -4,6 +4,8 @@ import type { JWT } from "next-auth/jwt";
 import type { Session } from "next-auth";
 import Google from "next-auth/providers/google";
 import { isGoogleSubjectDisabled, isUserDisabled, resolveGoogleUser } from "./accounts";
+import { restorePwaOAuthRequest } from "./pwa-oauth-restore";
+import { rewritePwaAuthError } from "./pwa-oauth-state";
 import { beginSession, limitSharedLogin, sessionIsCurrent } from "./auth-store";
 import { clientAddressKey } from "./login-limit";
 import { roleForVerifiedEmail } from "./multi-user-model";
@@ -17,6 +19,13 @@ export type GoogleAuthState = AppSession & {
 };
 
 let cached: GoogleAuth | null = null;
+
+export function googleAuthSecret(): string {
+  hydrate("AUTH_SECRET");
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) throw new Error("AUTH_SECRET is not set");
+  return secret;
+}
 
 function hydrate(name: "AUTH_SECRET" | "AUTH_GOOGLE_SECRET"): void {
   const encoded = process.env[`${name}_HEX`];
@@ -110,6 +119,10 @@ export function googleAuth(): GoogleAuth {
       Google({
         clientId: process.env.AUTH_GOOGLE_ID,
         clientSecret: process.env.AUTH_GOOGLE_SECRET,
+        // Google echoes `state` on the callback URL. iOS Home Screen apps finish
+        // that callback in Safari View Controller, which does not have the PKCE
+        // cookie set in the installed app. The handoff stores that cookie by state.
+        checks: ["pkce", "state"],
       }),
     ],
     callbacks: {
@@ -162,6 +175,21 @@ export async function signOutGoogle(): Promise<void> {
 }
 
 export async function handleGoogleAuth(method: "GET" | "POST", request: Request): Promise<Response> {
+  let nextRequest = request;
+  let handoffId: string | null = null;
+  if (method === "GET") {
+    try {
+      const restored = await restorePwaOAuthRequest(request);
+      nextRequest = restored.request;
+      handoffId = restored.handoffId;
+    } catch (error) {
+      // A desktop callback already carries its own cookies. A store outage
+      // should not turn that into a failed sign-in.
+      console.error("PWA OAuth cookie restore failed", error instanceof Error ? error.name : "unknown");
+    }
+  }
   const handler = googleAuth().handlers[method];
-  return handler(request as Parameters<typeof handler>[0]);
+  const response = await handler(nextRequest as Parameters<typeof handler>[0]);
+  if (!handoffId) return response;
+  return rewritePwaAuthError(response, handoffId);
 }
