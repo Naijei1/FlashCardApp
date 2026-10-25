@@ -1,11 +1,15 @@
 "use client";
 
+import { neuralSpeechPath } from "@/lib/speech-request";
+
 // Shared across every TTS button. A deck can render dozens of buttons, so voice
 // discovery and the global `voiceschanged` listener must not live in each
 // component instance.
 let synthesis: SpeechSynthesis | null = null;
 let voices: SpeechSynthesisVoice[] = [];
 let currentUtterance: SpeechSynthesisUtterance | null = null;
+let neuralAudio: HTMLAudioElement | null = null;
+let turnId = 0;
 
 function loadVoices() {
   voices = synthesis?.getVoices() ?? [];
@@ -36,8 +40,14 @@ function pickVoice(lang: string): SpeechSynthesisVoice | undefined {
   );
 }
 
-// Must be called from a user gesture on iOS Safari / Chrome.
-function speak(text: string, lang: string) {
+function silenceNeural() {
+  if (!neuralAudio) return;
+  neuralAudio.onerror = null;
+  neuralAudio.pause();
+}
+
+// Device speech. Used for English and whenever neural playback cannot start.
+function speakWeb(text: string, lang: string) {
   const activeSynthesis = getSynthesis();
   if (!activeSynthesis) return;
 
@@ -54,6 +64,37 @@ function speak(text: string, lang: string) {
     activeSynthesis.speak(utterance);
   } catch {
     // Speech is best-effort; fail silently.
+  }
+}
+
+// Must be called from a user gesture on iOS Safari / Chrome and the installed PWA.
+// Neural audio starts with play() in this turn; the file arrives after. A failed
+// or rate-limited response falls back to device speech.
+function speak(text: string, lang: string) {
+  const turn = ++turnId;
+  const path = neuralSpeechPath(text, lang);
+  silenceNeural();
+  getSynthesis()?.cancel();
+  if (!path || typeof Audio === "undefined") {
+    speakWeb(text, lang);
+    return;
+  }
+
+  const audio = neuralAudio ?? (neuralAudio = new Audio());
+  let fellBack = false;
+  const fallback = () => {
+    if (fellBack || turn !== turnId) return;
+    fellBack = true;
+    silenceNeural();
+    audio.removeAttribute("src");
+    speakWeb(text, lang);
+  };
+  audio.preload = "auto";
+  audio.onerror = fallback;
+  audio.src = path;
+  const played = audio.play();
+  if (played && typeof played.catch === "function") {
+    void played.catch(fallback);
   }
 }
 
