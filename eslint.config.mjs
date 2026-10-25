@@ -20,6 +20,7 @@ const eslintConfig = [
       "next-env.d.ts",
       "playwright-report/**",
       "test-results/**",
+      "data/char-dict.ts",
     ],
   },
 ];

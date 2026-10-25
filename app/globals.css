@@ -49,12 +49,22 @@ html {
   touch-action: manipulation;
 }
 
+/* Named sans CJK faces come before any web font. iOS Safari does not walk
+   past a web font for hanzi the file does not contain, and the last-resort
+   glyph looks like Times. PingFang / Hiragino / Noto / YaHei cover those
+   characters, including ones outside the HSK subset such as 烽. */
+:root {
+  --font-cjk-sans:
+    "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC",
+    "Microsoft YaHei", "WenQuanYi Micro Hei";
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family:
-    var(--font-sans), ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    var(--font-sans), var(--font-cjk-sans), ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, system-ui, sans-serif;
   min-height: 100%;
   min-height: 100dvh;
   overflow-x: clip;
@@ -195,18 +205,19 @@ html.keyboard-open .nav-dock-wrap {
   }
 }
 
-/* Authenticated shell. Chinese text uses the subset Noto Sans SC; the login
-   page stays on the system CJK stack so it does not download that file. */
+/* Authenticated shell. System sans CJK first, then the HSK subset for devices
+   with no Chinese font installed. The login page does not load that subset. */
 .app-zh {
   font-family:
-    var(--font-sans), var(--font-sans-sc), ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    var(--font-sans), var(--font-cjk-sans), var(--font-sans-sc, "PingFang SC"), ui-sans-serif, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
 }
 
-/* Lists and chrome use the sans face. The big study character uses serif.
-   Fallbacks cover hanzi that are outside the HSK subset. */
+/* Large card prompts and smaller Chinese runs share one sans stack.
+   The subset variable falls back to PingFang so a page that does not load the
+   file (login) still keeps the sans list. An unset var() would drop the rule. */
 .hanzi-text {
-  font-family: var(--font-sans-sc, "PingFang SC"), "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--font-cjk-sans), var(--font-sans-sc, "PingFang SC"), ui-sans-serif, system-ui, sans-serif;
 }
 .char-hit {
   display: inline;
@@ -228,7 +239,7 @@ html.keyboard-open .nav-dock-wrap {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 .hanzi {
-  font-family: var(--font-hanzi, "Songti SC"), "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+  font-family: var(--font-cjk-sans), var(--font-sans-sc, "PingFang SC"), ui-sans-serif, system-ui, sans-serif;
   font-size: clamp(3.25rem, 12vw, 5.75rem);
   font-weight: 600;
   letter-spacing: 0.02em;

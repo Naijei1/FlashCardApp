@@ -1,5 +1,6 @@
 import { pinyin } from "pinyin-pro";
 import { AccessError } from "./access-error";
+import { characterGloss, type CharacterRadical } from "./char-dict";
 import { getAppSession } from "./app-session";
 import {
   queryCharacterEntries,
@@ -20,10 +21,34 @@ const WARM_BUDGET_MS = 2_500;
 
 export type CharacterLookup = {
   character: string;
+  pinyin?: string;
+  gloss?: string;
+  radical?: CharacterRadical;
   words: LookupWord[];
   total: number;
   truncated: boolean;
 };
+
+/** Gloss and radical from the offline dictionary, plus a reading when pinyin-pro has one. */
+export function characterDetails(character: string): Pick<CharacterLookup, "pinyin" | "gloss" | "radical"> {
+  let gloss: string | undefined;
+  let radical: CharacterRadical | undefined;
+  try {
+    const entry = characterGloss(character);
+    gloss = entry?.gloss;
+    radical = entry?.radical;
+  } catch (error) {
+    console.warn("Character dictionary lookup failed", {
+      name: error instanceof Error ? error.name : "error",
+    });
+  }
+  const reading = readingForHeadword(character);
+  return {
+    ...(reading ? { pinyin: reading } : {}),
+    ...(gloss ? { gloss } : {}),
+    ...(radical ? { radical } : {}),
+  };
+}
 
 export function readingForHeadword(hanzi: string): string | undefined {
   try {
@@ -73,6 +98,7 @@ function finish(character: string, cards: readonly IndexedCard[], exclude?: { de
   const selected = selectLookupWords(cards, character, { exclude, limit: 100 });
   return {
     character,
+    ...characterDetails(character),
     words: withReadings(selected.words),
     total: selected.total,
     truncated: selected.total > selected.words.length,
