@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState, type CSS
 import { createPortal } from "react-dom";
 import { plural } from "@/lib/plural";
 import type { LookupWord } from "@/lib/characters";
+import type { CharacterRadical } from "@/lib/char-dict";
 import { IconChevronRight, IconX } from "./icons";
 
 export type LookupRequest = {
@@ -30,7 +31,46 @@ type LookupPayload = {
   words: LookupWord[];
   total: number;
   truncated: boolean;
+  pinyin?: string;
+  gloss?: string;
+  radical?: CharacterRadical;
 };
+
+function readFacts(data: LookupPayload): Pick<LookupPayload, "pinyin" | "gloss" | "radical"> {
+  const radical = data.radical;
+  const safeRadical =
+    radical && typeof radical.number === "number" && typeof radical.character === "string" && radical.character
+      ? {
+          number: radical.number,
+          character: radical.character,
+          ...(typeof radical.meaning === "string" && radical.meaning ? { meaning: radical.meaning } : {}),
+        }
+      : undefined;
+  return {
+    ...(typeof data.pinyin === "string" && data.pinyin ? { pinyin: data.pinyin } : {}),
+    ...(typeof data.gloss === "string" && data.gloss ? { gloss: data.gloss } : {}),
+    ...(safeRadical ? { radical: safeRadical } : {}),
+  };
+}
+
+function CharacterFacts({ payload }: { payload: LookupPayload | null }) {
+  if (!payload?.pinyin && !payload?.gloss && !payload?.radical) return null;
+  const radical = payload.radical;
+  return (
+    <div className="border-b border-border px-4 py-2">
+      {payload.pinyin && <p className="text-sm text-muted">{payload.pinyin}</p>}
+      {payload.gloss && <p className="text-sm leading-snug">{payload.gloss}</p>}
+      {radical && (
+        <p className="text-sm leading-snug text-muted">
+          Radical {radical.number}
+          {" · "}
+          <span lang="zh-CN" className="hanzi-text text-foreground">{radical.character}</span>
+          {radical.meaning ? ` ${radical.meaning}` : ""}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function CharacterLookupProvider({ children }: { children: ReactNode }) {
   const [request, setRequest] = useState<LookupRequest | null>(null);
@@ -82,6 +122,8 @@ export function CharacterLookupDialog({
 
   useEffect(() => {
     const controller = new AbortController();
+    setPayload(null);
+    setError(false);
     const params = new URLSearchParams({
       c: request.character,
       deckId: request.deckId,
@@ -97,6 +139,7 @@ export function CharacterLookupDialog({
           words: Array.isArray(data.words) ? data.words : [],
           total: typeof data.total === "number" ? data.total : 0,
           truncated: data.truncated === true,
+          ...readFacts(data),
         });
         setError(false);
       })
@@ -173,6 +216,7 @@ export function CharacterLookupDialog({
           </div>
         </div>
       )}
+      <CharacterFacts payload={error ? null : payload} />
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {error && (
           <div className="px-4 py-6 text-center">
