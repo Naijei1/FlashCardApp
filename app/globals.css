@@ -208,6 +208,25 @@ html.keyboard-open .nav-dock-wrap {
 .hanzi-text {
   font-family: var(--font-sans-sc, "PingFang SC"), "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
 }
+.char-hit {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  border-radius: 0.18em;
+  cursor: pointer;
+}
+.char-hit:hover,
+.char-hit-active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+}
 .hanzi {
   font-family: var(--font-hanzi, "Songti SC"), "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   font-size: clamp(3.25rem, 12vw, 5.75rem);

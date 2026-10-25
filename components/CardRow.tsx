@@ -7,6 +7,7 @@ import type { Card, Deck } from "@/lib/types";
 import { formatInterval } from "@/lib/interval-label";
 import { preventImeSubmit } from "@/lib/ime";
 import { responseError } from "@/lib/response-error";
+import CharacterText from "./CharacterText";
 import { IconPencil } from "./icons";
 import TtsButton from "./TtsButton";
 import { DEFAULT_FRONT_LANG } from "@/lib/languages";
@@ -251,24 +252,35 @@ export default function CardRow({
   return (
     <article className="card flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:py-2.5 sm:pr-1.5 sm:pl-4">
       <div className="min-w-0 flex-1">
-        <button
-          type="button"
-          onClick={() => setExpanded((value) => !value)}
-          className="block w-full min-w-0 text-left"
+        <div
+          className="block w-full min-w-0 cursor-pointer text-left"
           title={`${card.front} → ${card.back}`}
-          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
         >
           <span className="flex items-baseline gap-2">
-            <span className={`${expanded ? "whitespace-normal break-words" : "truncate"} text-lg font-medium ${hasChinese(card.front) ? "hanzi-text" : ""}`}>{card.front}</span>
+            <CharacterText text={card.front} deckId={card.deckId} cardId={card.id}
+              className={`${expanded ? "whitespace-normal break-words" : "truncate"} text-lg font-medium ${hasChinese(card.front) ? "hanzi-text" : ""}`} />
             <span aria-hidden="true" className="text-muted">
               →
             </span>
-            <span className={`${expanded ? "whitespace-normal break-words" : "truncate"} text-muted ${hasChinese(card.back) ? "hanzi-text" : ""}`}>{card.back}</span>
+            <CharacterText text={card.back} deckId={card.deckId} cardId={card.id}
+              className={`${expanded ? "whitespace-normal break-words" : "truncate"} text-muted ${hasChinese(card.back) ? "hanzi-text" : ""}`} />
           </span>
-        </button>
+          <button
+            type="button"
+            className="sr-only"
+            aria-expanded={expanded}
+            onClick={(event) => {
+              event.stopPropagation();
+              setExpanded((value) => !value);
+            }}
+          >
+            {expanded ? "Collapse card" : "Expand card"}
+          </button>
+        </div>
         {card.notes && (
           <div className={`${expanded ? "whitespace-normal break-words" : "truncate"} text-sm text-muted`} title={card.notes}>
-            {card.notes}
+            <CharacterText text={card.notes} deckId={card.deckId} cardId={card.id} />
           </div>
         )}
       </div>

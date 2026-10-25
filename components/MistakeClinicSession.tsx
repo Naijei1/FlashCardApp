@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { checkPinyinAnswer, numberedPinyin } from "@/lib/pinyin";
 import { plural } from "@/lib/plural";
 import { checkAnswer, diffChars, toWritePrompt, type DiffChar } from "@/lib/write";
+import CharacterText from "./CharacterText";
 import HardWordButton from "./HardWordButton";
 import { IconCheck, IconX } from "./icons";
 import RatingBar from "./RatingBar";
@@ -155,7 +156,8 @@ function RecognitionPrompt({
       <div key={card.id} onClick={() => setRevealed(true)} className="flashcard flex min-h-0 flex-1 cursor-pointer flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 basis-1/2 flex-col items-center justify-center gap-3 overflow-y-auto px-6 py-6 text-center">
           <div className="flex items-center gap-2">
-            <span lang={frontLang} className={frontLang.startsWith("zh") ? "hanzi selectable break-words" : "selectable text-5xl leading-tight font-medium break-words sm:text-6xl"}>{prompt}</span>
+            <CharacterText text={prompt} lang={frontLang} deckId={card.deckId} cardId={card.id}
+              className={frontLang.startsWith("zh") ? "hanzi selectable break-words" : "selectable text-5xl leading-tight font-medium break-words sm:text-6xl"} />
             <TtsButton text={prompt} lang={frontLang} />
           </div>
           {pinyin && (
@@ -171,12 +173,14 @@ function RecognitionPrompt({
           {revealed ? (
             <div key={card.id} className="reveal-in flex flex-col items-center gap-3">
               <div className="flex items-center gap-2">
-                <span lang={pinyin ? "zh-Latn-pinyin" : backLang} className={pinyin ? "pinyin selectable break-words" : "selectable text-3xl break-words text-foreground/90"}>
-                  {pinyin ? pinyin.syllables.join(" ") : card.back}
-                </span>
+                <CharacterText text={pinyin ? pinyin.syllables.join(" ") : card.back} lang={pinyin ? "zh-Latn-pinyin" : backLang}
+                  deckId={card.deckId} cardId={card.id}
+                  className={pinyin ? "pinyin selectable break-words" : "selectable text-3xl break-words text-foreground/90"} />
                 {!pinyin && <TtsButton text={card.back} lang={backLang} />}
               </div>
-              {card.notes && <p className="selectable text-base text-muted">{card.notes}</p>}
+              {card.notes && (
+                <CharacterText text={card.notes} deckId={card.deckId} cardId={card.id} className="selectable text-base text-muted" />
+              )}
             </div>
           ) : (
             <span className="text-sm text-muted">
@@ -265,9 +269,9 @@ function WritingPrompt({
       <div key={item.card.id} className="study-scroll flashcard flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-6 sm:px-8">
         <p className="eyebrow text-center">{item.mode === "pinyin" ? "Write Pinyin" : "Write Chinese"}</p>
         <div className="mt-3 text-center">
-          <span lang={item.mode === "pinyin" ? "zh-CN" : "zh-Latn-pinyin"} className={item.mode === "pinyin" ? "hanzi selectable break-words" : "pinyin selectable break-words"}>
-            {prompt.prompt}
-          </span>
+          <CharacterText text={prompt.prompt} lang={item.mode === "pinyin" ? "zh-CN" : "zh-Latn-pinyin"}
+            deckId={item.card.deckId} cardId={item.card.id}
+            className={item.mode === "pinyin" ? "hanzi selectable break-words" : "pinyin selectable break-words"} />
           {item.mode === "write" && item.pinyin && (
             <div className="mt-2 flex flex-col items-center gap-1">
               <button type="button" onClick={() => setShowEnglish((visible) => !visible)} className="btn btn-ghost text-sm">
@@ -321,11 +325,9 @@ function WritingPrompt({
                 ))}</span></p>
               )}
               <div className="flex items-center gap-2">
-                <span lang={answerLang} className={item.mode === "pinyin" ? "pinyin selectable break-words" : "hanzi-text selectable text-4xl break-words sm:text-5xl"}>
-                  {result.expected.map((char, index) => (
-                    <span key={index} className={result.correct || char.ok ? "" : "rounded bg-green-500/15 text-green-700 dark:text-green-400"}>{char.char}</span>
-                  ))}
-                </span>
+                <CharacterText text={result.expected.map((part) => part.char).join("")} lang={answerLang} deckId={item.card.deckId} cardId={item.card.id}
+                  className={item.mode === "pinyin" ? "pinyin selectable break-words" : "hanzi-text selectable text-4xl break-words sm:text-5xl"}
+                  decorate={(_, index) => result.correct || result.expected[index]?.ok ? undefined : "rounded bg-green-500/15 text-green-700 dark:text-green-400"} />
                 <TtsButton text={item.mode === "pinyin" ? prompt.prompt : prompt.answer} lang="zh-CN" />
               </div>
               {item.mode === "pinyin" && item.pinyin && (
@@ -335,7 +337,9 @@ function WritingPrompt({
                 </>
               )}
               {item.mode === "write" && item.pinyin && !showEnglish && <p className="selectable text-base text-muted">{item.pinyin.meaning}</p>}
-              {prompt.notes && <p className="selectable text-sm text-muted">{prompt.notes}</p>}
+              {prompt.notes && (
+                <CharacterText text={prompt.notes} deckId={item.card.deckId} cardId={item.card.id} className="selectable text-sm text-muted" />
+              )}
             </div>
           ) : (
             <span className="text-xs text-muted">
