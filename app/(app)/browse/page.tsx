@@ -20,7 +20,7 @@ export default async function BrowsePage({
   const { q = "", page: pageParam } = await searchParams;
   const viewerRole = (await getAppSession())?.role === "admin" ? "admin" : "user";
   const decks = await listDecks();
-  const cards = await listAllCards(decks);
+  const cards = await listAllCards(decks, { consistent: true });
 
   const trimmedQuery = q.trim();
   const query = trimmedQuery.toLowerCase();

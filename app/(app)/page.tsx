@@ -81,7 +81,9 @@ export default async function HomePage({
     return <AdminHome studyBlocked={adminStudy === "1"} />;
   }
   const [decks, teaser] = await Promise.all([listDecks(), nextReleaseTeaser()]);
-  const cards = await listAllCards(decks);
+  // A review commits just before this page is shown again. A consistent read
+  // sees that write; an eventually consistent one keeps the old due counts.
+  const cards = await listAllCards(decks, { consistent: true });
   const now = new Date();
   const totals = totalCounts(cards, now);
   const byDeck = countsByDeck(cards, now);

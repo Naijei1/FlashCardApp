@@ -4,7 +4,8 @@
 // background. The stable clientReviewId is both the local queue identity and
 // the server idempotency key, so any request may be retried safely.
 
-import { reviewStoragePrefix, subscribeLocalUser } from "@/lib/browser-user-scope";
+import { currentLocalUserId, reviewStoragePrefix, subscribeLocalUser } from "@/lib/browser-user-scope";
+import { clearStudyQueueCache } from "./studyQueueCache";
 
 const LEGACY_STORAGE_KEY = "flashcards.pending-reviews.v1";
 
@@ -46,6 +47,24 @@ export type ReviewSyncState = {
 
 type StateListener = (state: ReviewSyncState) => void;
 type PostResult = { ok: true } | { ok: false; retryable: boolean };
+
+/** A review the server acknowledged. Failures, discards, and other accounts are not included. */
+export type PersistedReview = {
+  clientReviewId: string;
+  cardId: string;
+  deckId: string;
+  mode: "review" | "write" | "pinyin";
+  /** Account that queued the write, captured before the request so a later switch cannot claim it. */
+  userId: string | null;
+};
+
+type PersistedListener = (review: PersistedReview) => void;
+const persistedListeners = new Set<PersistedListener>();
+
+export function subscribeReviewPersisted(listener: PersistedListener): () => void {
+  persistedListeners.add(listener);
+  return () => persistedListeners.delete(listener);
+}
 
 function newClientReviewId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -112,6 +131,8 @@ class ReviewQueue {
 
   constructor() {
     subscribeLocalUser(() => {
+      // The previous account's warmed queue must not become this account's session.
+      clearStudyQueueCache();
       this.queue = [];
       this.readStorage();
       this.notify();
@@ -160,6 +181,9 @@ class ReviewQueue {
   }
 
   push(review: PendingReview): string {
+    // A queue warmed on the previous screen can still include this card. Drop it
+    // before the next session reads, even if the network save has not finished.
+    clearStudyQueueCache();
     const reviewedAt = review.reviewedAt
       ? new Date(review.reviewedAt).toISOString()
       : new Date().toISOString();
@@ -428,14 +452,20 @@ class ReviewQueue {
   }
 
   private async send(review: QueuedReview, key: string): Promise<void> {
+    const ownerId = currentLocalUserId();
     const result = await this.post(review);
-    const index = this.queue.findIndex(
-      (item) => item.clientReviewId === review.clientReviewId
-    );
+    // A switch mid-request reloads another account's queue. Only the sender's
+    // queue may drop the item, and only that account hears that it persisted.
+    const stillOwner = currentLocalUserId() === ownerId;
+    const index = stillOwner
+      ? this.queue.findIndex((item) => item.clientReviewId === review.clientReviewId)
+      : -1;
     if (index >= 0) {
       if (result.ok) {
         this.queue.splice(index, 1);
         this.removeItem(review.clientReviewId);
+        clearStudyQueueCache();
+        this.emitPersisted(review, ownerId);
       } else {
         const current = this.queue[index];
         current.attempts += 1;
@@ -451,6 +481,18 @@ class ReviewQueue {
     this.activeCards.delete(key);
     this.notify();
     this.drain();
+  }
+
+  /** Server acknowledgement only. A dropped response, discard, or account switch does not emit. */
+  private emitPersisted(review: QueuedReview, userId: string | null): void {
+    const event: PersistedReview = {
+      clientReviewId: review.clientReviewId,
+      cardId: review.cardId,
+      deckId: review.deckId,
+      mode: review.mode ?? "review",
+      userId,
+    };
+    for (const listener of persistedListeners) listener(event);
   }
 }
 
