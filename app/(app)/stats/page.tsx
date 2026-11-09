@@ -17,7 +17,7 @@ const STATE_LABELS: Record<number, string> = {
 export default async function StatsPage() {
   if ((await getAppSession())?.role === "admin") redirect("/admin/users");
   const [decks, reviewCount] = await Promise.all([listDecks(), countReviewLogs()]);
-  const cards = uniqueWords(await listAllCards(decks));
+  const cards = uniqueWords(await listAllCards(decks, { consistent: true }));
   const now = new Date();
   const totals = totalCounts(cards, now);
   const byDeck = countsByDeck(cards, now);

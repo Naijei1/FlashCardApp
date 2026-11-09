@@ -330,6 +330,116 @@ it("does not keep retrying a deck that is not released", async () => {
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
 
+it("emits a persisted review only after the server acknowledges that account's save", async () => {
+  installBrowser();
+  const scope = await import("@/lib/browser-user-scope");
+  scope.bindLocalUser("user-a");
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) });
+  vi.stubGlobal("fetch", fetchMock);
+  const { createReviewSync, subscribeReviewPersisted } = await import("@/components/reviewSync");
+  const events: Array<{ userId: string | null; mode?: string; clientReviewId: string }> = [];
+  subscribeReviewPersisted((event) => events.push(event));
+  const sync = createReviewSync(vi.fn());
+  sync.push({
+    mode: "write",
+    cardId: "card-1",
+    deckId: "deck-1",
+    rating: 4,
+    clientReviewId: "review_user_a_ok1",
+    reviewedAt: "2026-09-03T14:00:00.000Z",
+  });
+  await vi.waitFor(() => expect(events).toHaveLength(1));
+  expect(events[0]).toMatchObject({
+    userId: "user-a",
+    mode: "write",
+    clientReviewId: "review_user_a_ok1",
+    cardId: "card-1",
+    deckId: "deck-1",
+  });
+  expect(sync.getState().pendingCount).toBe(0);
+});
+
+it("does not treat a rejected or non-acknowledged save as persisted", async () => {
+  installBrowser();
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({ error: "not found" }) })
+    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => { throw new Error("html"); } });
+  vi.stubGlobal("fetch", fetchMock);
+  const { createReviewSync, subscribeReviewPersisted } = await import("@/components/reviewSync");
+  const events: unknown[] = [];
+  subscribeReviewPersisted((event) => events.push(event));
+  const sync = createReviewSync(vi.fn());
+  sync.push({ cardId: "missing", deckId: "deck-1", rating: 3, clientReviewId: "review_missing_01", reviewedAt: "2026-09-03T14:00:00.000Z" });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(sync.getState().blockedCount).toBe(1);
+  sync.discardBlocked();
+  sync.push({ cardId: "card-2", deckId: "deck-1", rating: 3, clientReviewId: "review_html_page1", reviewedAt: "2026-09-03T14:01:00.000Z" });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(sync.getState()).toMatchObject({ pendingCount: 1, failedCount: 1 });
+  expect(events).toEqual([]);
+});
+
+it("drops a warmed study queue when a review is queued and when the account changes", async () => {
+  installBrowser(undefined, false);
+  const scope = await import("@/lib/browser-user-scope");
+  scope.bindLocalUser("user-a");
+  const { createReviewSync } = await import("@/components/reviewSync");
+  const cache = await import("@/components/studyQueueCache");
+  const url = cache.reviewQueueUrl("all", "review");
+  createReviewSync(vi.fn());
+  cache.rememberStudyQueue(url, { queue: [{ card: { id: "warm" } }], totalDue: 1 });
+  scope.bindLocalUser("user-a");
+  expect(cache.readStudyQueue(url)).toEqual({ queue: [{ card: { id: "warm" } }], totalDue: 1 });
+
+  cache.rememberStudyQueue(url, { queue: [{ card: { id: "warm" } }], totalDue: 1 });
+  createReviewSync(vi.fn()).push({
+    cardId: "card-1",
+    deckId: "deck-1",
+    rating: 3,
+    clientReviewId: "review_user_a_warm",
+    reviewedAt: "2026-09-03T14:00:00.000Z",
+  });
+  expect(cache.readStudyQueue(url)).toBeNull();
+
+  cache.rememberStudyQueue(url, { queue: [{ card: { id: "warm" } }], totalDue: 1 });
+  scope.bindLocalUser("user-b");
+  expect(cache.readStudyQueue(url)).toBeNull();
+});
+
+it("does not apply one account's acknowledgement to the account that is signed in when it returns", async () => {
+  installBrowser();
+  const resolvers: Array<(value: { ok: boolean; status: number; json: () => Promise<{ ok: boolean }> }) => void> = [];
+  vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => resolvers.push(resolve))));
+  const scope = await import("@/lib/browser-user-scope");
+  scope.bindLocalUser("user-a");
+  const { createReviewSync, subscribeReviewPersisted } = await import("@/components/reviewSync");
+  const events: Array<{ userId: string | null }> = [];
+  subscribeReviewPersisted((event) => events.push(event));
+  const sync = createReviewSync(vi.fn());
+  sync.push({
+    cardId: "card-1",
+    deckId: "deck-1",
+    rating: 3,
+    clientReviewId: "review_user_a_race",
+    reviewedAt: "2026-09-03T14:00:00.000Z",
+  });
+  await vi.waitFor(() => expect(resolvers).toHaveLength(1));
+  scope.bindLocalUser("user-b");
+  expect(sync.getState().pendingCount).toBe(0);
+  resolvers[0]({ ok: true, status: 200, json: async () => ({ ok: true }) });
+  await vi.waitFor(() => expect(sync.getState().isSyncing).toBe(false));
+  expect(events).toEqual([]);
+  expect(sync.getState().pendingCount).toBe(0);
+
+  scope.bindLocalUser("user-a");
+  expect(sync.getState().pendingCount).toBe(1);
+  await vi.waitFor(() => expect(resolvers).toHaveLength(2));
+  resolvers[1]({ ok: true, status: 200, json: async () => ({ ok: true }) });
+  await vi.waitFor(() => expect(events).toEqual([expect.objectContaining({ userId: "user-a", clientReviewId: "review_user_a_race" })]));
+  expect(sync.getState().pendingCount).toBe(0);
+});
+
 it("preserves a writing-mode review across an offline reload", async () => {
   const { storage } = installBrowser(undefined, false);
   const { createReviewSync } = await import("@/components/reviewSync");

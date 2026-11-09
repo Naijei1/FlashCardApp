@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { clearStudyQueueCache, readStudyQueue, rememberStudyQueue, reviewQueueUrl } from "@/components/studyQueueCache";
+import { captureStudyQueueEpoch, clearStudyQueueCache, readStudyQueue, rememberStudyQueue, reviewQueueUrl } from "@/components/studyQueueCache";
 
 afterEach(() => clearStudyQueueCache());
 
@@ -15,5 +15,15 @@ describe("study queue cache", () => {
     const url = reviewQueueUrl("deck", "write");
     rememberStudyQueue(url, { queue: [] });
     expect(readStudyQueue(url, Date.now() + 20_000)).toBeNull();
+  });
+
+  it("rejects a warm that was captured before the cache was cleared", () => {
+    const url = reviewQueueUrl("all", "review");
+    const captured = captureStudyQueueEpoch();
+    clearStudyQueueCache();
+    rememberStudyQueue(url, { queue: [{ card: { id: "stale" } }], totalDue: 1 }, captured);
+    expect(readStudyQueue(url)).toBeNull();
+    rememberStudyQueue(url, { queue: [{ card: { id: "fresh" } }], totalDue: 1 });
+    expect(readStudyQueue(url)).toEqual({ queue: [{ card: { id: "fresh" } }], totalDue: 1 });
   });
 });

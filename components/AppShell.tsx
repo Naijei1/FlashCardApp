@@ -10,7 +10,9 @@ import {
   IconSettings,
   IconStats,
 } from "./icons";
+import { isStudyRoute } from "@/lib/progress-refresh";
 import { CharacterLookupProvider } from "./CharacterLookup";
+import ReviewSyncBanner from "./ReviewSyncBanner";
 import { scrollDocumentToTop, useViewportLock } from "./useViewportLock";
 
 const NAV = [
@@ -45,13 +47,7 @@ export default function AppShell({
   const pathname = usePathname();
   const nav = role === "admin" ? ADMIN_NAV : NAV;
   // Study screens use their own full-screen layout with no nav chrome.
-  const immersive =
-    pathname.startsWith("/study/") ||
-    pathname.startsWith("/review/") ||
-    pathname.startsWith("/write/") ||
-    pathname.startsWith("/pinyin/") ||
-    pathname === "/clinic" ||
-    pathname.startsWith("/clinic/");
+  const immersive = isStudyRoute(pathname);
   useViewportLock(immersive);
   // iOS Safari only applies :active (our press feedback) once a touch listener exists.
   useEffect(() => {
@@ -128,6 +124,7 @@ export default function AppShell({
         id="main-content"
         className="mx-auto w-full max-w-3xl flex-1 px-safe pt-safe pb-[calc(7.5rem+env(safe-area-inset-bottom))] [--gutter:1rem] sm:[--gutter:1.5rem] md:pb-12 md:[--gutter:2.5rem] lg:max-w-5xl xl:max-w-6xl"
       >
+        <ReviewSyncBanner />
         {children}
       </main>
 

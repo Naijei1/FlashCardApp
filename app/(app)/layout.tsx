@@ -1,5 +1,6 @@
 import AppShell from "@/components/AppShell";
 import LocalUserScope from "@/components/LocalUserScope";
+import ProgressRefresh from "@/components/ProgressRefresh";
 import { requireSession } from "@/lib/session";
 import { notoSansSc } from "../fonts";
 
@@ -12,6 +13,7 @@ export default async function AppLayout({
   return (
     <div className={`${notoSansSc.variable} app-zh min-h-dvh`}>
       <LocalUserScope userId={session.userId}>
+        <ProgressRefresh />
         <AppShell role={session.role === "admin" ? "admin" : "user"}>{children}</AppShell>
       </LocalUserScope>
     </div>
