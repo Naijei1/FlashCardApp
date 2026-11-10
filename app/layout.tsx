@@ -2,9 +2,37 @@ import type { Metadata, Viewport } from "next";
 import { notoSans } from "./fonts";
 import "./globals.css";
 
+const siteUrl = new URL("https://flashcards.naijei.com");
+const description = "Personal flashcards with FSRS spaced repetition";
+
 export const metadata: Metadata = {
+  metadataBase: siteUrl,
   title: "Chinese Flashcards",
-  description: "Personal flashcards with FSRS spaced repetition",
+  description,
+  // Relative image and page URLs are resolved against metadataBase so crawlers
+  // receive absolute https://flashcards.naijei.com links. The file is in /public,
+  // outside the signed-in app shell.
+  openGraph: {
+    title: "Chinese Flashcards",
+    description,
+    url: "/",
+    type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 627,
+        type: "image/png",
+        alt: "Chinese Flashcards",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Chinese Flashcards",
+    description,
+    images: ["/og-image.png"],
+  },
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
