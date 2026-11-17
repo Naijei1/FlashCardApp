@@ -59,6 +59,8 @@ export default function CramSession({
     setRevealed(false);
   }
 
+  // Also reachable from the completion screen, so a mistaken final mark can
+  // be corrected: stepping back restores the last card and drops its result.
   function undo() {
     if (!round || index === 0) return;
     const previous = round[index - 1];
@@ -133,6 +135,7 @@ export default function CramSession({
             className={`btn btn-lg w-full ${missedCards.length > 0 ? "btn-secondary" : "btn-primary"}`}>
             Shuffle all {plural(cards.length, "card")} again
           </button>
+          <button type="button" onClick={undo} className="btn btn-ghost">↶ Undo last answer</button>
           <Link href={backHref} className="btn btn-ghost">← Done</Link>
         </div>
       </div>

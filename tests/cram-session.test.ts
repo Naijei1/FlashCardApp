@@ -121,6 +121,34 @@ it("shows source lessons and undo restores the previous card", async () => {
   expect(container.textContent).toContain("✓ 1");
 });
 
+it("undo on the completion screen corrects the final mark", async () => {
+  const cards = [cramCard(0), cramCard(1)];
+  await act(async () => root.render(createElement(CramSession, { cards, backHref: "/", title: "Final", random: () => 0.99 })));
+  const first = prompt();
+  await click("Show answer");
+  await click("Got it");
+  const last = prompt();
+  await click("Show answer");
+  await click("Missed");
+  expect(container.textContent).toContain("Round complete");
+  expect(container.textContent).toMatch(/1\s*missed/);
+  expect(container.textContent).toContain("Re-drill 1 missed card");
+
+  await click("Undo last answer");
+  expect(container.textContent).not.toContain("Round complete");
+  expect(container.textContent).toContain("2 / 2");
+  expect(container.textContent).toContain("✓ 1");
+  expect(container.textContent).toContain("✗ 0");
+  expect(prompt()).toBe(last);
+  expect(prompt()).not.toBe(first);
+
+  await click("Got it");
+  expect(container.textContent).toContain("Round complete");
+  expect(container.textContent).toMatch(/2\s*got it/);
+  expect(container.textContent).toMatch(/0\s*missed/);
+  expect(container.textContent).not.toContain("Re-drill");
+});
+
 it("keeps the cram screen out of progress refreshes, like other study screens", () => {
   expect(isStudyRoute("/cram/g1")).toBe(true);
   expect(isStudyRoute("/groups/g1")).toBe(false);

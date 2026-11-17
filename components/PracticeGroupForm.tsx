@@ -24,7 +24,14 @@ export default function PracticeGroupForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const visibleIds = new Set(sections.flatMap((section) => section.lessons.map((lesson) => lesson.id)));
-  const count = [...selected].filter((id) => visibleIds.has(id)).length;
+  const deckIds = [...selected].filter((id) => visibleIds.has(id));
+  const count = deckIds.length;
+  // In edit mode, an untouched lesson selection is not sent, so a rename keeps
+  // every saved lesson, including ones that are unavailable right now. This
+  // also lets a group whose lessons are all unavailable still be renamed.
+  const originalIds = (group?.deckIds ?? []).filter((id) => visibleIds.has(id));
+  const lessonsChanged = !group || count !== new Set(originalIds).size || deckIds.some((id) => !originalIds.includes(id));
+  const canSave = !busy && name.trim() !== "" && (count > 0 || !lessonsChanged);
 
   function toggle(id: string) {
     setSelected((current) => {
@@ -38,12 +45,11 @@ export default function PracticeGroupForm({
   async function save() {
     setError("");
     setBusy(true);
-    // Lessons that were hidden or removed since saving drop out on save.
-    const deckIds = [...selected].filter((id) => visibleIds.has(id));
+    // When the selection changes, lessons hidden or removed since saving drop out.
     const res = await fetch(group ? `/api/practice-groups/${encodeURIComponent(group.id)}` : "/api/practice-groups", {
       method: group ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, deckIds }),
+      body: JSON.stringify(lessonsChanged ? { name, deckIds } : { name }),
     }).catch(() => null);
     if (!res?.ok) {
       setBusy(false);
@@ -106,7 +112,7 @@ export default function PracticeGroupForm({
       ))}
 
       <div className="flex flex-wrap items-center gap-2 pt-1">
-        <button type="submit" disabled={busy || !name.trim() || count === 0} className="btn btn-primary btn-lg flex-1">
+        <button type="submit" disabled={!canSave} className="btn btn-primary btn-lg flex-1">
           {group ? "Save changes" : count > 0 ? `Save group · ${plural(count, "lesson")}` : "Pick lessons"}
         </button>
         {group && (

@@ -64,6 +64,9 @@ export async function getPracticeGroup(id: string): Promise<PracticeGroup | null
 
 export async function createPracticeGroup(input: GroupInput): Promise<PracticeGroup> {
   const session = await learnerSession();
+  // Soft limit: count-then-insert is not atomic, so concurrent creates can
+  // overshoot MAX_GROUPS_PER_USER by a few. That is acceptable for a per-user
+  // abuse guard; an exact cap would need a transactional counter item.
   const existing = await listPracticeGroups();
   if (existing.length >= MAX_GROUPS_PER_USER) throw new AccessError(403, "too many practice groups");
   const now = new Date().toISOString();
