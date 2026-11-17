@@ -6,7 +6,10 @@ import WarmStudyQueue from "@/components/WarmStudyQueue";
 import WeeklyGoal from "@/components/WeeklyGoal";
 import { reviewQueueUrl } from "@/components/studyQueueCache";
 import { getAppSession } from "@/lib/app-session";
+import { deckKicker } from "@/lib/deck-kicker";
 import { listAllCards, listDecks, nextReleaseTeaser } from "@/lib/db";
+import { listPracticeGroups } from "@/lib/practice-group-store";
+import { resolveGroupDecks, type PracticeGroup } from "@/lib/practice-groups";
 import { countsByDeck, totalCounts } from "@/lib/due";
 import { weakWordCount } from "@/lib/mistake-clinic";
 import { plural } from "@/lib/plural";
@@ -16,12 +19,6 @@ import { weeklyProgress } from "@/lib/practice";
 import { hardWords } from "@/lib/study-sets";
 import type { Deck, DeckCounts } from "@/lib/types";
 import { uniqueWords } from "@/lib/words";
-
-function deckKicker(deck: Deck): string {
-  if (deck.source === "private") return "Private";
-  if (typeof deck.releaseWeek === "number") return releaseWeekLabel(deck.releaseWeek);
-  return "Shared";
-}
 
 function DeckList({
   decks,
@@ -48,6 +45,32 @@ function DeckList({
         );
       })}
     </div>
+  );
+}
+
+function PracticeGroups({ groups, decks }: { groups: PracticeGroup[]; decks: Deck[] }) {
+  return (
+    <section aria-labelledby="groups-heading" className="space-y-3">
+      <div>
+        <h2 id="groups-heading" className="eyebrow">Practice a group</h2>
+        <p className="mt-1 text-sm text-muted">Cram several lessons together, e.g. for an exam. Doesn&apos;t change your review schedule.</p>
+      </div>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+        {groups.map((group) => {
+          const { decks: available, missing } = resolveGroupDecks(group, decks);
+          const names = available.map((deck) => deck.name).join(", ");
+          return (
+            <ModeLink key={group.id} href={`/groups/${encodeURIComponent(group.id)}`} title={group.name}
+              kicker={plural(available.length, "lesson")}
+              detail={missing > 0 ? `${missing} unavailable${names ? ` · ${names}` : ""}` : names || "No lessons available"} />
+          );
+        })}
+        <Link href="/groups/new"
+          className="pressable flex min-h-20 items-center justify-center rounded-2xl border border-dashed border-border px-5 py-4 text-sm font-semibold text-muted hover:border-accent/50 hover:text-foreground">
+          + New practice group
+        </Link>
+      </div>
+    </section>
   );
 }
 
@@ -80,7 +103,7 @@ export default async function HomePage({
   if ((await getAppSession())?.role === "admin") {
     return <AdminHome studyBlocked={adminStudy === "1"} />;
   }
-  const [decks, teaser] = await Promise.all([listDecks(), nextReleaseTeaser()]);
+  const [decks, teaser, practiceGroups] = await Promise.all([listDecks(), nextReleaseTeaser(), listPracticeGroups()]);
   // A review commits just before this page is shown again. A consistent read
   // sees that write; an eventually consistent one keeps the old due counts.
   const cards = await listAllCards(decks, { consistent: true });
@@ -147,6 +170,8 @@ export default async function HomePage({
             badge={clinicCount} />
         </div>
       </section>
+
+      <PracticeGroups groups={practiceGroups} decks={decks} />
 
       {teaser && <UpcomingLesson teaser={teaser} timeZone={zone} />}
 

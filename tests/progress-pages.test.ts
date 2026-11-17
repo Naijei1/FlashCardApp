@@ -8,6 +8,7 @@ const db = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/db", () => db);
+vi.mock("@/lib/practice-group-store", () => ({ listPracticeGroups: vi.fn(async () => []) }));
 vi.mock("@/lib/app-session", () => ({
   getAppSession: vi.fn(async () => ({ role: "user", userId: "user-a" })),
 }));

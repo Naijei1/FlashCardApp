@@ -32,7 +32,7 @@ const ADMIN_NAV = [
 ];
 
 function isActive(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" || pathname.startsWith("/decks/") : pathname.startsWith(href);
+  return href === "/" ? pathname === "/" || pathname.startsWith("/decks/") || pathname.startsWith("/groups/") : pathname.startsWith(href);
 }
 
 function noop() {}
