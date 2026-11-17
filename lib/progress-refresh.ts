@@ -18,6 +18,7 @@ export function isStudyRoute(pathname: string): boolean {
     pathname === "/clinic" ||
     pathname.startsWith("/clinic/") ||
     pathname.startsWith("/study/") ||
+    pathname.startsWith("/cram/") ||
     pathname.startsWith("/review/") ||
     pathname.startsWith("/write/") ||
     pathname.startsWith("/pinyin/")

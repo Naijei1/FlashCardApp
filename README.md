@@ -37,6 +37,15 @@ Tailwind CSS; data lives in a single DynamoDB table.
   hard — then drills them with mixed Recognition, Write Chinese, and Write
   Pinyin prompts. Each prompt records as its real skill mode, so FSRS schedules
   and weekly new-word progress stay independent and consistent.
+- **Practice a group (cram mode)**: on Home, save named groups of lessons
+  (e.g. "Final: L6-10"), then cram every card in them, shuffled each time.
+  Words repeated across lessons appear once (same Chinese text and same
+  reading; the same hanzi with a different reading stays separate), keeping
+  the earliest lesson's card and listing the other lessons. Got it / Missed
+  stats are session-only, with a re-drill of missed cards at the end. Cramming
+  never writes reviews, FSRS state, hard-word marks, or weekly progress.
+  Groups are stored per learner at `PK=USER#<userId>`,
+  `SK=PRACTICE_GROUP#<id>`; unreleased, hidden, or deleted lessons are skipped.
 - **Weekly goal**: 77 new words per week (about 11 a day), alongside due reviews.
   Tracks newly introduced words from this version onward, using Eastern
   Monday–Sunday weeks. Introduction counts are not a guarantee of mastery.
