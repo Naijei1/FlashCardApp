@@ -76,3 +76,35 @@ it("sends the new lesson selection when it changes, and blocks clearing every le
   await act(async () => button("Save changes").click());
   expect(sentBody()).toEqual({ name: "Old", deckIds: ["l2"] });
 });
+
+async function setField(selector: string, value: string) {
+  const field = container.querySelector(selector) as HTMLInputElement | HTMLSelectElement;
+  const proto = field instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(field, value);
+    field.dispatchEvent(new Event(field instanceof HTMLSelectElement ? "change" : "input", { bubbles: true }));
+  });
+}
+
+it("sends an exam date and target recall only when they change", async () => {
+  const group = { id: "g1", name: "Final", deckIds: ["l1"] };
+  await act(async () => root.render(createElement(PracticeGroupForm, { sections, group, onDone: vi.fn() })));
+  expect((container.querySelector("select") as HTMLSelectElement).disabled).toBe(true);
+  await setField("input[type=date]", "2026-12-18");
+  await setField("select", "0.9");
+  await act(async () => button("Save changes").click());
+  expect(sentBody()).toEqual({ name: "Final", examDate: "2026-12-18", targetRecall: 0.9 });
+});
+
+it("keeps a past exam date on rename and sends null when cleared", async () => {
+  const group = { id: "g1", name: "Final", deckIds: ["l1"], examDate: "2026-01-10", targetRecall: 0.9 };
+  await act(async () => root.render(createElement(PracticeGroupForm, { sections, group, onDone: vi.fn() })));
+  await rename("Final (done)");
+  await act(async () => button("Save changes").click());
+  expect(sentBody()).toEqual({ name: "Final (done)" });
+
+  fetchMock.mockClear();
+  await act(async () => button("Clear").click());
+  await act(async () => button("Save changes").click());
+  expect(sentBody()).toEqual({ name: "Final (done)", examDate: null });
+});

@@ -37,13 +37,22 @@ Tailwind CSS; data lives in a single DynamoDB table.
   hard — then drills them with mixed Recognition, Write Chinese, and Write
   Pinyin prompts. Each prompt records as its real skill mode, so FSRS schedules
   and weekly new-word progress stay independent and consistent.
-- **Practice a group (cram mode)**: on Home, save named groups of lessons
-  (e.g. "Final: L6-10"), then cram every card in them, shuffled each time.
-  Words repeated across lessons appear once (same Chinese text and same
-  reading; the same hanzi with a different reading stays separate), keeping
-  the earliest lesson's card and listing the other lessons. Got it / Missed
-  stats are session-only, with a re-drill of missed cards at the end. Cramming
-  never writes reviews, FSRS state, hard-word marks, or weekly progress.
+- **Practice a group / exam prep**: on Home, save named groups of lessons
+  (e.g. "Final: L6-10"). Words repeated across lessons appear once (same
+  Chinese text and same reading; the same hanzi with a different reading stays
+  separate), keeping the earliest lesson's card. Group sessions use the normal
+  Recognition and Write screens with Again/Hard/Good/Easy, and every rating
+  saves through `/api/review` and the offline queue to *every* merged copy.
+  Optionally set an exam date (local YYYY-MM-DD) and a target recall (85-98%,
+  default 95%). Until that date, recognition and writing follow an exam plan
+  computed on the fly from FSRS-6's forgetting curve: a card is due early when
+  its predicted recall at the exam is below target and the last safe day to
+  review it has arrived; new words are spread over the days left (minus a 1-2
+  day buffer); the day before and exam day add a final pass for anything under
+  97%. Home shows "Final in N days · X/Y ready · today: a due + b new". Pinyin
+  is optional practice that saves but never counts toward readiness. Without a
+  date (or after it) a group is plain FSRS due + new, plus an "extra practice"
+  shuffle of every card, which also saves. See `lib/exam.ts`.
   Groups are stored per learner at `PK=USER#<userId>`,
   `SK=PRACTICE_GROUP#<id>`; unreleased, hidden, or deleted lessons are skipped.
 - **Weekly goal**: 77 new words per week (about 11 a day), alongside due reviews.

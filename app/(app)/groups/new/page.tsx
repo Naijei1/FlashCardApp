@@ -19,8 +19,8 @@ export default async function NewPracticeGroupPage() {
         <p className="eyebrow mt-2">Practice a group</p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight">New group</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Combine lessons and cram them together. Words that repeat across lessons appear once.
-          Cramming doesn&apos;t change your review schedule.
+          Combine lessons and study them together. Words that repeat across lessons appear once.
+          Every rating counts toward your normal review schedule. Add an exam date to get a day-by-day plan.
         </p>
       </header>
       <PracticeGroupForm sections={lessonSections(decks, counts, deckKicker)} />
