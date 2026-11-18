@@ -114,3 +114,8 @@ export function currentRetentionSchedule(stored: StoredFsrs): StoredFsrs {
   const due = new Date(Math.min(Date.parse(stored.due), last + days * 86_400_000)).toISOString();
   return { ...stored, due, scheduled_days: Math.max(0, Math.round((Date.parse(due) - last) / 86_400_000)), retentionTarget: 0.95 };
 }
+
+/** FSRS-6 forgetting-curve decay (w[20]) of the parameters every scheduler here uses. */
+export function forgettingCurveDecay(mode: ReviewMode = "review"): number {
+  return schedulers[mode].parameters.w[20];
+}

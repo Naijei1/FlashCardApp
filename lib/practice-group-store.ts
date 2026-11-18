@@ -74,6 +74,8 @@ export async function createPracticeGroup(input: GroupInput): Promise<PracticeGr
     id: randomUUID(),
     name: input.name,
     deckIds: input.deckIds,
+    ...(input.examDate ? { examDate: input.examDate } : {}),
+    ...(typeof input.targetRecall === "number" ? { targetRecall: input.targetRecall } : {}),
     createdAt: now,
     updatedAt: now,
   };
@@ -86,6 +88,8 @@ export async function createPracticeGroup(input: GroupInput): Promise<PracticeGr
         ownerUserId: session.userId,
         name: group.name,
         deckIds: group.deckIds,
+        ...(group.examDate ? { examDate: group.examDate } : {}),
+        ...(group.targetRecall !== undefined ? { targetRecall: group.targetRecall } : {}),
         createdAt: group.createdAt,
         updatedAt: group.updatedAt,
       },
@@ -111,12 +115,23 @@ export async function updatePracticeGroup(id: string, input: Partial<GroupInput>
     values[":deckIds"] = input.deckIds;
     sets.push("#deckIds = :deckIds");
   }
+  const removes: string[] = [];
+  for (const field of ["examDate", "targetRecall"] as const) {
+    const value = input[field];
+    if (value === undefined) continue;
+    names[`#${field}`] = field;
+    if (value === null) removes.push(`#${field}`);
+    else {
+      values[`:${field}`] = value;
+      sets.push(`#${field} = :${field}`);
+    }
+  }
   try {
     const res = await getDocClient().send(
       new UpdateCommand({
         TableName: tableName(),
         Key: practiceGroupKey(session.userId, id),
-        UpdateExpression: `SET ${sets.join(", ")}`,
+        UpdateExpression: `SET ${sets.join(", ")}${removes.length > 0 ? ` REMOVE ${removes.join(", ")}` : ""}`,
         // Never create a group by updating a missing or foreign id.
         ConditionExpression: "attribute_exists(PK)",
         ExpressionAttributeNames: names,
