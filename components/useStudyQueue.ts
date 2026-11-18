@@ -18,6 +18,13 @@ import type { Card, ReviewMode } from "@/lib/types";
 import { createReviewSync, type ReviewSyncState } from "./reviewSync";
 import { readStudyQueue, reviewQueueUrl } from "./studyQueueCache";
 
+/** A study queue other than a deck's, such as a practice group. */
+export type StudySource = {
+  /** Stable id for this queue's batch break, e.g. "group:<id>:today". */
+  scope: string;
+  url: (includeNew: boolean) => string;
+};
+
 /** Waiting longer than this for a parked learning card starts the batch break instead. */
 const LONG_WAIT_MS = 60_000;
 
@@ -38,11 +45,13 @@ export function useStudyQueue({
   mode,
   newOnly = false,
   random = Math.random,
+  source,
 }: {
   deckId: string;
   mode: ReviewMode;
   newOnly?: boolean;
   random?: () => number;
+  source?: StudySource;
 }) {
   // Client storage can contain a pending review or enforced break that the
   // server cannot see. Gate the first card until that local check completes.
@@ -86,7 +95,10 @@ export function useStudyQueue({
     () => createReviewSync((failedCount) => setSyncState((state) => ({ ...state, failedCount }))),
     []
   );
-  const breakScope = useMemo(() => ({ deckId, mode }), [deckId, mode]);
+  const sourceScope = source?.scope;
+  const sourceUrlRef = useRef(source?.url);
+  sourceUrlRef.current = source?.url;
+  const breakScope = useMemo(() => ({ deckId: sourceScope ?? deckId, mode }), [deckId, mode, sourceScope]);
 
   const resolveSyncFailures = useCallback(() => {
     sync.discardBlocked();
@@ -106,7 +118,8 @@ export function useStudyQueue({
     }
     waitingToLoadRef.current = false;
     const includeNew = newOnly || extendNewRef.current;
-    const url = reviewQueueUrl(deckId, mode, includeNew);
+    const sourceUrl = sourceScope ? sourceUrlRef.current : undefined;
+    const url = sourceUrl ? sourceUrl(includeNew) : reviewQueueUrl(deckId, mode, includeNew);
     const applyLoaded = (data: { queue: StudyQueueItem[]; totalDue: number; remainingNew?: number }) => {
       const carried = carryRef.current;
       carryRef.current = [];
@@ -140,7 +153,7 @@ export function useStudyQueue({
       .catch(() => {
         if (!controller.signal.aborted) setLoadError(true);
       });
-  }, [chooseCurrent, deckId, mode, newOnly, sync]);
+  }, [chooseCurrent, deckId, mode, newOnly, sourceScope, sync]);
 
   useEffect(() => {
     const unsubscribe = sync.subscribe((state) => {
@@ -238,13 +251,20 @@ export function useStudyQueue({
 
       const item = queue[readyIndex];
       const now = new Date();
-      sync.push({ mode, cardId: item.card.id, deckId: item.card.deckId, rating, reviewedAt: now.toISOString() });
+      // A group word can exist as several cards (across lessons, or a reversed
+      // pair). Save the same rating to each copy so their memory stays in step.
+      const reviewedAt = now.toISOString();
+      const copies = item.copies?.length ? item.copies : [{ deckId: item.card.deckId, id: item.card.id }];
+      for (const copy of copies) sync.push({ mode, cardId: copy.id, deckId: copy.deckId, rating, reviewedAt });
       // The local result only decides whether a learning step returns within
       // this session; the server's recomputation stays canonical for storage.
       const { card } = rateCard(item.card, rating as Grade, now, mode);
       const rest = [...queue.slice(0, readyIndex), ...queue.slice(readyIndex + 1)];
       const staysInSession = belongsInCurrentSession(card.fsrs.due, now.getTime());
-      const next = staysInSession ? [...rest, { ...item, card }] : rest;
+      // A learning step returns on its own schedule, not the batch's readyAt.
+      const { readyAt: _readyAt, ...rated } = item;
+      void _readyAt;
+      const next = staysInSession ? [...rest, { ...rated, card }] : rest;
       if (!staysInSession && (card.fsrs.state === State.Learning || card.fsrs.state === State.Relearning)) {
         setBackLater((n) => n + 1);
       }

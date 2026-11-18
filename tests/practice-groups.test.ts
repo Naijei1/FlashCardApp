@@ -46,10 +46,12 @@ function fakeTable(seed: Record<string, unknown>[] = []) {
       const names = input.ExpressionAttributeNames as Record<string, string>;
       const values = input.ExpressionAttributeValues as Record<string, unknown>;
       const updated = { ...existing };
-      for (const part of String(input.UpdateExpression).replace(/^SET /, "").split(", ")) {
+      const [setPart, removePart] = String(input.UpdateExpression).replace(/^SET /, "").split(" REMOVE ");
+      for (const part of setPart.split(", ")) {
         const [lhs, rhs] = part.split(" = ");
         updated[names[lhs]] = values[rhs];
       }
+      for (const name of removePart?.split(", ") ?? []) delete updated[names[name]];
       items.set(id(input.Key as never), updated);
       return { Attributes: updated };
     }
@@ -98,6 +100,27 @@ describe("input validation", () => {
     });
     expect(parseGroupInput({ name: "Renamed" }, allowed, { partial: true })).toEqual({ ok: true, value: { name: "Renamed" } });
   });
+
+  it("validates an optional exam date and target recall", () => {
+    const today = "2026-11-17";
+    const parse = (body: Record<string, unknown>) => parseGroupInput({ name: "Final", deckIds: ["l6"], ...body }, allowed, { today });
+    expect(parse({ examDate: "2026-12-18", targetRecall: 0.9 })).toEqual({
+      ok: true, value: { name: "Final", deckIds: ["l6"], examDate: "2026-12-18", targetRecall: 0.9 },
+    });
+    expect(parse({ examDate: today })).toMatchObject({ ok: true, value: { examDate: today } });
+    expect(parse({ examDate: "2026-11-16" })).toEqual({ ok: false, error: "exam date is in the past" });
+    expect(parse({ examDate: "2026-02-30" })).toMatchObject({ ok: false });
+    expect(parse({ examDate: "12/18/2026" })).toMatchObject({ ok: false });
+    expect(parse({ examDate: "2031-01-01" })).toEqual({ ok: false, error: "exam date is too far ahead" });
+    expect(parse({ targetRecall: 0.8 })).toMatchObject({ ok: false });
+    expect(parse({ targetRecall: 0.99 })).toMatchObject({ ok: false });
+    expect(parse({ targetRecall: "0.9" })).toMatchObject({ ok: false });
+    // null clears either field on update.
+    expect(parseGroupInput({ examDate: null, targetRecall: null }, allowed, { partial: true, today })).toEqual({
+      ok: true, value: { examDate: null, targetRecall: null },
+    });
+    expect(parseGroupInput({ examDate: "" }, allowed, { partial: true, today })).toEqual({ ok: true, value: { examDate: null } });
+  });
 });
 
 describe("group CRUD is scoped to the signed-in learner", () => {
@@ -117,6 +140,28 @@ describe("group CRUD is scoped to the signed-in learner", () => {
 
     await store.deletePracticeGroup(group.id);
     expect(await store.listPracticeGroups()).toEqual([]);
+  });
+
+  it("stores, edits, and clears the exam date and target recall", async () => {
+    const items = fakeTable();
+    mocks.session.mockResolvedValue(learnerA);
+    const store = await import("@/lib/practice-group-store");
+    const group = await store.createPracticeGroup({ name: "Final", deckIds: ["l6"], examDate: "2026-12-18", targetRecall: 0.9 });
+    expect(group).toMatchObject({ examDate: "2026-12-18", targetRecall: 0.9 });
+    const key = practiceGroupKey("user-a", group.id);
+    expect(items.get(`${key.PK}\u0000${key.SK}`)).toMatchObject({ examDate: "2026-12-18", targetRecall: 0.9 });
+
+    expect(await store.updatePracticeGroup(group.id, { examDate: "2026-12-20" })).toMatchObject({ examDate: "2026-12-20", targetRecall: 0.9 });
+    const cleared = await store.updatePracticeGroup(group.id, { examDate: null, targetRecall: null });
+    expect(cleared.examDate).toBeUndefined();
+    expect(cleared.targetRecall).toBeUndefined();
+    expect(items.get(`${key.PK}\u0000${key.SK}`)).not.toHaveProperty("examDate");
+
+    // Corrupt stored values are ignored on read rather than trusted.
+    items.set(`${key.PK}\u0000${key.SK}`, { ...items.get(`${key.PK}\u0000${key.SK}`)!, examDate: "soon", targetRecall: 2 });
+    const read = await store.getPracticeGroup(group.id);
+    expect(read?.examDate).toBeUndefined();
+    expect(read?.targetRecall).toBeUndefined();
   });
 
   it("does not let another learner read, edit, or delete the group", async () => {
@@ -201,6 +246,14 @@ describe("routes", () => {
     const patched = await item.PATCH(json({ name: "Final v2", deckIds: ["week-6", "week-7"] }, "PATCH"), params);
     expect(await patched.json()).toMatchObject({ name: "Final v2", deckIds: ["week-6", "week-7"] });
 
+    const dated = await item.PATCH(json({ examDate: "2026-12-18", targetRecall: 0.97 }, "PATCH"), params);
+    expect(await dated.json()).toMatchObject({ name: "Final v2", examDate: "2026-12-18", targetRecall: 0.97 });
+    expect((await item.PATCH(json({ examDate: "2026-11-01" }, "PATCH"), params)).status).toBe(400);
+    expect((await item.PATCH(json({ targetRecall: 0.5 }, "PATCH"), params)).status).toBe(400);
+    expect((await POST(json({ name: "Bad", deckIds: ["week-6"], examDate: "tomorrow" }))).status).toBe(400);
+    const undated = await item.PATCH(json({ examDate: null }, "PATCH"), params);
+    expect(await undated.json()).not.toHaveProperty("examDate");
+
     mocks.session.mockResolvedValue(learnerB);
     expect((await item.GET(new Request("https://app.test"), params)).status).toBe(404);
     expect((await item.PATCH(json({ name: "mine now" }, "PATCH"), params)).status).toBe(404);
@@ -239,12 +292,61 @@ describe("cram set release gating", () => {
     const set = await loadCramSet("g1");
     expect(set?.decks.map((d) => d.id)).toEqual(["week-6"]);
     expect(set?.missing).toBe(3);
-    expect(set?.cards.map((c) => c.prompt)).toEqual(["你好"]);
+    expect(set?.entries.map((e) => e.view.prompt)).toEqual(["你好"]);
     expect(JSON.stringify(set)).not.toContain("秘密");
     const writes = mocks.send.mock.calls.filter(([command]) => command.constructor.name !== "GetCommand" &&
       command.constructor.name !== "QueryCommand");
     expect(writes).toEqual([]);
     expect(JSON.stringify([...items.entries()])).toBe(before);
+  });
+});
+
+describe("group study queue route", () => {
+  const params = (id: string) => ({ params: Promise.resolve({ id }) });
+  const url = (query: string) => new Request(`https://app.test/api/practice-groups/g1/queue?${query}`);
+
+  it("serves only released, unhidden cards, merges duplicates, and never writes", async () => {
+    const items = fakeTable([
+      globalDeck("week-6", { status: "published", releaseWeek: 6, frontLanguage: "zh-CN" }),
+      globalDeck("week-8", { status: "published", releaseWeek: 8, frontLanguage: "zh-CN" }),
+      globalDeck("week-9", { status: "scheduled", releaseAt: "2026-12-01T00:00:00.000Z", releaseWeek: 9 }),
+      globalCard("week-6", "a", "老师", "teacher"),
+      globalCard("week-8", "a8", "老师", "teacher"),
+      globalCard("week-6", "b", "谢谢", "thanks"),
+      globalCard("week-9", "c", "秘密", "secret"),
+      { PK: "USER#user-a", SK: "HIDDEN#GLOBAL#week-6#CARD#b", hidden: true },
+      { PK: "USER#user-a", SK: "PRACTICE_GROUP#g1", name: "Final", deckIds: ["week-6", "week-8", "week-9"],
+        examDate: "2026-12-18", createdAt: at, updatedAt: at },
+    ]);
+    const before = JSON.stringify([...items.entries()]);
+    mocks.session.mockResolvedValue(learnerA);
+    const { GET } = await import("@/app/api/practice-groups/[id]/queue/route");
+    const res = await GET(url("mode=review&plan=all"), params("g1"));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.queue).toHaveLength(1);
+    expect(data.queue[0]).toMatchObject({
+      card: { id: "a", front: "老师" },
+      copies: [{ deckId: "week-6", id: "a" }, { deckId: "week-8", id: "a8" }],
+    });
+    expect(JSON.stringify(data)).not.toContain("秘密");
+    expect(JSON.stringify(data)).not.toContain("谢谢");
+    expect(JSON.stringify([...items.entries()])).toBe(before);
+
+    expect((await GET(url("mode=sing"), params("g1"))).status).toBe(400);
+    expect((await GET(url("plan=cram"), params("g1"))).status).toBe(400);
+    expect((await GET(url(""), params("nope"))).status).toBe(404);
+  });
+
+  it("is closed to admins, signed-out visitors, and other learners", async () => {
+    fakeTable([{ PK: "USER#user-a", SK: "PRACTICE_GROUP#g1", name: "Final", deckIds: [], createdAt: at, updatedAt: at }]);
+    const { GET } = await import("@/app/api/practice-groups/[id]/queue/route");
+    mocks.session.mockResolvedValue(admin);
+    expect((await GET(url(""), params("g1"))).status).toBe(403);
+    mocks.session.mockResolvedValue(null);
+    expect((await GET(url(""), params("g1"))).status).toBe(401);
+    mocks.session.mockResolvedValue(learnerB);
+    expect((await GET(url(""), params("g1"))).status).toBe(404);
   });
 });
 

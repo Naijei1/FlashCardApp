@@ -14,7 +14,7 @@ import TtsButton from "./TtsButton";
 import { useHandwritingGuard } from "./useHandwritingGuard";
 import { useKeepInView } from "./useKeepInView";
 import { useKeyboard } from "./useKeyboard";
-import { useStudyQueue } from "./useStudyQueue";
+import { useStudyQueue, type StudySource } from "./useStudyQueue";
 import { repeatMistakesStorageKey, subscribeLocalUser } from "@/lib/browser-user-scope";
 
 const CORRECTION_COPIES = 3;
@@ -30,13 +30,18 @@ export default function WriteSession({
   deckId,
   chineseLang,
   backHref,
+  source,
+  emptyMessage,
 }: {
   mode?: "write" | "pinyin";
   deckId: string;
   chineseLang: string;
   backHref: string;
+  /** A non-deck queue, such as a practice group. */
+  source?: StudySource;
+  emptyMessage?: string;
 }) {
-  const study = useStudyQueue({ deckId, mode });
+  const study = useStudyQueue({ deckId, mode, source });
   const { current, submitRating } = study;
   const [value, setValue] = useState("");
   const [showEnglish, setShowEnglish] = useState(false);
@@ -161,9 +166,9 @@ export default function WriteSession({
     <QueueStatus study={study} backHref={backHref} onLearnMore={study.learnMoreNewWords} copy={{
       noun: mode === "pinyin" ? "Pinyin" : "writing",
       verb: "wrote",
-      empty: mode === "pinyin"
+      empty: emptyMessage ?? (mode === "pinyin"
         ? "No cards with recognizable Chinese characters are due. Add Chinese to either side of a card, or come back later."
-        : "No cards with a Pinyin reading are due right now — come back later.",
+        : "No cards with a Pinyin reading are due right now — come back later."),
     }} />
   );
   if (!current) return status;

@@ -8,6 +8,8 @@ import { reviewQueueUrl } from "@/components/studyQueueCache";
 import { getAppSession } from "@/lib/app-session";
 import { deckKicker } from "@/lib/deck-kicker";
 import { listAllCards, listDecks, nextReleaseTeaser } from "@/lib/db";
+import { mergeCramEntries } from "@/lib/cram";
+import { examTileLine, summarizeGroup } from "@/lib/group-study";
 import { listPracticeGroups } from "@/lib/practice-group-store";
 import { resolveGroupDecks, type PracticeGroup } from "@/lib/practice-groups";
 import { countsByDeck, totalCounts } from "@/lib/due";
@@ -17,7 +19,7 @@ import { appTimeZone } from "@/lib/forecast";
 import { partitionStudyDecks, releaseWeekLabel, type ReleaseTeaser } from "@/lib/multi-user-model";
 import { weeklyProgress } from "@/lib/practice";
 import { hardWords } from "@/lib/study-sets";
-import type { Deck, DeckCounts } from "@/lib/types";
+import type { Card, Deck, DeckCounts } from "@/lib/types";
 import { uniqueWords } from "@/lib/words";
 
 function DeckList({
@@ -48,21 +50,30 @@ function DeckList({
   );
 }
 
-function PracticeGroups({ groups, decks }: { groups: PracticeGroup[]; decks: Deck[] }) {
+function PracticeGroups({ groups, decks, cards, now, timeZone }: {
+  groups: PracticeGroup[]; decks: Deck[]; cards: Card[]; now: Date; timeZone: string;
+}) {
   return (
     <section aria-labelledby="groups-heading" className="space-y-3">
       <div>
         <h2 id="groups-heading" className="eyebrow">Practice a group</h2>
-        <p className="mt-1 text-sm text-muted">Cram several lessons together, e.g. for an exam. Doesn&apos;t change your review schedule.</p>
+        <p className="mt-1 text-sm text-muted">Study several lessons together, e.g. for an exam. Ratings count toward your normal reviews.</p>
       </div>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
         {groups.map((group) => {
           const { decks: available, missing } = resolveGroupDecks(group, decks);
+          const selected = new Set(available.map((deck) => deck.id));
+          const entries = mergeCramEntries(cards.filter((card) => selected.has(card.deckId)), available);
+          const { exam, modes } = summarizeGroup(entries, { group, decks: available, now, timeZone });
           const names = available.map((deck) => deck.name).join(", ");
+          const today = modes.review.due + modes.write.due + modes.review.newToday + modes.write.newToday;
+          const detail = exam
+            ? examTileLine(exam)
+            : missing > 0 ? `${missing} unavailable${names ? ` · ${names}` : ""}` : names || "No lessons available";
           return (
             <ModeLink key={group.id} href={`/groups/${encodeURIComponent(group.id)}`} title={group.name}
-              kicker={plural(available.length, "lesson")}
-              detail={missing > 0 ? `${missing} unavailable${names ? ` · ${names}` : ""}` : names || "No lessons available"} />
+              kicker={plural(available.length, "lesson")} detail={detail}
+              badge={exam ? exam.due + exam.newToday : today} />
           );
         })}
         <Link href="/groups/new"
@@ -171,7 +182,7 @@ export default async function HomePage({
         </div>
       </section>
 
-      <PracticeGroups groups={practiceGroups} decks={decks} />
+      <PracticeGroups groups={practiceGroups} decks={decks} cards={cards} now={now} timeZone={zone} />
 
       {teaser && <UpcomingLesson teaser={teaser} timeZone={zone} />}
 

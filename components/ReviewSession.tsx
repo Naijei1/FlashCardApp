@@ -8,7 +8,7 @@ import RatingBar from "./RatingBar";
 import { QueueStatus, SessionHeader } from "./SessionChrome";
 import TtsButton from "./TtsButton";
 import { useKeyboard } from "./useKeyboard";
-import { useStudyQueue } from "./useStudyQueue";
+import { useStudyQueue, type StudySource } from "./useStudyQueue";
 
 type DeckLangs = Record<string, { front?: string; back?: string }>;
 
@@ -17,13 +17,18 @@ export default function ReviewSession({
   deckLangs,
   backHref,
   newOnly = false,
+  source,
+  emptyMessage,
 }: {
   deckId: string;
   deckLangs: DeckLangs;
   backHref: string;
   newOnly?: boolean;
+  /** A non-deck queue, such as a practice group. */
+  source?: StudySource;
+  emptyMessage?: string;
 }) {
-  const study = useStudyQueue({ deckId, mode: "review", newOnly });
+  const study = useStudyQueue({ deckId, mode: "review", newOnly, source });
   const [revealed, setRevealed] = useState(false);
   const [showEnglish, setShowEnglish] = useState(false);
   const { current, submitRating } = study;
@@ -53,9 +58,9 @@ export default function ReviewSession({
     <QueueStatus study={study} backHref={backHref} copy={{
       noun: "review",
       verb: "reviewed",
-      empty: newOnly
+      empty: emptyMessage ?? (newOnly
         ? "No unseen words are waiting here. Use Spaced Repetition for words you have already started."
-        : "No cards are due right now — come back later.",
+        : "No cards are due right now — come back later."),
     }} />
   );
   if (!current) return status;

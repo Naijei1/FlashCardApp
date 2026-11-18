@@ -160,13 +160,22 @@ function resolveCard(card: Card, deck: Deck | undefined): Resolved {
   };
 }
 
+export type CramEntry = {
+  key: string;
+  /** The copy shown: earliest lesson, Chinese-first direction. */
+  card: Card;
+  /** Every merged copy, `card` first. Ratings in a group apply to all of them. */
+  copies: Card[];
+  view: CramCard;
+};
+
 /**
  * Merge a group's cards into one cram set. The same Chinese text with the same
  * reading appears once, keeping the copy from the earliest lesson (and, within
  * a lesson, the Chinese-first direction). The same hanzi with a different
  * reading stays separate. Callers pass already release-gated, unhidden cards.
  */
-export function buildCramCards(cards: readonly Card[], decks: readonly Deck[]): CramCard[] {
+export function mergeCramEntries(cards: readonly Card[], decks: readonly Deck[]): CramEntry[] {
   const ordered = [...decks].sort(compareLessons);
   const rank = new Map(ordered.map((deck, index) => [deck.id, index]));
   const deckById = new Map(decks.map((deck) => [deck.id, deck]));
@@ -179,15 +188,27 @@ export function buildCramCards(cards: readonly Card[], decks: readonly Deck[]): 
       a.card.createdAt.localeCompare(b.card.createdAt) ||
       a.card.id.localeCompare(b.card.id)
     );
-  const byKey = new Map<string, { keep: Resolved; deckIds: Set<string> }>();
+  const byKey = new Map<string, { keep: Resolved; copies: Card[]; deckIds: Set<string> }>();
   for (const entry of resolved) {
     const existing = byKey.get(entry.key);
-    if (existing) existing.deckIds.add(entry.card.deckId);
-    else byKey.set(entry.key, { keep: entry, deckIds: new Set([entry.card.deckId]) });
+    if (existing) {
+      existing.deckIds.add(entry.card.deckId);
+      existing.copies.push(entry.card);
+    } else byKey.set(entry.key, { keep: entry, copies: [entry.card], deckIds: new Set([entry.card.deckId]) });
   }
-  return [...byKey.values()].map(({ keep, deckIds }) => ({
+  return [...byKey.values()].map(({ keep, copies, deckIds }) => ({
     key: keep.key,
-    ...keep.view,
-    sources: ordered.filter((deck) => deckIds.has(deck.id)).map((deck) => deck.name),
+    card: keep.card,
+    copies,
+    view: {
+      key: keep.key,
+      ...keep.view,
+      sources: ordered.filter((deck) => deckIds.has(deck.id)).map((deck) => deck.name),
+    },
   }));
+}
+
+/** Display-only cram cards: no FSRS state, progress, or review version. */
+export function buildCramCards(cards: readonly Card[], decks: readonly Deck[]): CramCard[] {
+  return mergeCramEntries(cards, decks).map((entry) => entry.view);
 }

@@ -3,17 +3,50 @@ import { notFound } from "next/navigation";
 import GroupEditor from "@/components/GroupEditor";
 import { loadCramSet } from "@/lib/cram-set";
 import { deckKicker } from "@/lib/deck-kicker";
+import { appTimeZone } from "@/lib/forecast";
 import { requireLearnerPage } from "@/lib/guards";
 import { listAllCards, listDecks } from "@/lib/db";
-import { lessonSections } from "@/lib/practice-groups";
+import { examTileLine, summarizeGroup, type ModeSummary } from "@/lib/group-study";
+import { groupTargetRecall, lessonSections, type GroupPlan } from "@/lib/practice-groups";
 import { plural } from "@/lib/plural";
+import type { ReviewMode } from "@/lib/types";
 import { uniqueWords } from "@/lib/words";
+
+const MODE_LABELS: Record<ReviewMode, string> = { review: "Recognition", write: "Writing", pinyin: "Pinyin" };
+
+function formatExamDate(examDate: string): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric", year: "numeric" })
+    .format(new Date(`${examDate}T12:00:00Z`));
+}
+
+function StudyRow({ groupId, mode, plan, summary, label }: {
+  groupId: string; mode: ReviewMode; plan: GroupPlan; summary: ModeSummary; label?: string;
+}) {
+  const href = `/cram/${encodeURIComponent(groupId)}?mode=${mode}&plan=${plan}`;
+  const count = plan === "all" ? summary.total : summary.due + summary.newToday;
+  const detail = plan === "all"
+    ? plural(summary.total, "card")
+    : `${summary.due} due + ${summary.newToday} new`;
+  return (
+    <li className="flex items-center justify-between gap-3 px-5 py-3">
+      <div className="min-w-0">
+        <p className="font-medium">{label ?? MODE_LABELS[mode]}</p>
+        <p className="text-sm text-muted tabular-nums">{detail}</p>
+      </div>
+      {count > 0 ? (
+        <Link href={href} className={`btn shrink-0 ${plan === "today" ? "btn-primary" : "btn-secondary"}`}>Start</Link>
+      ) : (
+        <span aria-disabled="true" className="btn btn-secondary shrink-0 text-muted">{plan === "all" ? "No cards" : "Done"}</span>
+      )}
+    </li>
+  );
+}
 
 export default async function PracticeGroupPage({ params }: { params: Promise<{ groupId: string }> }) {
   await requireLearnerPage();
   const { groupId } = await params;
   const decks = await listDecks();
-  const allCards = await listAllCards(decks);
+  const allCards = await listAllCards(decks, { consistent: true });
   const set = await loadCramSet(groupId, { decks, cards: allCards });
   if (!set) notFound();
   const { group, missing } = set;
@@ -21,17 +54,19 @@ export default async function PracticeGroupPage({ params }: { params: Promise<{ 
   for (const card of uniqueWords(allCards)) {
     counts.set(card.deckId, (counts.get(card.deckId) ?? 0) + 1);
   }
-  const href = `/cram/${encodeURIComponent(group.id)}`;
+  const summary = summarizeGroup(set.entries, { group, decks: set.decks, now: new Date(), timeZone: appTimeZone() });
+  const { exam } = summary;
+  const target = Math.round(groupTargetRecall(group) * 100);
 
   return (
     <div className="space-y-6 py-6">
       <header>
         <Link href="/" className="btn btn-ghost -ml-3 px-3">← Home</Link>
-        <p className="eyebrow mt-2">Practice group · cram mode</p>
+        <p className="eyebrow mt-2">Practice group{exam ? " · exam prep" : ""}</p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight break-words">{group.name}</h1>
         <p className="mt-2 text-sm text-muted">
-          {plural(set.cards.length, "card")} from {plural(set.decks.length, "lesson")}, shuffled every time.
-          Cramming doesn&apos;t change your review schedule.
+          {plural(set.entries.length, "word")} from {plural(set.decks.length, "lesson")}. Words repeated across lessons appear once.
+          Every rating counts toward your normal review schedule.
         </p>
       </header>
 
@@ -41,6 +76,40 @@ export default async function PracticeGroupPage({ params }: { params: Promise<{ 
           and {missing === 1 ? "was" : "were"} skipped. Edit the group to tidy it up.
         </p>
       )}
+
+      {exam && (
+        <section aria-labelledby="exam-heading" className="card p-5">
+          <h2 id="exam-heading" className="eyebrow">Exam plan</h2>
+          <p className="mt-2 text-lg font-semibold">{examTileLine(exam)}</p>
+          <p className="mt-1 text-sm text-muted">
+            Exam on {formatExamDate(exam.examDate)} · aiming for {target}% recall in recognition and writing.
+            {exam.finalPass ? " Final pass: anything below 97% predicted recall is due today." : ""}
+          </p>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-border/70" aria-hidden="true">
+            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${exam.total ? (exam.ready / exam.total) * 100 : 0}%` }} />
+          </div>
+        </section>
+      )}
+
+      <section aria-labelledby="today-heading" className="card overflow-hidden">
+        <h2 id="today-heading" className="eyebrow px-5 pt-4">{exam ? "Today’s exam plan" : "Today"}</h2>
+        <ul className="divide-y divide-border">
+          <StudyRow groupId={group.id} mode="review" plan="today" summary={summary.modes.review} />
+          <StudyRow groupId={group.id} mode="write" plan="today" summary={summary.modes.write} />
+        </ul>
+      </section>
+
+      <section aria-labelledby="practice-heading" className="card overflow-hidden">
+        <div className="px-5 pt-4">
+          <h2 id="practice-heading" className="eyebrow">Extra practice</h2>
+          <p className="mt-1 text-sm text-muted">These also save to your review schedule.{exam ? " Pinyin doesn’t count toward exam readiness." : ""}</p>
+        </div>
+        <ul className="divide-y divide-border">
+          <StudyRow groupId={group.id} mode="review" plan="all" summary={summary.modes.review} label="Shuffle all · Recognition" />
+          <StudyRow groupId={group.id} mode="write" plan="all" summary={summary.modes.write} label="Shuffle all · Writing" />
+          <StudyRow groupId={group.id} mode="pinyin" plan="today" summary={summary.modes.pinyin} label="Pinyin practice" />
+        </ul>
+      </section>
 
       <section className="card overflow-hidden">
         <ul className="divide-y divide-border">
@@ -52,17 +121,10 @@ export default async function PracticeGroupPage({ params }: { params: Promise<{ 
           ))}
           {set.decks.length === 0 && <li className="px-5 py-4 text-sm text-muted">No lessons available. Edit the group to pick some.</li>}
         </ul>
-        <div className="border-t border-border bg-surface-muted/50 p-4">
-          {set.cards.length > 0 ? (
-            <Link href={href} className="btn btn-primary btn-lg w-full">Start cramming</Link>
-          ) : (
-            <span aria-disabled="true" className="btn btn-secondary btn-lg w-full text-muted">No cards to practice</span>
-          )}
-        </div>
       </section>
 
       <GroupEditor sections={lessonSections(decks, counts, deckKicker)}
-        group={{ id: group.id, name: group.name, deckIds: group.deckIds }} />
+        group={{ id: group.id, name: group.name, deckIds: group.deckIds, examDate: group.examDate, targetRecall: group.targetRecall }} />
     </div>
   );
 }

@@ -41,7 +41,7 @@ export async function PATCH(request: Request, { params }: Params) {
     const allowed = new Set([...visible, ...current.deckIds]);
     const parsed = parseGroupInput(body, allowed, { partial: true });
     if (!parsed.ok) return badRequest(parsed.error);
-    if (parsed.value.name === undefined && parsed.value.deckIds === undefined) return badRequest("nothing to update");
+    if (Object.values(parsed.value).every((value) => value === undefined)) return badRequest("nothing to update");
     return NextResponse.json(await updatePracticeGroup(id, parsed.value), { headers: NO_STORE });
   } catch (error) {
     return handled(error);

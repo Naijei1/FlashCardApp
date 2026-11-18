@@ -2,7 +2,7 @@
 export const SESSION_HORIZON_MS = 15 * 60_000;
 export const RATE_LOCKOUT_MS = 250;
 
-type Schedulable = { card: { fsrs: { due: string } } };
+type Schedulable = { card: { fsrs: { due: string } }; readyAt?: string };
 
 /** Identity used to avoid showing the same word twice in a row. */
 export function studyItemKey(item: { card: { deckId: string; id: string } }): string {
@@ -12,7 +12,10 @@ export function studyItemKey(item: { card: { deckId: string; id: string } }): st
 /** Invalid stored dates should surface for repair instead of trapping the UI forever. */
 export function queuedDueAt(item: Schedulable): number {
   const due = new Date(item.card.fsrs.due).getTime();
-  return Number.isFinite(due) ? due : 0;
+  const fsrsDue = Number.isFinite(due) ? due : 0;
+  // An exam plan or extra practice can bring a card forward, never push it back.
+  const ready = item.readyAt ? Date.parse(item.readyAt) : Number.NaN;
+  return Number.isFinite(ready) ? Math.min(ready, fsrsDue) : fsrsDue;
 }
 
 /** Indexes of cards whose wait is over (or that were never parked). */

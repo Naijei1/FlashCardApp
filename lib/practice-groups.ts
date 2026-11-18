@@ -1,3 +1,5 @@
+import { DEFAULT_TARGET_RECALL, dayDiff, isValidDateKey, MAX_TARGET_RECALL, MIN_TARGET_RECALL, parseTargetRecall } from "./exam";
+import { appTimeZone, localDateKey } from "./forecast";
 import type { Deck } from "./types";
 import { isRecord } from "./validation";
 
@@ -10,9 +12,23 @@ export type PracticeGroup = {
   id: string;
   name: string;
   deckIds: string[];
+  /** Exam day as YYYY-MM-DD in the learner's local calendar. Optional. */
+  examDate?: string;
+  /** Recall the exam plan aims for on exam day. Absent means DEFAULT_TARGET_RECALL. */
+  targetRecall?: number;
   createdAt: string;
   updatedAt: string;
 };
+
+/** "today" = due + new (the exam plan when dated); "all" = extra practice, every card once. */
+export type GroupPlan = "today" | "all";
+
+/** How far ahead an exam may be scheduled. */
+export const MAX_EXAM_DAYS_AHEAD = 3 * 366;
+
+export function groupTargetRecall(group: Pick<PracticeGroup, "targetRecall">): number {
+  return parseTargetRecall(group.targetRecall) ?? DEFAULT_TARGET_RECALL;
+}
 
 export const MAX_GROUP_NAME_LENGTH = 80;
 export const MAX_GROUP_DECKS = 100;
@@ -40,12 +56,20 @@ export function groupFromItem(item: Record<string, unknown>): PracticeGroup | nu
     id: item.SK.slice(GROUP_SK_PREFIX.length),
     name: item.name,
     deckIds: item.deckIds.filter((id): id is string => typeof id === "string"),
+    ...(isValidDateKey(item.examDate) ? { examDate: item.examDate } : {}),
+    ...(parseTargetRecall(item.targetRecall) !== null ? { targetRecall: parseTargetRecall(item.targetRecall)! } : {}),
     createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date(0).toISOString(),
     updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : new Date(0).toISOString(),
   };
 }
 
-export type GroupInput = { name: string; deckIds: string[] };
+/** `null` clears an optional field on update. */
+export type GroupInput = {
+  name: string;
+  deckIds: string[];
+  examDate?: string | null;
+  targetRecall?: number | null;
+};
 
 /**
  * Validates a create/update body. `allowedDeckIds` is the caller's visible
@@ -54,7 +78,7 @@ export type GroupInput = { name: string; deckIds: string[] };
 export function parseGroupInput(
   body: unknown,
   allowedDeckIds: ReadonlySet<string>,
-  options: { partial?: boolean } = {}
+  options: { partial?: boolean; today?: string } = {}
 ): { ok: true; value: Partial<GroupInput> } | { ok: false; error: string } {
   if (!isRecord(body)) return { ok: false, error: "invalid body" };
   const value: Partial<GroupInput> = {};
@@ -75,6 +99,27 @@ export function parseGroupInput(
       return { ok: false, error: "a selected lesson is not available" };
     }
     value.deckIds = deckIds;
+  }
+  if (body.examDate !== undefined) {
+    if (body.examDate === null || body.examDate === "") value.examDate = null;
+    else {
+      if (!isValidDateKey(body.examDate)) return { ok: false, error: "exam date must be a real date (YYYY-MM-DD)" };
+      const today = options.today ?? localDateKey(new Date(), appTimeZone());
+      const ahead = dayDiff(today, body.examDate);
+      if (ahead < 0) return { ok: false, error: "exam date is in the past" };
+      if (ahead > MAX_EXAM_DAYS_AHEAD) return { ok: false, error: "exam date is too far ahead" };
+      value.examDate = body.examDate;
+    }
+  }
+  if (body.targetRecall !== undefined) {
+    if (body.targetRecall === null) value.targetRecall = null;
+    else {
+      const target = parseTargetRecall(body.targetRecall);
+      if (target === null) {
+        return { ok: false, error: `target recall must be between ${MIN_TARGET_RECALL} and ${MAX_TARGET_RECALL}` };
+      }
+      value.targetRecall = target;
+    }
   }
   return { ok: true, value };
 }

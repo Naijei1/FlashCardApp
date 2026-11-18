@@ -2,25 +2,37 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { DEFAULT_TARGET_RECALL } from "@/lib/exam";
 import { MAX_GROUP_NAME_LENGTH, type LessonSection } from "@/lib/practice-groups";
 import { plural } from "@/lib/plural";
 import { responseError } from "@/lib/response-error";
 
+type EditableGroup = { id: string; name: string; deckIds: string[]; examDate?: string; targetRecall?: number };
 
-/** Create or edit a saved practice group: a name and a set of lessons. */
+const TARGET_CHOICES = [0.85, 0.9, 0.95, 0.97, 0.98];
+
+/** Today's date in the browser's own calendar, for the date picker's minimum. */
+function localToday(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+/** Create or edit a saved practice group: a name, lessons, and an optional exam date. */
 export default function PracticeGroupForm({
   sections,
   group,
   onDone,
 }: {
   sections: LessonSection[];
-  group?: { id: string; name: string; deckIds: string[] };
+  group?: EditableGroup;
   /** Edit mode closes in place instead of navigating. */
   onDone?: () => void;
 }) {
   const router = useRouter();
   const [name, setName] = useState(group?.name ?? "");
   const [selected, setSelected] = useState<Set<string>>(() => new Set(group?.deckIds ?? []));
+  const [examDate, setExamDate] = useState(group?.examDate ?? "");
+  const [targetRecall, setTargetRecall] = useState(group?.targetRecall ?? DEFAULT_TARGET_RECALL);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const visibleIds = new Set(sections.flatMap((section) => section.lessons.map((lesson) => lesson.id)));
@@ -49,7 +61,13 @@ export default function PracticeGroupForm({
     const res = await fetch(group ? `/api/practice-groups/${encodeURIComponent(group.id)}` : "/api/practice-groups", {
       method: group ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(lessonsChanged ? { name, deckIds } : { name }),
+      body: JSON.stringify({
+        name,
+        ...(lessonsChanged ? { deckIds } : {}),
+        // Only changed exam fields are sent, so a rename after the exam keeps its date.
+        ...(examDate !== (group?.examDate ?? "") ? { examDate: examDate || null } : {}),
+        ...(targetRecall !== (group?.targetRecall ?? DEFAULT_TARGET_RECALL) ? { targetRecall } : {}),
+      }),
     }).catch(() => null);
     if (!res?.ok) {
       setBusy(false);
@@ -85,6 +103,33 @@ export default function PracticeGroupForm({
         <input value={name} onChange={(event) => setName(event.target.value)} maxLength={MAX_GROUP_NAME_LENGTH}
           placeholder="Final: L6–10" className="input mt-1" enterKeyHint="done" />
       </label>
+
+      <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <legend className="eyebrow mb-2">Exam (optional)</legend>
+        <label className="block text-sm">
+          <span className="text-muted">Exam date</span>
+          <span className="mt-1 flex gap-2">
+            <input type="date" value={examDate} min={examDate && examDate < localToday() ? undefined : localToday()}
+              onChange={(event) => setExamDate(event.target.value)} className="input flex-1" aria-describedby="exam-help" />
+            {examDate && (
+              <button type="button" onClick={() => setExamDate("")} className="btn btn-ghost px-3">Clear</button>
+            )}
+          </span>
+        </label>
+        <label className="block text-sm">
+          <span className="text-muted">Target recall on exam day</span>
+          <select value={targetRecall} onChange={(event) => setTargetRecall(Number(event.target.value))}
+            className="input mt-1" disabled={!examDate}>
+            {TARGET_CHOICES.map((value) => (
+              <option key={value} value={value}>{Math.round(value * 100)}%{value === DEFAULT_TARGET_RECALL ? " (default)" : ""}</option>
+            ))}
+          </select>
+        </label>
+        <p id="exam-help" className="text-xs text-muted sm:col-span-2">
+          With a date, the group schedules recognition and writing so each word is likely remembered on exam day,
+          and spreads new words over the days left.
+        </p>
+      </fieldset>
 
       {noLessons ? (
         <p className="card p-4 text-sm text-muted">No lessons are available to combine yet.</p>
