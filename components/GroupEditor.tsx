@@ -10,7 +10,7 @@ export default function GroupEditor({
   group,
 }: {
   sections: LessonSection[];
-  group: { id: string; name: string; deckIds: string[] };
+  group: { id: string; name: string; deckIds: string[]; examDate?: string; targetRecall?: number };
 }) {
   const [open, setOpen] = useState(false);
   if (!open) {
@@ -22,7 +22,7 @@ export default function GroupEditor({
   }
   return (
     <section aria-label="Edit group" className="card p-5">
-      <PracticeGroupForm key={`${group.name}:${group.deckIds.join(",")}`} sections={sections} group={group}
+      <PracticeGroupForm key={`${group.name}:${group.deckIds.join(",")}:${group.examDate ?? ""}:${group.targetRecall ?? ""}`} sections={sections} group={group}
         onDone={() => setOpen(false)} />
     </section>
   );

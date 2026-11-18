@@ -292,12 +292,61 @@ describe("cram set release gating", () => {
     const set = await loadCramSet("g1");
     expect(set?.decks.map((d) => d.id)).toEqual(["week-6"]);
     expect(set?.missing).toBe(3);
-    expect(set?.cards.map((c) => c.prompt)).toEqual(["你好"]);
+    expect(set?.entries.map((e) => e.view.prompt)).toEqual(["你好"]);
     expect(JSON.stringify(set)).not.toContain("秘密");
     const writes = mocks.send.mock.calls.filter(([command]) => command.constructor.name !== "GetCommand" &&
       command.constructor.name !== "QueryCommand");
     expect(writes).toEqual([]);
     expect(JSON.stringify([...items.entries()])).toBe(before);
+  });
+});
+
+describe("group study queue route", () => {
+  const params = (id: string) => ({ params: Promise.resolve({ id }) });
+  const url = (query: string) => new Request(`https://app.test/api/practice-groups/g1/queue?${query}`);
+
+  it("serves only released, unhidden cards, merges duplicates, and never writes", async () => {
+    const items = fakeTable([
+      globalDeck("week-6", { status: "published", releaseWeek: 6, frontLanguage: "zh-CN" }),
+      globalDeck("week-8", { status: "published", releaseWeek: 8, frontLanguage: "zh-CN" }),
+      globalDeck("week-9", { status: "scheduled", releaseAt: "2026-12-01T00:00:00.000Z", releaseWeek: 9 }),
+      globalCard("week-6", "a", "老师", "teacher"),
+      globalCard("week-8", "a8", "老师", "teacher"),
+      globalCard("week-6", "b", "谢谢", "thanks"),
+      globalCard("week-9", "c", "秘密", "secret"),
+      { PK: "USER#user-a", SK: "HIDDEN#GLOBAL#week-6#CARD#b", hidden: true },
+      { PK: "USER#user-a", SK: "PRACTICE_GROUP#g1", name: "Final", deckIds: ["week-6", "week-8", "week-9"],
+        examDate: "2026-12-18", createdAt: at, updatedAt: at },
+    ]);
+    const before = JSON.stringify([...items.entries()]);
+    mocks.session.mockResolvedValue(learnerA);
+    const { GET } = await import("@/app/api/practice-groups/[id]/queue/route");
+    const res = await GET(url("mode=review&plan=all"), params("g1"));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.queue).toHaveLength(1);
+    expect(data.queue[0]).toMatchObject({
+      card: { id: "a", front: "老师" },
+      copies: [{ deckId: "week-6", id: "a" }, { deckId: "week-8", id: "a8" }],
+    });
+    expect(JSON.stringify(data)).not.toContain("秘密");
+    expect(JSON.stringify(data)).not.toContain("谢谢");
+    expect(JSON.stringify([...items.entries()])).toBe(before);
+
+    expect((await GET(url("mode=sing"), params("g1"))).status).toBe(400);
+    expect((await GET(url("plan=cram"), params("g1"))).status).toBe(400);
+    expect((await GET(url(""), params("nope"))).status).toBe(404);
+  });
+
+  it("is closed to admins, signed-out visitors, and other learners", async () => {
+    fakeTable([{ PK: "USER#user-a", SK: "PRACTICE_GROUP#g1", name: "Final", deckIds: [], createdAt: at, updatedAt: at }]);
+    const { GET } = await import("@/app/api/practice-groups/[id]/queue/route");
+    mocks.session.mockResolvedValue(admin);
+    expect((await GET(url(""), params("g1"))).status).toBe(403);
+    mocks.session.mockResolvedValue(null);
+    expect((await GET(url(""), params("g1"))).status).toBe(401);
+    mocks.session.mockResolvedValue(learnerB);
+    expect((await GET(url(""), params("g1"))).status).toBe(404);
   });
 });
 

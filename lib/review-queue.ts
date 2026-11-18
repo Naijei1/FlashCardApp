@@ -9,6 +9,13 @@ export type StudyQueueItem = {
   pinyin?: PinyinReading;
   /** Side holding the Chinese answer, resolved with the card's own deck settings. */
   chineseSide?: ChineseSide;
+  /**
+   * Group sessions: every merged duplicate of this word (same hanzi + reading
+   * across lessons or a reversed pair). A rating is saved to each copy.
+   */
+  copies?: Array<{ deckId: string; id: string }>;
+  /** Group sessions: show from this time even if FSRS's own due date is later. */
+  readyAt?: string;
 };
 
 export type ReviewQueueData = {
