@@ -10,13 +10,17 @@ export function cardForMode(card: Card, mode: ReviewMode): Card {
 }
 
 export function rateMode(card: Card, mode: ReviewMode, rating: Grade, now: Date) {
-  const result = rateCard(cardForMode(card, mode), rating, now, mode);
+  const projected = cardForMode(card, mode);
+  const result = rateCard(projected, rating, now, mode);
   if (mode === "review") return result;
   // Learning another skill for a legacy known word is not new vocabulary.
   if (card.fsrs.reps > 0 && !card.practice?.firstStudiedAt) {
     delete result.card.practice.firstStudiedAt;
   }
+  // Per-skill start marker, so the daily new-card allowance still sees this start.
+  const skillStartedAt = projected.practice?.skillStartedAt ?? (projected.fsrs.reps === 0 ? now.toISOString() : undefined);
+  const practice: NonNullable<Card["practice"]> = { ...result.card.practice, ...(skillStartedAt ? { skillStartedAt } : {}) };
   return { ...result, card: { ...card, updatedAt: now.toISOString(), modes: {
-    ...card.modes, [mode]: { fsrs: result.card.fsrs, practice: result.card.practice },
+    ...card.modes, [mode]: { fsrs: result.card.fsrs, practice },
   } } };
 }

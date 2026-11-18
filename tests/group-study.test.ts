@@ -117,4 +117,22 @@ describe("group queue", () => {
     const more = buildGroupQueue(groupEntries(updated, [l6, l8]), { ...ctx("2026-12-18"), mode: "review", plan: "today", extendNew: true });
     expect(more.queue.filter((item) => item.card.fsrs.state === 0)).toHaveLength(1);
   });
+  it("keeps a supplied reading from the meaning side in session details", () => {
+    const cards = [card("x", "l6", "行", "háng — profession")];
+    const entries = groupEntries(cards, [l6]);
+    const { queue } = buildGroupQueue(entries, { ...ctx(), mode: "pinyin", plan: "all" });
+    expect(queue[0].pinyin?.syllables).toEqual(["háng"]);
+  });
+
+  it("counts writing starts on a legacy recognition card toward today's allowance", () => {
+    const legacy = (id: string, front: string, back: string) =>
+      card(id, "l6", front, back, reviewedState(30, "2026-11-01T15:00:00Z", 30));
+    const cards = [legacy("p", "老师", "teacher"), legacy("q", "朋友", "friend"), legacy("r", "学生", "student")];
+    const plan = (list: Card[]) => buildGroupQueue(groupEntries(list, [l6]), { ...ctx("2026-12-18"), mode: "write", plan: "today" });
+    const first = plan(cards);
+    const started = first.queue.find((item) => item.card.fsrs.state === 0)!;
+    const updated = cards.map((c) => c.id === started.card.id ? rateMode(c, "write", Rating.Good, now).card : c);
+    const second = plan(updated);
+    expect(second.queue.filter((item) => item.card.fsrs.state === 0)).toHaveLength(first.queue.filter((item) => item.card.fsrs.state === 0).length - 1);
+  });
 });

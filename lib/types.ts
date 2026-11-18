@@ -48,7 +48,9 @@ export type Card = {
   fsrs: StoredFsrs;
   hard?: boolean;
   modes?: Partial<Record<"write" | "pinyin", { fsrs: StoredFsrs; practice?: Card["practice"] }>>;
-  practice?: { failures: number; successes: number; correctStreak: number; firstStudiedAt?: string };
+  practice?: { failures: number; successes: number; correctStreak: number; firstStudiedAt?: string;
+    /** When this skill's own memory was first rated; unlike firstStudiedAt, set even for words learned in another skill. */
+    skillStartedAt?: string };
   source?: CardSource;
   contentVersion?: number;
 };

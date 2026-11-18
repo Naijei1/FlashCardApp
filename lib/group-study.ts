@@ -63,7 +63,7 @@ function projectEntry(entry: CramEntry, mode: ReviewMode): Card {
 }
 
 function introducedOn(card: Card, today: string, timeZone: string): boolean {
-  const at = card.practice?.firstStudiedAt;
+  const at = card.practice?.skillStartedAt ?? card.practice?.firstStudiedAt;
   return !!at && Number.isFinite(Date.parse(at)) && localDateKey(new Date(at), timeZone) === today;
 }
 
@@ -84,8 +84,13 @@ function modeItems(entries: readonly CramEntry[], mode: ReviewMode, ctx: GroupCo
   const items: ModeItem[] = [];
   for (const entry of entries) {
     const card = projectEntry(entry, mode);
-    const details = studyDetails(card, mode, sideFor(card));
-    if (!details) continue;
+    const base = studyDetails(card, mode, sideFor(card));
+    if (!base) continue;
+    // Keep the reading chosen for the merged word, including hints from the meaning side or notes.
+    const syllables = entry.view.pinyin?.split(" ").filter(Boolean);
+    const details = base.pinyin && syllables?.length === base.pinyin.syllables.length
+      ? { ...base, pinyin: { ...base.pinyin, syllables } }
+      : base;
     const status = clock ? examCardStatus(card.fsrs, mode, clock, target, ctx.timeZone, decay) : undefined;
     items.push({ entry, card, details, status });
   }
