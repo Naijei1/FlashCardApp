@@ -150,7 +150,7 @@ it("shows each lesson at completion and retries the same summary independently o
   failedStats = true;
   await act(async () => root.render(createElement(GroupSession, {
     groupId: "g1", mode: "write", plan: "all", deckLangs: {}, chineseLang: "zh-CN", backHref: "/groups/g1",
-    lessonNames: { l6: "Lesson 6", l8: "Lesson 8" }, recentSessions: [{
+    lessonNames: { l6: "Lesson 6", l8: "Lesson 8", l9: "Lesson 9" }, recentSessions: [{
       id: "prev", startedAt: at, mode: "write", lessons: { l6: [1, 2, 2, 0] },
     }],
   })));
@@ -158,8 +158,13 @@ it("shows each lesson at completion and retries the same summary independently o
   await click("Don't know");
   await click("Easy");
   await flush();
-  expect(container.textContent).toContain("Lesson 61 rating · 0% struggleDown from 60% last session");
-  expect(container.textContent).toContain("Lesson 81 rating · 0% struggleNo ratings last session");
+  const lessons = container.querySelectorAll("section li");
+  expect(lessons[0].querySelector('[role="img"]')?.getAttribute("aria-label")).toBe("Lesson 6: 0 again/hard, 1 good/easy");
+  expect(lessons[0].querySelector('[aria-label="Struggle 0% this session, down from 60% compared with last session"]')).toBeTruthy();
+  expect(lessons[0].textContent).toContain("↓ from 60%");
+  expect(lessons[1].querySelector('[aria-label="Struggle 0% this session"]')).toBeTruthy();
+  expect(lessons[1].textContent).not.toContain("from");
+  expect(container.querySelector("details summary")?.textContent).toBe("1 lesson with no ratings");
   expect(sessionStorage.getItem(practiceSessionKey("g1", "write"))).toBeNull();
   expect(snapshots[0]).toMatchObject({ mode: "write", lessons: { l6: [0, 0, 0, 1], l8: [0, 0, 0, 1] } });
   failedStats = false;
@@ -179,8 +184,8 @@ it("can finish a partial group session and see its first-session summary", async
   await flush();
   await click("Finish");
   expect(container.textContent).toContain("1 card left in this batch");
-  expect(container.textContent).toContain("First recorded recognition session");
-  expect(container.textContent).toContain("1 rating · 0% struggle");
+  expect(container.textContent).toContain("First recognition session");
+  expect(container.querySelector('[aria-label="Struggle 0% this session"]')).toBeTruthy();
 });
 
 it("keeps group study screens out of progress refreshes and targets the group queue", () => {
@@ -203,7 +208,7 @@ it("keeps Finish available after resuming and continuing a batch break", async (
     ...session("review", "all").props, recentSessions: [saved, earlier],
   })));
   await flush();
-  expect(container.textContent).toContain("1 rating · 100% struggleUp from 0% last session");
+  expect(container.textContent).toContain("↑ from 0%");
   await act(async () => {
     vi.setSystemTime(until);
     vi.advanceTimersByTime(1000);
@@ -216,6 +221,7 @@ it("keeps Finish available after resuming and continuing a batch break", async (
   await flush();
   expect(snapshots[0]).toMatchObject({ id: saved.id, startedAt: saved.startedAt, lessons: { l6: [1, 0, 0, 1] } });
   await click("Finish");
-  expect(container.textContent).toContain("2 ratings · 50% struggle");
+  expect(container.querySelector('[aria-label^="Struggle 50% this session"]')).toBeTruthy();
+  expect(container.textContent).toContain("2 ratings");
   expect(sessionStorage.getItem(key)).toBeNull();
 });

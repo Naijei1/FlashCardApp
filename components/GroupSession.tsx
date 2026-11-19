@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { addLessonRating, ATTRIBUTION_NOTE, describeChange, loadPracticeSession, practiceSessionKey, previousPracticeSession, ratingCount, storePracticeSession, struggleRate, SKILL_NAMES, type PracticeSession } from "@/lib/lesson-stats";
+import { addLessonRating, loadPracticeSession, practiceSessionKey, previousPracticeSession, storePracticeSession, type PracticeSession } from "@/lib/lesson-stats";
 import type { Grade } from "@/lib/fsrs";
-import { plural } from "@/lib/plural";
+import LessonSessionSummary from "./LessonSessionSummary";
 import type { GroupPlan } from "@/lib/practice-groups";
 import type { ReviewMode } from "@/lib/types";
 import ReviewSession from "./ReviewSession";
@@ -93,35 +93,8 @@ export default function GroupSession({
     void save();
   }, [mode, save, storageKey]);
   const previous = previousPracticeSession(recentSessions, snapshot?.id);
-  const unrated = Object.entries(lessonNames).filter(([id]) => !snapshot?.lessons[id]);
-  const summary = snapshot && (
-    <section className="w-full rounded-xl border border-border p-3 text-left text-sm">
-      <h2 className="font-semibold">{SKILL_NAMES[mode]} by lesson</h2>
-      <p className="mt-1 text-xs text-muted">Struggle counts Retry (Again) and Hard ratings. {ATTRIBUTION_NOTE}</p>
-      {mode === "pinyin" && <p className="text-xs text-muted">Pinyin is optional practice outside readiness.</p>}
-      {!previous && <p className="mt-1 text-xs text-muted">First recorded {SKILL_NAMES[mode].toLowerCase()} session for this group.</p>}
-      <ul className="mt-2 divide-y divide-border" role="list">
-        {Object.entries(snapshot.lessons).map(([id, counts]) => {
-          const rate = struggleRate(counts);
-          const change = describeChange(rate, struggleRate(previous?.lessons[id]));
-          return <li key={id} className="py-2">
-            <h3 className="font-medium break-words">{lessonNames[id] ?? id}</h3>
-            <p>{plural(ratingCount(counts), "rating")} · {Math.round(rate! * 100)}% struggle</p>
-            {previous && <p className="text-xs text-muted">{change}</p>}
-          </li>;
-        })}
-      </ul>
-      {unrated.length > 0 && <details className="mt-1 text-xs text-muted">
-        <summary className="cursor-pointer py-2">{plural(unrated.length, "lesson")} with no ratings this session</summary>
-        <p>{unrated.map(([, name]) => name).join(", ")}</p>
-      </details>}
-      {saveState === "saving" && <p className="text-xs text-muted">Saving lesson stats…</p>}
-      {saveState === "failed" && <div role="status">
-        <p>Lesson stats couldn’t sync. Card ratings sync separately. Retry before leaving to keep this breakdown.</p>
-        <button type="button" className="btn btn-secondary mt-1" onClick={save}>Retry lesson stats</button>
-      </div>}
-    </section>
-  );
+  const summary = snapshot && <LessonSessionSummary session={snapshot} previous={previous}
+    lessonNames={lessonNames} saveState={saveState} onRetry={save} />;
   const hasRatings = snapshot !== null;
   const source = useMemo<StudySource>(() => ({
     onRating,
