@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import GroupSession from "@/components/GroupSession";
 import { listDecks } from "@/lib/db";
-import { getPracticeGroup } from "@/lib/practice-group-store";
+import { getPracticeGroup, recentPracticeSessions } from "@/lib/practice-group-store";
 import { requireLearnerPage } from "@/lib/guards";
 import type { GroupPlan } from "@/lib/practice-groups";
 import type { ReviewMode } from "@/lib/types";
@@ -24,11 +24,13 @@ export default async function GroupStudyPage({
   const plan = (PLANS as string[]).includes(query.plan ?? "") ? (query.plan as GroupPlan) : "today";
   const [group, decks] = await Promise.all([getPracticeGroup(groupId), listDecks()]);
   if (!group) notFound();
+  const recentSessions = await recentPracticeSessions(groupId, mode, 2);
   const selected = decks.filter((deck) => group.deckIds.includes(deck.id));
   const deckLangs = Object.fromEntries(selected.map((d) => [d.id, { front: d.frontLanguage, back: d.backLanguage }]));
   const chineseLang = selected.flatMap((d) => [d.frontLanguage, d.backLanguage]).find(isChineseLang) ?? "zh-CN";
   return (
-    <GroupSession key={`${mode}:${plan}`} groupId={group.id} mode={mode} plan={plan} deckLangs={deckLangs}
+    <GroupSession key={`${group.id}:${mode}:${plan}`} groupId={group.id} mode={mode} plan={plan} deckLangs={deckLangs}
+      lessonNames={Object.fromEntries(selected.map((d) => [d.id, d.name]))} recentSessions={recentSessions}
       chineseLang={chineseLang} backHref={`/groups/${encodeURIComponent(group.id)}`} />
   );
 }

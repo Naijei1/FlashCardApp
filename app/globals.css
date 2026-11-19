@@ -101,6 +101,16 @@ html.immersive body {
   overflow: hidden;
   overscroll-behavior: none;
 }
+/* A group summary may list every lesson. Keep the entire result, including
+   navigation and retry controls, reachable in a short visual viewport. */
+.study-frame.study-results {
+  overflow-y: auto;
+  justify-content: flex-start;
+  justify-content: safe center;
+}
+.study-results > * {
+  flex-shrink: 0;
+}
 .study-scroll,
 .study-surface .overflow-y-auto,
 .overscroll-contain {

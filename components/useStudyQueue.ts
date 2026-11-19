@@ -23,6 +23,9 @@ export type StudySource = {
   /** Stable id for this queue's batch break, e.g. "group:<id>:today". */
   scope: string;
   url: (includeNew: boolean) => string;
+  hasRatings?: boolean;
+  onFinish?: () => void;
+  onRating?: (copies: readonly { deckId: string }[], grade: Grade, reviewedAt: string) => void;
 };
 
 /** Waiting longer than this for a parked learning card starts the batch break instead. */
@@ -60,6 +63,7 @@ export function useStudyQueue({
   const [remainingNew, setRemainingNew] = useState(0);
   const [batchSize, setBatchSize] = useState(0);
   const [breakUntil, setBreakUntil] = useState(0);
+  const [finishedEarly, setFinishedEarly] = useState(false);
   const [reviewed, setReviewed] = useState(0);
   /** Learning cards whose next step (about an hour) falls outside this session. */
   const [backLater, setBackLater] = useState(0);
@@ -169,6 +173,7 @@ export function useStudyQueue({
 
   useEffect(() => {
     setBreakUntil(0);
+    setFinishedEarly(false);
     setReviewed(0);
     setBackLater(0);
     carryRef.current = [];
@@ -243,7 +248,7 @@ export function useStudyQueue({
   /** Saves a rating in the background and returns the next queue, or null if ignored. */
   const submitRating = useCallback(
     (rating: number): StudyQueueItem[] | null => {
-      if (!queue || readyIndex < 0) return null;
+      if (finishedEarly || !queue || readyIndex < 0) return null;
       const advancedAt = performance.now();
       if (!canAcceptRating(advancedAtRef.current, advancedAt)) return null;
       advancedAtRef.current = advancedAt;
@@ -256,6 +261,7 @@ export function useStudyQueue({
       const reviewedAt = now.toISOString();
       const copies = item.copies?.length ? item.copies : [{ deckId: item.card.deckId, id: item.card.id }];
       for (const copy of copies) sync.push({ mode, cardId: copy.id, deckId: copy.deckId, rating, reviewedAt });
+      source?.onRating?.(copies, rating as Grade, reviewedAt);
       // The local result only decides whether a learning step returns within
       // this session; the server's recomputation stays canonical for storage.
       const { card } = rateCard(item.card, rating as Grade, now, mode);
@@ -281,7 +287,7 @@ export function useStudyQueue({
       }
       return next;
     },
-    [batchSize, breakScope, chooseCurrent, mode, queue, readyIndex, sync, totalDue]
+    [batchSize, breakScope, chooseCurrent, finishedEarly, mode, queue, readyIndex, source, sync, totalDue]
   );
 
   const setHard = useCallback((target: Card, hard: boolean) => {
@@ -306,9 +312,17 @@ export function useStudyQueue({
     loadQueue();
   }, [loadQueue]);
 
+  const onFinish = source?.onFinish;
+  const hasRatings = source?.hasRatings || reviewed > 0;
+  useEffect(() => {
+    if (hasRatings && (finishedEarly || (!loadError && !breakUntil && queue?.length === 0))) onFinish?.();
+  }, [breakUntil, finishedEarly, hasRatings, loadError, onFinish, queue]);
+
   return {
     queue,
-    current: queue && readyIndex >= 0 ? queue[readyIndex] : undefined,
+    finishEarly: source?.onRating && hasRatings ? () => setFinishedEarly(true) : undefined,
+    finishedEarly,
+    current: !finishedEarly && queue && readyIndex >= 0 ? queue[readyIndex] : undefined,
     nextDueAt,
     nowMs,
     totalDue,

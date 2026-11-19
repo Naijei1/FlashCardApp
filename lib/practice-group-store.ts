@@ -13,6 +13,8 @@ import {
   type PracticeGroup,
 } from "./practice-groups";
 import type { AppSession } from "./principal";
+import { HISTORY_WINDOW, ratingCount, type PracticeSession } from "./lesson-stats";
+import type { ReviewMode } from "./types";
 
 /**
  * Practice groups live in the signed-in learner's own partition. Every call
@@ -162,5 +164,38 @@ export async function deletePracticeGroup(id: string): Promise<void> {
   } catch (error) {
     if (isConditionFailure(error)) throw new AccessError(404, "group not found");
     throw error;
+  }
+}
+
+function sessionPrefix(groupId: string, mode: ReviewMode) {
+  return `PRACTICE_SESSION#${groupId}#${mode}#`;
+}
+
+export async function recentPracticeSessions(groupId: string, mode: ReviewMode, limit = HISTORY_WINDOW): Promise<PracticeSession[]> {
+  const owner = await learnerSession();
+  if (!isValidGroupId(groupId)) return [];
+  const result = await getDocClient().send(new QueryCommand({
+    TableName: tableName(), ConsistentRead: true, ScanIndexForward: false, Limit: limit,
+    KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
+    ExpressionAttributeValues: { ":pk": `USER#${owner.userId}`, ":sk": sessionPrefix(groupId, mode) },
+  }));
+  return (result.Items ?? []).map(({ id, startedAt, lessons }) => ({ id, startedAt, mode, lessons }));
+}
+
+/** Save cumulative snapshots so leaving mid-batch counts too. A delayed or retried
+ * request cannot overwrite a newer snapshot of the same session. */
+export async function savePracticeSession(groupId: string, snapshot: PracticeSession) {
+  const owner = await learnerSession();
+  const attributedRatings = Object.values(snapshot.lessons).reduce((n, counts) => n + ratingCount(counts), 0);
+  try {
+    await getDocClient().send(new PutCommand({
+      TableName: tableName(),
+      Item: { ...snapshot, PK: `USER#${owner.userId}`, SK: `${sessionPrefix(groupId, snapshot.mode)}${snapshot.startedAt}#${snapshot.id}`,
+        kind: "practiceSession", attributedRatings, ttl: Math.floor(Date.now() / 1000) + 365 * 86400 },
+      ConditionExpression: "attribute_not_exists(PK) OR attributedRatings < :count",
+      ExpressionAttributeValues: { ":count": attributedRatings },
+    }));
+  } catch (error) {
+    if (!isConditionFailure(error)) throw error;
   }
 }

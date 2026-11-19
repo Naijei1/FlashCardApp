@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { emptyCardState, Rating } from "@/lib/fsrs";
-import { buildGroupQueue, examTileLine, groupEntries, summarizeGroup } from "@/lib/group-study";
+import { buildGroupQueue, examTileLine, groupEntries, lessonReadiness, summarizeGroup } from "@/lib/group-study";
 import { rateMode } from "@/lib/modes";
 import type { Card, Deck, StoredFsrs } from "@/lib/types";
 
@@ -58,6 +58,13 @@ describe("summary and Home tile", () => {
     expect(examTileLine(summary.exam!)).toBe("Final in 1 day · 1/8 ready · today: 1 due + 6 new");
     // Pinyin practice is offered but never part of the exam numbers.
     expect(summary.modes.pinyin.total).toBe(4);
+  });
+
+  it("attributes current readiness to each lesson once and excludes pinyin memory", () => {
+    const cards = fixture().map((c) => ({ ...c, modes: { pinyin: { fsrs: strong } } }));
+    const result = lessonReadiness(groupEntries(cards, [l6, l8]), ctx());
+    expect(result.get("l6")).toEqual({ review: { solid: 1, shaky: 1, unseen: 0 }, write: { solid: 0, shaky: 0, unseen: 2 } });
+    expect(result.get("l8")).toEqual({ review: { solid: 1, shaky: 0, unseen: 2 }, write: { solid: 0, shaky: 0, unseen: 3 } });
   });
 
   it("spreads new words with the buffer while the exam is far", () => {

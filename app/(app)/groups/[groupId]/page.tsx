@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import LessonProgress from "@/components/LessonProgress";
+import { EXAM_MODES } from "@/lib/exam";
+import { recentPracticeSessions } from "@/lib/practice-group-store";
 import GroupEditor from "@/components/GroupEditor";
 import { loadCramSet } from "@/lib/cram-set";
 import { deckKicker } from "@/lib/deck-kicker";
 import { appTimeZone } from "@/lib/forecast";
 import { requireLearnerPage } from "@/lib/guards";
 import { listAllCards, listDecks } from "@/lib/db";
-import { examTileLine, summarizeGroup, type ModeSummary } from "@/lib/group-study";
+import { examTileLine, lessonReadiness, summarizeGroup, type ModeSummary } from "@/lib/group-study";
 import { groupTargetRecall, lessonSections, type GroupPlan } from "@/lib/practice-groups";
 import { plural } from "@/lib/plural";
 import type { ReviewMode } from "@/lib/types";
@@ -54,7 +57,10 @@ export default async function PracticeGroupPage({ params }: { params: Promise<{ 
   for (const card of uniqueWords(allCards)) {
     counts.set(card.deckId, (counts.get(card.deckId) ?? 0) + 1);
   }
-  const summary = summarizeGroup(set.entries, { group, decks: set.decks, now: new Date(), timeZone: appTimeZone() });
+  const ctx = { group, decks: set.decks, now: new Date(), timeZone: appTimeZone() };
+  const summary = summarizeGroup(set.entries, ctx);
+  const readiness = lessonReadiness(set.entries, ctx);
+  const history = await Promise.all(EXAM_MODES.map((mode) => recentPracticeSessions(group.id, mode)));
   const { exam } = summary;
   const target = Math.round(groupTargetRecall(group) * 100);
 
@@ -111,17 +117,8 @@ export default async function PracticeGroupPage({ params }: { params: Promise<{ 
         </ul>
       </section>
 
-      <section className="card overflow-hidden">
-        <ul className="divide-y divide-border">
-          {set.decks.map((deck) => (
-            <li key={deck.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
-              <span className="min-w-0 truncate font-medium">{deck.name}</span>
-              {deck.source && <span className="shrink-0 text-muted">{deckKicker(deck)}</span>}
-            </li>
-          ))}
-          {set.decks.length === 0 && <li className="px-5 py-4 text-sm text-muted">No lessons available. Edit the group to pick some.</li>}
-        </ul>
-      </section>
+      <LessonProgress lessons={set.decks.map((d) => ({ id: d.id, name: d.name, kicker: d.source ? deckKicker(d) : undefined,
+        readiness: readiness.get(d.id)! }))} target={target} history={history.flat()} />
 
       <GroupEditor sections={lessonSections(decks, counts, deckKicker)}
         group={{ id: group.id, name: group.name, deckIds: group.deckIds, examDate: group.examDate, targetRecall: group.targetRecall }} />
