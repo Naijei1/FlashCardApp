@@ -18,7 +18,6 @@ import { scrollDocumentToTop, useViewportLock } from "./useViewportLock";
 const NAV = [
   { href: "/", label: "Home", Icon: IconHome },
   { href: "/browse", label: "Browse", Icon: IconSearch },
-  { href: "/import", label: "Import", Icon: IconImport },
   { href: "/stats", label: "Stats", Icon: IconStats },
   { href: "/settings", label: "Settings", Icon: IconSettings },
 ];

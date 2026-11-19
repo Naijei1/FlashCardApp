@@ -1,4 +1,5 @@
 "use client";
+import InfoButton from "@/components/InfoButton";
 import { useEffect, useState } from "react";
 import { DAILY_WORD_GOAL, WEEKLY_WORD_GOAL } from "@/lib/practice";
 
@@ -30,8 +31,14 @@ export default function WeeklyGoal({ initialProgress = null }: { initialProgress
   const percent = Math.min(100, (week / WEEKLY_WORD_GOAL) * 100);
   return (
     <section className="card h-full p-5 sm:p-6">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="eyebrow">Weekly vocabulary goal</h2>
+      <div className="flex flex-wrap items-center justify-between gap-x-2">
+        <div className="flex items-center gap-1">
+          <h2 className="eyebrow">Weekly vocabulary goal</h2>
+          <InfoButton topic="Weekly vocabulary goal">
+            Aim for {DAILY_WORD_GOAL} new words a day, plus your due reviews. Counts words first studied
+            Monday–Sunday (Eastern); learning a word takes later recall, not just introducing it.
+          </InfoButton>
+        </div>
         {progress && <span className="text-xs text-muted">Today {progress.today} / {DAILY_WORD_GOAL}</span>}
       </div>
       <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">
@@ -43,10 +50,6 @@ export default function WeeklyGoal({ initialProgress = null }: { initialProgress
         <div className="h-full rounded-full bg-accent transition-[width] duration-500"
           style={{ width: `${percent}%` }} />
       </div>
-      <p className="mt-3 text-xs text-muted">
-        Aim for {DAILY_WORD_GOAL} new words a day, plus your due reviews. Counts words first studied
-        Monday–Sunday (Eastern); learning a word takes later recall, not just introducing it.
-      </p>
     </section>
   );
 }

@@ -1,3 +1,4 @@
+import InfoButton from "@/components/InfoButton";
 import Link from "next/link";
 import PracticeGroupForm from "@/components/PracticeGroupForm";
 import { listAllCards, listDecks } from "@/lib/db";
@@ -17,11 +18,13 @@ export default async function NewPracticeGroupPage() {
       <header>
         <Link href="/" className="btn btn-ghost -ml-3 px-3">← Home</Link>
         <p className="eyebrow mt-2">Practice a group</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight">New group</h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted">
-          Combine lessons and study them together. Words that repeat across lessons appear once.
-          Every rating counts toward your normal review schedule. Add an exam date to get a day-by-day plan.
-        </p>
+        <div className="flex items-center gap-1">
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">New group</h1>
+          <InfoButton topic="Practice groups">
+            Combine lessons and study them together. Words that repeat across lessons appear once.
+            Every rating counts toward your normal review schedule. Add an exam date to get a day-by-day plan.
+          </InfoButton>
+        </div>
       </header>
       <PracticeGroupForm sections={lessonSections(decks, counts, deckKicker)} />
     </div>

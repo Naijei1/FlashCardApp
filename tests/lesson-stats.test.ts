@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { emptyCardState, Rating, State } from "@/lib/fsrs";
-import { addLessonRating, classifyReadiness, compareStruggle, describeChange, loadPracticeSession, practiceSessionKey, previousPracticeSession, recentStruggle, storePracticeSession, struggleRate, type Counts, type PracticeSession } from "@/lib/lesson-stats";
+import { addLessonRating, classifyReadiness, compareStruggle, describeChange, loadPracticeSession, practiceSessionKey, previousPracticeSession, recentStruggle, storePracticeSession, struggleLevel, struggleRate, type Counts, type PracticeSession } from "@/lib/lesson-stats";
 
 it("credits one rating to every distinct lesson of a merged word, including repeated attempts", () => {
   const copies = [{ deckId: "a" }, { deckId: "a" }, { deckId: "b" }];
@@ -28,7 +28,7 @@ it("orders the last five sessions per skill, preserving gaps and weighting each 
     session(6, [0, 0, 10, 0]), session(2, [1, 0, 0, 0]), session(1, [99, 0, 0, 0]),
     session(3), session(5, [1, 0, 1, 0]), session(4, [0, 1, 0, 0]), session(7, [99, 0, 0, 0], "pinyin"),
   ], "a", "review");
-  expect(stats).toEqual({ trend: [1, null, 1, 0.5, 0], ratings: 14, rate: 3 / 14 });
+  expect(stats).toEqual({ sessionCount: 5, rate: 3 / 14, latestRate: 0, change: describeChange(0, 0.75) });
 });
 
 it("keeps learning and relearning shaky even with fresh memory; applies the current recall target to review cards", () => {
@@ -45,10 +45,23 @@ it("keeps learning and relearning shaky even with fresh memory; applies the curr
 
 
 it("describes changes using the displayed percentages", () => {
-  expect(describeChange(1 / 3, 0.334)).toBe("Same as last session");
-  expect(describeChange(0.25, 1 / 3)).toBe("Down from 33% last session");
-  expect(describeChange(0.5, 1 / 3)).toBe("Up from 33% last session");
-  expect(describeChange(0.5, null)).toBe("No ratings last session");
+  expect(describeChange(1 / 3, 0.334)?.chip).toBe("= same");
+  expect(describeChange(0.25, 1 / 3)?.chip).toBe("↓ from 33%");
+  expect(describeChange(0.5, 1 / 3)?.chip).toBe("↑ from 33%");
+  expect(describeChange(0.5, null)).toBeNull();
+});
+
+it("classifies the displayed percentage, keeping an unrated lesson neutral", () => {
+  expect([null, 0, 0.19, 0.199, 0.2, 0.39, 0.4, 1].map(struggleLevel))
+    .toEqual(["unrated", "low", "low", "medium", "medium", "medium", "high", "high"]);
+});
+
+it("keeps pooled ratings without a trend when the latest session skips the lesson", () => {
+  const history: PracticeSession[] = [
+    { id: "1", startedAt: "2026-11-01", mode: "write", lessons: { a: [1, 0, 1, 0] } },
+    { id: "2", startedAt: "2026-11-02", mode: "write", lessons: {} },
+  ];
+  expect(recentStruggle(history, "a", "write")).toMatchObject({ rate: 0.5, change: null, latestRate: null });
 });
 
 it("resumes only fresh sessions for the same group and skill", () => {

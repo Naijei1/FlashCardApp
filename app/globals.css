@@ -357,3 +357,30 @@ html.keyboard-open .nav-dock-wrap {
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+.info-dialog {
+  position: fixed;
+  inset: auto 0 0;
+  width: 100%;
+  max-width: none;
+  max-height: calc(100dvh - max(1rem, env(safe-area-inset-top)));
+  margin: 0;
+  border-radius: 1.5rem 1.5rem 0 0;
+  padding: 1rem max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  overscroll-behavior: contain;
+}
+
+.info-dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+@media (min-width: 48rem) {
+  .info-dialog {
+    inset: 0;
+    width: min(28rem, calc(100% - 2rem));
+    margin: auto;
+    border-radius: 1rem;
+  }
+}

@@ -1,3 +1,4 @@
+import InfoButton from "@/components/InfoButton";
 import { redirect } from "next/navigation";
 import { countReviewLogs, listAllCards, listDecks } from "@/lib/db";
 import { getAppSession } from "@/lib/app-session";
@@ -68,9 +69,13 @@ export default async function StatsPage() {
       </section>
 
       <section className="card p-5">
-        <h2 className="eyebrow mb-3">
-          Review forecast — next 7 days
-        </h2>
+        <div className="mb-2 flex items-center gap-1">
+          <h2 className="eyebrow">Review forecast — next 7 days</h2>
+          <InfoButton topic="Review forecast">
+            Today is every scheduled review for this local day in {zone}, including ones later today.
+            Due now is only what is ready this moment. New words are counted separately.
+          </InfoButton>
+        </div>
         <div className="space-y-1.5">
           {forecast.map((day) => (
             <div key={day.key} className="flex items-center gap-3 text-sm">
@@ -85,10 +90,6 @@ export default async function StatsPage() {
             </div>
           ))}
         </div>
-        <p className="mt-3 text-xs text-muted">
-          Today is every scheduled review for this local day in {zone}, including ones later today.
-          Due now is only what is ready this moment. New words are counted separately.
-        </p>
       </section>
 
       <section className="card p-5">

@@ -3,7 +3,7 @@ import { badRequest, notFound, requireRegularUser } from "@/lib/api";
 import { appTimeZone } from "@/lib/forecast";
 import { cardForMode } from "@/lib/modes";
 import { buildStudyQueue } from "@/lib/pinyin-queue";
-import { DAILY_WORD_GOAL, introducedToday } from "@/lib/practice";
+import { DAILY_WORD_GOAL, remainingDailyNew } from "@/lib/practice";
 import { ALL_DECK, loadStudySet } from "@/lib/study-sets";
 import type { ReviewMode } from "@/lib/types";
 
@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   // flag from "Learn more new words" to load another day's-sized batch.
   const newLimit = newOnly
     ? mode === "review" ? undefined : DAILY_WORD_GOAL
-    : Math.max(0, DAILY_WORD_GOAL - introducedToday(cards, now, appTimeZone()));
+    : remainingDailyNew(cards, now, appTimeZone());
   const data = buildStudyQueue(cards, { mode, sideFor: set.sideFor, now, newOnly, newLimit });
   return NextResponse.json(data, {
     headers: { "Cache-Control": "private, no-store, max-age=0" },

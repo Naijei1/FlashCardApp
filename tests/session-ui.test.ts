@@ -150,10 +150,10 @@ it("prompts for written Chinese using Pinyin, with optional English", async () =
   expect(container.textContent).toContain("Correct");
 });
 
-it("parks a Retry card until due and ignores reveal shortcuts during the wait", async () => {
+it("parks an Again card until due and ignores reveal shortcuts during the wait", async () => {
   await render(createElement(ReviewSession, { deckId: "deck", deckLangs: {}, backHref: "/" }));
   await click("Show answer");
-  await click("Retry");
+  await click("Again");
   expect(container.textContent).toContain("Almost done");
   expect(container.textContent).toContain("Finish for now");
   await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: " " })));
@@ -225,12 +225,12 @@ it.each(["review", "write", "pinyin"] as const)("does not loop duplicate/reverse
   expect(container.textContent).toContain("Nothing due");
 });
 
-it("keeps a hard marker when a Retry word returns and allows removing it", async () => {
+it("keeps a hard marker when an Again word returns and allows removing it", async () => {
   await render(createElement(ReviewSession, { deckId: "deck", deckLangs: {}, backHref: "/" }));
   await click("☆ Mark as hard");
   expect(card.hard).toBe(true);
   await click("Show answer");
-  await click("Retry");
+  await click("Again");
   await act(async () => vi.advanceTimersByTimeAsync(59_000));
   await act(async () => vi.advanceTimersByTimeAsync(1_000));
   expect(container.textContent).toContain("★ In Hard Words");
@@ -239,12 +239,12 @@ it("keeps a hard marker when a Retry word returns and allows removing it", async
   expect(card.fsrs.reps).toBe(1);
 });
 
-it("keeps the Chinese prompt and pinyin answer when a Retry card returns", async () => {
+it("keeps the Chinese prompt and pinyin answer when an Again card returns", async () => {
   card.front = "hello";
   card.back = "你好";
   await render(createElement(ReviewSession, { deckId: "deck", deckLangs: {}, backHref: "/" }));
   await click("Show answer");
-  await click("Retry");
+  await click("Again");
   await act(async () => vi.advanceTimersByTimeAsync(59_000));
   await act(async () => vi.advanceTimersByTimeAsync(1_000));
   expect(container.textContent).toContain("你好");

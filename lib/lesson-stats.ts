@@ -42,12 +42,22 @@ export function compareStruggle(current: Counts, previous?: Counts) {
   return { rate, from, delta: rate === null || from === null ? null : rate - from };
 }
 
-export function describeChange(current: number | null, previous: number | null): string {
-  if (current === null || previous === null) return "No ratings last session";
+export function struggleLevel(rate: number | null) {
+  if (rate === null) return "unrated";
+  const percent = Math.round(rate * 100);
+  if (percent < 20) return "low";
+  return percent < 40 ? "medium" : "high";
+}
+
+/** Compare whole percentages so identical displayed rates always read as unchanged. */
+export function describeChange(current: number | null, previous: number | null) {
+  if (current === null || previous === null) return null;
   const percent = Math.round(current * 100);
   const from = Math.round(previous * 100);
-  if (percent === from) return "Same as last session";
-  return `${percent < from ? "Down" : "Up"} from ${from}% last session`;
+  if (percent === from) return { arrow: "→", chip: "= same", description: `unchanged at ${from}%` };
+  const down = percent < from;
+  const arrow = down ? "↓" : "↑";
+  return { arrow, chip: `${arrow} from ${from}%`, description: `${down ? "down" : "up"} from ${from}%` };
 }
 
 export function previousPracticeSession(recent: readonly PracticeSession[], currentId?: string) {
@@ -87,17 +97,20 @@ export function storePracticeSession(storage: SessionStorage | undefined, key: s
   }
 }
 
-/** Pool individual ratings. Keep a gap when the lesson was skipped in a session. */
+/** The pill pools all ratings. Its arrow compares the latest skill session to the
+ * pooled earlier sessions in the same window. A skipped latest lesson has no arrow. */
 export function recentStruggle(sessions: readonly PracticeSession[], lesson: string, mode: ExamMode) {
   const recent = sessions.filter((s) => s.mode === mode)
     .sort((a, b) => a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id)).slice(-HISTORY_WINDOW);
   const total: Counts = [0, 0, 0, 0];
-  const trend = recent.map((s) => {
-    const counts = s.lessons[lesson];
-    counts?.forEach((n, i) => { total[i] += n; });
-    return struggleRate(counts);
-  });
-  return { trend, rate: struggleRate(total), ratings: ratingCount(total) };
+  for (const session of recent.slice(0, -1)) {
+    session.lessons[lesson]?.forEach((n, i) => { total[i] += n; });
+  }
+  const previous = struggleRate(total);
+  const latest = recent.at(-1)?.lessons[lesson];
+  const latestRate = struggleRate(latest);
+  latest?.forEach((n, i) => { total[i] += n; });
+  return { rate: struggleRate(total), sessionCount: recent.length, latestRate, change: describeChange(latestRate, previous) };
 }
 
 export function classifyReadiness(fsrs: StoredFsrs, mode: ExamMode, now: Date, target: number): keyof Readiness {

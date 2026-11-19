@@ -1,5 +1,6 @@
 "use client";
 
+import InfoButton from "@/components/InfoButton";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DEFAULT_TARGET_RECALL } from "@/lib/exam";
@@ -105,30 +106,32 @@ export default function PracticeGroupForm({
       </label>
 
       <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <legend className="eyebrow mb-2">Exam (optional)</legend>
+        <legend className="eyebrow">Exam (optional)</legend>
         <label className="block text-sm">
           <span className="text-muted">Exam date</span>
           <span className="mt-1 flex gap-2">
             <input type="date" value={examDate} min={examDate && examDate < localToday() ? undefined : localToday()}
-              onChange={(event) => setExamDate(event.target.value)} className="input flex-1" aria-describedby="exam-help" />
+              onChange={(event) => setExamDate(event.target.value)} className="input min-w-0 flex-1" aria-describedby="exam-help" />
             {examDate && (
               <button type="button" onClick={() => setExamDate("")} className="btn btn-ghost px-3">Clear</button>
             )}
           </span>
         </label>
-        <label className="block text-sm">
-          <span className="text-muted">Target recall on exam day</span>
-          <select value={targetRecall} onChange={(event) => setTargetRecall(Number(event.target.value))}
-            className="input mt-1" disabled={!examDate}>
-            {TARGET_CHOICES.map((value) => (
-              <option key={value} value={value}>{Math.round(value * 100)}%{value === DEFAULT_TARGET_RECALL ? " (default)" : ""}</option>
-            ))}
-          </select>
-        </label>
-        <p id="exam-help" className="text-xs text-muted sm:col-span-2">
-          With a date, the group schedules recognition and writing so each word is likely remembered on exam day,
-          and spreads new words over the days left.
-        </p>
+        <div className="flex items-end gap-1">
+          <label className="block min-w-0 flex-1 text-sm">
+            <span className="text-muted">Target recall on exam day</span>
+            <select value={targetRecall} onChange={(event) => setTargetRecall(Number(event.target.value))}
+              className="input mt-1" disabled={!examDate} aria-describedby="exam-help">
+              {TARGET_CHOICES.map((value) => (
+                <option key={value} value={value}>{Math.round(value * 100)}%{value === DEFAULT_TARGET_RECALL ? " (default)" : ""}</option>
+              ))}
+            </select>
+          </label>
+          <InfoButton topic="Exam target recall" descriptionId="exam-help">
+            With a date, the group schedules recognition and writing so each word is likely remembered on exam day,
+            and spreads new words over the days left.
+          </InfoButton>
+        </div>
       </fieldset>
 
       {noLessons ? (

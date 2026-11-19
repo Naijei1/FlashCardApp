@@ -1,11 +1,12 @@
 "use client";
 
+import InfoButton from "@/components/InfoButton";
 import { useRouter } from "next/navigation";
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useRef, useState, type ReactNode } from "react";
 import { isImeEnter } from "@/lib/ime";
 import { responseError } from "@/lib/response-error";
 
-export default function AddCardForm({ deckId, live = false }: { deckId: string; live?: boolean }) {
+export default function AddCardForm({ deckId, live = false, actions }: { deckId: string; live?: boolean; actions?: ReactNode }) {
   const router = useRouter();
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
@@ -55,7 +56,16 @@ export default function AddCardForm({ deckId, live = false }: { deckId: string; 
       }}
       className="space-y-3 card p-5"
     >
-      <h3 className="eyebrow">Add card</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <h3 className="eyebrow">Add card</h3>
+          <InfoButton topic="Adding cards">
+            For a specific pronunciation, write it after the Chinese: 行 (háng).
+            Write Chinese practice asks for the characters. Write Pinyin uses the supplied reading when recognized.
+          </InfoButton>
+        </div>
+        {actions}
+      </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="text-sm text-muted">
           Front
@@ -76,10 +86,6 @@ export default function AddCardForm({ deckId, live = false }: { deckId: string; 
           />
         </label>
       </div>
-      <p className="text-xs text-muted">
-        For a specific pronunciation, write it after the Chinese: 行 (háng).
-        Write Chinese practice asks for the characters; Write Pinyin uses the supplied reading when recognized.
-      </p>
       <label className="block text-sm text-muted">
         Notes <span className="font-normal">(optional)</span>
         <input

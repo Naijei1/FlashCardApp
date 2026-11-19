@@ -1,5 +1,6 @@
 "use client";
 
+import InfoButton from "@/components/InfoButton";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { previewIntervals } from "@/lib/fsrs";
 import { checkPinyinAnswer, numberedPinyin } from "@/lib/pinyin";
@@ -207,9 +208,18 @@ export default function WriteSession({
           )}
         </div>
 
-        <label className="mt-6 block text-sm font-medium text-muted" htmlFor="write-input">
-          {mode === "pinyin" ? "Type the Pinyin" : "Write the Chinese"}
-        </label>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <label className="text-sm font-medium text-muted" htmlFor="write-input">
+            {mode === "pinyin" ? "Type the Pinyin" : "Write the Chinese"}
+          </label>
+          <InfoButton topic="Writing answers" descriptionId={mode === "pinyin" ? "pinyin-input-help" : undefined}>
+            <p>Type or write with Apple Pencil, then tap Check answer.</p>
+            {mode === "pinyin" && <p>
+              {checkTones ? "Use tone marks or numbers: nǐ hǎo or ni3 hao3." : "Tones are optional: ni hao is accepted."}
+              {" "}Use ü, v, or u: for ü. Neutral tones can be blank, 0, or 5.
+            </p>}
+          </InfoButton>
+        </div>
         <input
           id="write-input"
           ref={inputRef}
@@ -234,17 +244,11 @@ export default function WriteSession({
           }`}
         />
         {mode === "pinyin" && (
-          <div className="mt-3 space-y-1.5 text-sm text-muted">
-            <label className="check-row">
-              <input type="checkbox" checked={checkTones} onChange={(event) => setCheckTones(event.target.checked)}
-                disabled={!!result} className="checkbox" />
-              Check tones
-            </label>
-            <p id="pinyin-input-help" className="text-xs">
-              {checkTones ? "Use tone marks or numbers: nǐ hǎo or ni3 hao3." : "Tones are optional: ni hao is accepted."}
-              {" "}Use ü, v, or u: for ü. Neutral tones can be blank, 0, or 5.
-            </p>
-          </div>
+          <label className="check-row mt-2 text-sm text-muted">
+            <input type="checkbox" checked={checkTones} onChange={(event) => setCheckTones(event.target.checked)}
+              disabled={!!result} className="checkbox" />
+            Check tones
+          </label>
         )}
         <label className="check-row mt-1 text-sm text-muted">
           <input type="checkbox" checked={repeatMistakes} disabled={drillFailed || !!result} className="checkbox"
@@ -312,7 +316,6 @@ export default function WriteSession({
             </div>
           ) : (
             <span className="text-xs text-muted">
-              <span className="touch-hint">Type or write with Apple Pencil, then tap Check answer</span>
               <span className="kbd-hint">Enter ↵ to check</span>
             </span>
           )}

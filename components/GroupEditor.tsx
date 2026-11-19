@@ -15,7 +15,7 @@ export default function GroupEditor({
   const [open, setOpen] = useState(false);
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="btn btn-secondary w-full sm:w-auto">
+      <button type="button" onClick={() => setOpen(true)} className="btn btn-secondary">
         Edit group
       </button>
     );
