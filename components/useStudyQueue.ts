@@ -23,6 +23,8 @@ export type StudySource = {
   /** Stable id for this queue's batch break, e.g. "group:<id>:today". */
   scope: string;
   url: (includeNew: boolean) => string;
+  hasRatings?: boolean;
+  onFinish?: () => void;
   onRating?: (copies: readonly { deckId: string }[], grade: Grade, reviewedAt: string) => void;
 };
 
@@ -310,9 +312,15 @@ export function useStudyQueue({
     loadQueue();
   }, [loadQueue]);
 
+  const onFinish = source?.onFinish;
+  const hasRatings = source?.hasRatings || reviewed > 0;
+  useEffect(() => {
+    if (hasRatings && (finishedEarly || (!loadError && !breakUntil && queue?.length === 0))) onFinish?.();
+  }, [breakUntil, finishedEarly, hasRatings, loadError, onFinish, queue]);
+
   return {
     queue,
-    finishEarly: source?.onRating && reviewed > 0 ? () => setFinishedEarly(true) : undefined,
+    finishEarly: source?.onRating && hasRatings ? () => setFinishedEarly(true) : undefined,
     finishedEarly,
     current: !finishedEarly && queue && readyIndex >= 0 ? queue[readyIndex] : undefined,
     nextDueAt,

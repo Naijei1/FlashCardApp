@@ -13,7 +13,8 @@ function parseSession(input: unknown, deckIds: string[]): PracticeSession | null
       !isRecord(lessons) || !Object.keys(lessons).length) return null;
   const rows: [string, Counts][] = [];
   for (const [deckId, counts] of Object.entries(lessons)) {
-    if (!deckIds.includes(deckId) || !Array.isArray(counts) || counts.length !== 4 ||
+    if (!deckIds.includes(deckId)) continue;
+    if (!Array.isArray(counts) || counts.length !== 4 ||
         !counts.every((n) => Number.isSafeInteger(n) && n >= 0 && n <= 1_000_000)) return null;
     const grades = counts as Counts;
     if (!ratingCount(grades)) return null;
@@ -31,7 +32,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!group) return notFound("group not found");
     const session = parseSession(await request.json().catch(() => null), group.deckIds);
     if (!session) return badRequest("invalid practice session");
-    await savePracticeSession(id, session);
+    if (Object.keys(session.lessons).length) await savePracticeSession(id, session);
     return new Response(null, { status: 204 });
   } catch (error) {
     const response = accessErrorResponse(error);

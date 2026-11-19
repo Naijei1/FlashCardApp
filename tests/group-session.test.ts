@@ -6,6 +6,8 @@ import GroupSession, { groupQueueUrl } from "@/components/GroupSession";
 import { emptyCardState } from "@/lib/fsrs";
 import { buildGroupQueue, groupEntries } from "@/lib/group-study";
 import { cardForMode, rateMode } from "@/lib/modes";
+import { practiceSessionKey, type PracticeSession } from "@/lib/lesson-stats";
+import { startBreak } from "@/lib/study-break";
 import { isStudyRoute } from "@/lib/progress-refresh";
 import type { Card, Deck, ReviewMode, StoredFsrs } from "@/lib/types";
 
@@ -39,6 +41,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(now);
   localStorage.clear();
+  sessionStorage.clear();
   posted = [];
   snapshots = [];
   failedStats = false;
@@ -147,9 +150,9 @@ it("shows each lesson at completion and retries the same summary independently o
   failedStats = true;
   await act(async () => root.render(createElement(GroupSession, {
     groupId: "g1", mode: "write", plan: "all", deckLangs: {}, chineseLang: "zh-CN", backHref: "/groups/g1",
-    lessonNames: { l6: "Lesson 6", l8: "Lesson 8" }, previous: {
+    lessonNames: { l6: "Lesson 6", l8: "Lesson 8" }, recentSessions: [{
       id: "prev", startedAt: at, mode: "write", lessons: { l6: [1, 2, 2, 0] },
-    },
+    }],
   })));
   await flush();
   await click("Don't know");
@@ -157,6 +160,7 @@ it("shows each lesson at completion and retries the same summary independently o
   await flush();
   expect(container.textContent).toContain("Lesson 61 rating · 0% struggleDown from 60% last session");
   expect(container.textContent).toContain("Lesson 81 rating · 0% struggleNo ratings last session");
+  expect(sessionStorage.getItem(practiceSessionKey("g1", "write"))).toBeNull();
   expect(snapshots[0]).toMatchObject({ mode: "write", lessons: { l6: [0, 0, 0, 1], l8: [0, 0, 0, 1] } });
   failedStats = false;
   await click("Retry lesson stats");
@@ -182,4 +186,36 @@ it("can finish a partial group session and see its first-session summary", async
 it("keeps group study screens out of progress refreshes and targets the group queue", () => {
   expect(isStudyRoute("/cram/g1")).toBe(true);
   expect(groupQueueUrl("g1", "write", "today", true)).toBe("/api/practice-groups/g1/queue?mode=write&plan=today&new=1");
+});
+
+
+it("keeps Finish available after resuming and continuing a batch break", async () => {
+  vi.useRealTimers();
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+  vi.setSystemTime(now);
+  const key = practiceSessionKey("g1", "review");
+  const saved: PracticeSession = { id: "resumed", startedAt: now.toISOString(), mode: "review", lessons: { l6: [1, 0, 0, 0] } };
+  sessionStorage.setItem(key, JSON.stringify(saved));
+  const until = startBreak({ deckId: "group:g1:all", mode: "review" });
+  cards.push(card("b", "l6", "朋友", "friend"));
+  const earlier: PracticeSession = { ...saved, id: "earlier", lessons: { l6: [0, 0, 1, 0] } };
+  await act(async () => root.render(createElement(GroupSession, {
+    ...session("review", "all").props, recentSessions: [saved, earlier],
+  })));
+  await flush();
+  expect(container.textContent).toContain("1 rating · 100% struggleUp from 0% last session");
+  await act(async () => {
+    vi.setSystemTime(until);
+    vi.advanceTimersByTime(1000);
+  });
+  await click("Continue");
+  await flush();
+  expect(container.textContent).toContain("Finish");
+  await click("Show answer");
+  await click("Easy");
+  await flush();
+  expect(snapshots[0]).toMatchObject({ id: saved.id, startedAt: saved.startedAt, lessons: { l6: [1, 0, 0, 1] } });
+  await click("Finish");
+  expect(container.textContent).toContain("2 ratings · 50% struggle");
+  expect(sessionStorage.getItem(key)).toBeNull();
 });

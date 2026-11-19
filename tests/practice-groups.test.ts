@@ -225,7 +225,11 @@ describe("routes", () => {
     for (const data of [body, latest, body, latest]) expect((await POST(json(data), params)).status).toBe(204);
     expect(await store.recentPracticeSessions(group.id, "review")).toEqual([latest]);
     expect(await store.recentPracticeSessions(group.id, "write")).toEqual([]);
-    for (const lessons of [{ l7: [1, 2, 3, 4] }, { l6: [-1, 0, 0, 0] }, {}]) {
+    const filtered = { ...latest, lessons: { l6: [1, 0, 3, 0] } };
+    expect((await POST(json({ ...filtered, lessons: { ...filtered.lessons, l7: "ignored" } }), params)).status).toBe(204);
+    expect((await POST(json({ ...body, id: "unknown-only", lessons: { l7: [1, 2, 3, 4] } }), params)).status).toBe(204);
+    expect(await store.recentPracticeSessions(group.id, "review")).toEqual([filtered]);
+    for (const lessons of [{ l6: [-1, 0, 0, 0], l7: [1, 2, 3, 4] }, {}]) {
       expect((await POST(json({ ...body, lessons }), params)).status).toBe(400);
     }
     mocks.session.mockResolvedValue(learnerB);
