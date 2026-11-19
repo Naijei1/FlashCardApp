@@ -21,6 +21,7 @@ export function SessionScreen({
   note,
   backLabel = "← Back",
   action,
+  summary,
 }: {
   backHref: string;
   title: string;
@@ -31,10 +32,11 @@ export function SessionScreen({
   note?: string;
   backLabel?: string;
   action?: ReactNode;
+  summary?: ReactNode;
 }) {
   const secondaryBack = !!(onRetry || action);
   return (
-    <div className="study-frame mx-auto flex max-w-md flex-col items-center justify-center gap-3 px-6 pt-safe pb-safe text-center">
+    <div className={`study-frame ${summary ? "study-results" : ""} mx-auto flex max-w-md flex-col items-center justify-center gap-3 px-6 pt-safe pb-safe text-center`}>
       <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
       <p className="text-muted">{body}</p>
       {note && <BackLaterNote text={note} />}
@@ -44,6 +46,7 @@ export function SessionScreen({
           Try again
         </button>
       )}
+      {summary}
       {action}
       <Link href={backHref} className={secondaryBack ? "btn btn-ghost" : "btn btn-primary mt-2"}>
         {backLabel}
@@ -75,18 +78,21 @@ export function QueueStatus({
   backHref,
   copy,
   onLearnMore,
+  summary,
 }: {
   study: StudyQueueState;
   backHref: string;
   copy: { noun: string; verb: string; empty: string };
   onLearnMore?: () => void;
+  summary?: ReactNode;
 }) {
   const { queue, syncState, resolveSyncFailures, reviewed } = study;
   const note = backLaterText(study.backLater);
   const screen = (title: string, body: string, onRetry?: () => void, backLabel?: string, action?: ReactNode) => (
     <SessionScreen backHref={backHref} title={title} body={body} syncState={syncState}
-      onRetrySaves={resolveSyncFailures} onRetry={onRetry} note={note} backLabel={backLabel} action={action} />
+      onRetrySaves={resolveSyncFailures} onRetry={onRetry} note={note} backLabel={backLabel} action={action} summary={queue ? summary : undefined} />
   );
+  if (study.finishedEarly) return screen("Session complete", `${plural(study.queue?.length ?? 0, "card")} left in this batch.`);
   if (study.loadError) return screen("Something went wrong", `Could not load the ${copy.noun} queue.`, study.loadQueue);
   if (study.breakUntil > 0) {
     return (
@@ -99,6 +105,7 @@ export function QueueStatus({
         backHref={backHref}
         onRetrySaves={resolveSyncFailures}
         onContinue={study.continueAfterBreak}
+        summary={summary}
         note={note}
       />
     );
@@ -154,9 +161,11 @@ export function SessionHeader({
   return (
     <>
       <header className="flex items-center gap-3 py-3">
-        <Link href={backHref} className="btn btn-ghost -ml-2 shrink-0 px-3">
-          ← Back
-        </Link>
+        {study.finishEarly ? (
+          <button type="button" onClick={study.finishEarly} className="btn btn-ghost -ml-2 shrink-0 px-3">Finish</button>
+        ) : (
+          <Link href={backHref} className="btn btn-ghost -ml-2 shrink-0 px-3">← Back</Link>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex justify-between text-xs tabular-nums text-muted">
             <span>{left} left{study.waiting > 0 ? ` · ${study.waiting} waiting` : ""}</span>

@@ -19,6 +19,7 @@ export default function BreakScreen({
   onContinue,
   onRetrySaves,
   note,
+  summary,
 }: {
   until: number;
   /** Cards rated in the batch just finished (0 when resuming a stored break). */
@@ -32,6 +33,7 @@ export default function BreakScreen({
   onRetrySaves: () => void;
   /** Learning cards that will return later, shown under the summary. */
   note?: string;
+  summary?: React.ReactNode;
 }) {
   const [msLeft, setMsLeft] = useState(() => until - Date.now());
 
@@ -46,7 +48,7 @@ export default function BreakScreen({
   const savesPending = syncState.pendingCount > 0;
 
   return (
-    <div className="study-frame mx-auto flex max-w-md flex-col items-center justify-center gap-4 px-6 pt-safe pb-safe text-center">
+    <div className={`study-frame ${summary ? "study-results" : ""} mx-auto flex max-w-md flex-col items-center justify-center gap-4 px-6 pt-safe pb-safe text-center`}>
       <span className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 text-3xl text-accent">
         <IconClock strokeWidth={1.8} />
       </span>
@@ -60,6 +62,7 @@ export default function BreakScreen({
           : "A short rest helps the next batch stick."}
       </p>
       {note && <p className="text-sm text-muted">↻ {note}.</p>}
+      {summary}
       <SyncNotice state={syncState} onRetry={onRetrySaves} />
       <div
         className="text-6xl font-semibold tabular-nums tracking-tight"

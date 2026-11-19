@@ -11,6 +11,7 @@ import {
 } from "./exam";
 import { localDateKey } from "./forecast";
 import { forgettingCurveDecay } from "./fsrs";
+import { classifyReadiness, lessonIds, type Readiness } from "./lesson-stats";
 import { cardForMode } from "./modes";
 import { studyDetails } from "./pinyin-queue";
 import { DAILY_WORD_GOAL } from "./practice";
@@ -228,6 +229,21 @@ export function summarizeGroup(entries: readonly CramEntry[], ctx: GroupContext)
       newToday: sum("newToday"),
     },
   };
+}
+
+/** Use the same eligible words and freshest memory as the group study queue. */
+export function lessonReadiness(entries: readonly CramEntry[], ctx: GroupContext) {
+  const counts = new Map(ctx.decks.map((deck) => [deck.id, {
+    review: { solid: 0, shaky: 0, unseen: 0 }, write: { solid: 0, shaky: 0, unseen: 0 },
+  } satisfies Record<(typeof EXAM_MODES)[number], Readiness>]));
+  const target = groupTargetRecall(ctx.group);
+  for (const mode of EXAM_MODES) {
+    for (const { entry, card } of modeItems(entries, mode, ctx, null)) {
+      const status = classifyReadiness(card.fsrs, mode, ctx.now, target);
+      for (const id of lessonIds(entry.copies)) counts.get(id)![mode][status]++;
+    }
+  }
+  return counts;
 }
 
 /** "Final in N days · X/Y ready · today: a due + b new". */

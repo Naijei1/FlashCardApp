@@ -55,6 +55,16 @@ Tailwind CSS; data lives in a single DynamoDB table.
   shuffle of every card, which also saves. See `lib/exam.ts`.
   Groups are stored per learner at `PK=USER#<userId>`,
   `SK=PRACTICE_GROUP#<id>`; unreleased, hidden, or deleted lessons are skipped.
+  The lesson breakdown pools Again and Hard ratings over the five latest group
+  sessions for each skill. A merged word counts once per lesson on each attempt.
+  Each word uses its freshest copy’s skill memory to estimate recall today.
+  The session summary compares against the preceding session for the same skill.
+  Each visit with ratings writes one cumulative `PRACTICE_SESSION#<groupId>#<mode>#<startedAt>#<id>`
+  row in the learner’s partition (`USER#shared` in shared-password mode), with
+  four grade counts per rated lesson and a one-year DynamoDB TTL. History starts
+  with the first recorded group session. The summary retries on reconnect, on the
+  next rating, or via its retry button while the session is open. Leaving offline
+  can lose unsynced lesson counts. Card ratings have their own durable queue.
 - **Weekly goal**: 77 new words per week (about 11 a day), alongside due reviews.
   Tracks newly introduced words from this version onward, using Eastern
   Monday–Sunday weeks. Introduction counts are not a guarantee of mastery.

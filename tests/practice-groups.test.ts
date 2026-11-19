@@ -31,7 +31,12 @@ function fakeTable(seed: Record<string, unknown>[] = []) {
     if (name === "GetCommand") return { Item: items.get(id(input.Key as never)) };
     if (name === "PutCommand") {
       const item = input.Item as Record<string, unknown>;
-      if (input.ConditionExpression && items.has(id(item as never))) throw conditionFailed();
+      const existing = items.get(id(item as never));
+      if (input.ConditionExpression && existing) {
+        const newerSnapshot = input.ConditionExpression === "attribute_not_exists(PK) OR attributedRatings < :count" &&
+          Number(existing.attributedRatings) < Number(item.attributedRatings);
+        if (!newerSnapshot) throw conditionFailed();
+      }
       items.set(id(item as never), item);
       return {};
     }
@@ -207,6 +212,30 @@ describe("routes", () => {
       body: JSON.stringify(body),
     });
   }
+
+  it("scopes session history to the owner and accepts only newer snapshots for group lessons", async () => {
+    fakeTable();
+    mocks.session.mockResolvedValue(learnerA);
+    const store = await import("@/lib/practice-group-store");
+    const group = await store.createPracticeGroup({ name: "Final", deckIds: ["l6"] });
+    const { POST } = await import("@/app/api/practice-groups/[id]/sessions/route");
+    const params = { params: Promise.resolve({ id: group.id }) };
+    const body = { id: "s1", mode: "review", startedAt: at, lessons: { l6: [1, 0, 0, 0] } };
+    const latest = { ...body, lessons: { l6: [1, 0, 2, 0] } };
+    for (const data of [body, latest, body, latest]) expect((await POST(json(data), params)).status).toBe(204);
+    expect(await store.recentPracticeSessions(group.id, "review")).toEqual([latest]);
+    expect(await store.recentPracticeSessions(group.id, "write")).toEqual([]);
+    for (const lessons of [{ l7: [1, 2, 3, 4] }, { l6: [-1, 0, 0, 0] }, {}]) {
+      expect((await POST(json({ ...body, lessons }), params)).status).toBe(400);
+    }
+    mocks.session.mockResolvedValue(learnerB);
+    expect((await POST(json(body), params)).status).toBe(404);
+    expect(await store.recentPracticeSessions(group.id, "review")).toEqual([]);
+    mocks.session.mockResolvedValue(admin);
+    expect((await POST(json(body), params)).status).toBe(403);
+    mocks.session.mockResolvedValue(null);
+    expect((await POST(json(body), params)).status).toBe(401);
+  });
 
   it("refuses to save an unreleased week, and saves released ones", async () => {
     fakeTable([

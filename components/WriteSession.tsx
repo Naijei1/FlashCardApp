@@ -32,6 +32,7 @@ export default function WriteSession({
   backHref,
   source,
   emptyMessage,
+  summary,
 }: {
   mode?: "write" | "pinyin";
   deckId: string;
@@ -40,6 +41,7 @@ export default function WriteSession({
   /** A non-deck queue, such as a practice group. */
   source?: StudySource;
   emptyMessage?: string;
+  summary?: React.ReactNode;
 }) {
   const study = useStudyQueue({ deckId, mode, source });
   const { current, submitRating } = study;
@@ -163,7 +165,7 @@ export default function WriteSession({
   });
 
   const status = (
-    <QueueStatus study={study} backHref={backHref} onLearnMore={study.learnMoreNewWords} copy={{
+    <QueueStatus summary={summary} study={study} backHref={backHref} onLearnMore={study.learnMoreNewWords} copy={{
       noun: mode === "pinyin" ? "Pinyin" : "writing",
       verb: "wrote",
       empty: emptyMessage ?? (mode === "pinyin"

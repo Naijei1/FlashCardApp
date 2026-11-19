@@ -19,6 +19,7 @@ export default function ReviewSession({
   newOnly = false,
   source,
   emptyMessage,
+  summary,
 }: {
   deckId: string;
   deckLangs: DeckLangs;
@@ -27,6 +28,7 @@ export default function ReviewSession({
   /** A non-deck queue, such as a practice group. */
   source?: StudySource;
   emptyMessage?: string;
+  summary?: React.ReactNode;
 }) {
   const study = useStudyQueue({ deckId, mode: "review", newOnly, source });
   const [revealed, setRevealed] = useState(false);
@@ -55,7 +57,7 @@ export default function ReviewSession({
   });
 
   const status = (
-    <QueueStatus study={study} backHref={backHref} copy={{
+    <QueueStatus summary={summary} study={study} backHref={backHref} copy={{
       noun: "review",
       verb: "reviewed",
       empty: emptyMessage ?? (newOnly
