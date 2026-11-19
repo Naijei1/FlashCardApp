@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rateCard, weeklyProgress } from "@/lib/practice";
+import { newToday, rateCard, weeklyProgress } from "@/lib/practice";
 import { buildQueue, dueCards } from "@/lib/due";
 import { uniqueWords } from "@/lib/words";
 import { emptyCardState, applyRating, previewIntervals, Rating } from "@/lib/fsrs";
@@ -48,7 +48,7 @@ describe("adaptive recall", () => {
     card = rateCard(card, Rating.Good, new Date(card.fsrs.due)).card;
     expect(card.practice).toMatchObject({ failures: 2, successes: 2, correctStreak: 2, firstStudiedAt: now.toISOString() });
   });
-  it("confirms a new word 10 minutes later before Good graduates it, while Retry comes back in a minute", () => {
+  it("confirms a new word 10 minutes later before Good graduates it, while Again comes back in a minute", () => {
     const after = (state: ReturnType<typeof make>["fsrs"], grade: 1 | 2 | 3 | 4, at = now) => Date.parse(applyRating(state, grade, at).fsrs.due) - at.getTime();
     expect(after(make().fsrs, Rating.Again)).toBe(60_000);
     expect(after(make().fsrs, Rating.Good)).toBe(600_000);
@@ -92,4 +92,16 @@ it("gives a failed mature word a shorter recovery interval than another successf
   expect(missed.fsrs.lapses).toBeGreaterThan(remembered.fsrs.lapses);
   const relearned = rateCard(missed, Rating.Good, new Date(missed.fsrs.due)).card;
   expect(relearned.fsrs.scheduled_days).toBeLessThan(remembered.fsrs.scheduled_days);
+});
+
+
+it("caps today's new words by unseen supply and distinct words introduced on the local day", () => {
+  const localEvening = new Date("2026-09-21T01:00:00Z");
+  const zone = "America/New_York";
+  const started = Array.from({ length: 12 }, (_, i) => rateCard({ ...make(String(i)), front: `word-${i}` }, Rating.Good, now).card);
+  expect(newToday(75, [], localEvening, zone)).toBe(11);
+  expect(newToday(75, [started[0], { ...started[0], id: "copy" }], localEvening, zone)).toBe(10);
+  expect(newToday(3, [started[0]], localEvening, zone)).toBe(3);
+  expect(newToday(75, started, localEvening, zone)).toBe(0);
+  expect(newToday(75, started, localEvening, "UTC")).toBe(11);
 });

@@ -1,3 +1,6 @@
+import Chip from "@/components/Chip";
+import CountChips from "@/components/CountChips";
+import InfoButton from "@/components/InfoButton";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import WarmStudyQueue from "@/components/WarmStudyQueue";
@@ -52,6 +55,8 @@ export default async function DeckPage({
   if (!set) notFound();
   const { deck, cards, sideFor } = set;
   const virtual = isVirtualDeck(deckId);
+  const canAddCards = viewerRole === "admin" ? deck.source !== "private" : deck.source !== "global";
+  const exportLink = <a href={`/api/decks/${deck.id}/export`} className="btn btn-secondary">Export CSV</a>;
   const now = new Date();
   const skillCounts = (mode: ReviewMode) => totalCounts(
     cards.map((card) => cardForMode(card, mode)).filter((card) => studyDetails(card, mode, sideFor(card))),
@@ -72,8 +77,6 @@ export default async function DeckPage({
   const page = Math.min(requestedPage(pageParam), totalPages);
   const pageStart = (page - 1) * PAGE_SIZE;
   const shown = sorted.slice(pageStart, pageStart + PAGE_SIZE);
-  const status = (due: number, fresh: number) =>
-    [due > 0 ? `${due} due` : "Nothing due", fresh > 0 ? `${fresh} new` : ""].filter(Boolean).join(" · ");
 
   return (
     <div className="space-y-8 py-6">
@@ -82,31 +85,27 @@ export default async function DeckPage({
         <div className="min-w-0 flex-1">
           <p className="eyebrow">{EYEBROW[deckId] ?? "Lesson"}</p>
           <h1 className="mt-1 truncate text-3xl font-bold tracking-tight">{deck.name}</h1>
-          <p className="mt-1 text-sm text-muted">
-            {plural(counts.total, "card")} · {counts.due} due · {counts.newCards} new
-            {deckId === ALL_DECK && ` · ${plural(decks.length, "deck")}`}
-          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <CountChips counts={counts} showTotal />
+            {deckId === ALL_DECK && <Chip>{plural(decks.length, "deck")}</Chip>}
+          </div>
         </div>
         {!virtual && (viewerRole === "admin" || deck.source !== "global") && <DeckSettings deck={deck} />}
       </header>
 
       {viewerRole !== "admin" && <section aria-labelledby="modes-heading" className="space-y-3">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+        <div className="flex items-center gap-1">
           <h2 id="modes-heading" className="eyebrow">Study modes</h2>
-          <span className="text-xs text-muted">Each mode keeps its own schedule</span>
-        </div>
-        <div className="card bg-surface-muted/45 p-4 text-sm text-muted">
-          <p>
-            Not sure what to choose? Use <span className="font-semibold text-foreground">Spaced Repetition</span> for the daily habit.
-            Pick <span className="font-semibold text-foreground">Normal Review</span> for a no-pressure flip-through, or a writing mode when you want active recall.
-          </p>
+          <InfoButton topic="Study modes">
+            <p>Use Spaced Repetition for daily reviews and up to {DAILY_WORD_GOAL} new words. Pick Normal Review to flip through cards freely, or a writing mode to practice active recall.</p>
+            <p>Each scheduled mode keeps its own schedule.</p>
+          </InfoButton>
         </div>
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
           <div className="sm:col-span-2 xl:col-span-4">
             <ModeLink primary prefetch href={`/review/${deckId}`} kicker="Recommended"
               title="Spaced Repetition"
-              detail={`${status(counts.due, counts.newCards)} · daily review with up to ${DAILY_WORD_GOAL} new`}
-              badge={counts.due} />
+              chips={<CountChips counts={counts} />} />
           </div>
           {counts.newCards > 0 && (
             <ModeLink prefetch href={`/review/${deckId}?new=1`} kicker="Shortcut" title="Learn new words"
@@ -115,11 +114,9 @@ export default async function DeckPage({
           <ModeLink href={`/study/${deckId}`} title="Normal Review"
             detail="Flip freely — doesn’t affect scheduling" />
           <ModeLink prefetch href={`/write/${deckId}`} title="Write Chinese"
-            detail={`Pinyin → characters · ${status(writeCounts.due, writeCounts.newCards)}`}
-            badge={writeCounts.due} />
+            chips={<><Chip>Pinyin → characters</Chip><CountChips counts={writeCounts} /></>} />
           <ModeLink prefetch href={`/pinyin/${deckId}`} title="Write Pinyin"
-            detail={`Characters → pinyin · ${status(pinyinCounts.due, pinyinCounts.newCards)}`}
-            badge={pinyinCounts.due} />
+            chips={<><Chip>Characters → pinyin</Chip><CountChips counts={pinyinCounts} /></>} />
         </div>
         {words.length > 0 && counts.newCards === 0 && counts.due === 0 && nextReview && (
           <p className="text-sm text-muted">
@@ -136,24 +133,15 @@ export default async function DeckPage({
         />
       )}
 
-      {!virtual && (
-        <>
-          <div className="flex gap-2">
-            {(viewerRole === "admin" ? deck.source !== "private" : deck.source !== "global") && (
-              <Link href={viewerRole === "admin" ? "/admin/upload" : `/import?deck=${deck.id}`} className="btn btn-secondary">
-                {viewerRole === "admin" ? "Upload CSV" : "Import CSV"}
-              </Link>
-            )}
-            <a href={`/api/decks/${deck.id}/export`} className="btn btn-secondary">Export CSV</a>
-          </div>
-          {(viewerRole === "admin" ? deck.source !== "private" : deck.source !== "global") && (
-            <AddCardForm
-              deckId={deck.id}
-              live={deck.source === "global" && isReleasedToLearners(deck, now)}
-            />
-          )}
-        </>
-      )}
+      {!virtual && (canAddCards ? (
+        <AddCardForm deckId={deck.id} live={deck.source === "global" && isReleasedToLearners(deck, now)}
+          actions={<div className="flex flex-wrap gap-2">
+            <Link href={viewerRole === "admin" ? "/admin/upload" : `/import?deck=${deck.id}`} className="btn btn-secondary">
+              {viewerRole === "admin" ? "Upload CSV" : "Import CSV"}
+            </Link>
+            {exportLink}
+          </div>} />
+      ) : exportLink)}
 
       <section aria-labelledby="deck-cards-heading" className="space-y-3">
         <div className="flex items-baseline justify-between gap-3">

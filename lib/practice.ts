@@ -41,6 +41,14 @@ export function introducedToday(cards: Card[], now: Date, timeZone: string): num
   return words.size;
 }
 
+export function remainingDailyNew(cards: Card[], now: Date, timeZone: string): number {
+  return Math.max(0, DAILY_WORD_GOAL - introducedToday(cards, now, timeZone));
+}
+
+export function newToday(unseen: number, cards: Card[], now: Date, timeZone: string): number {
+  return Math.min(unseen, remainingDailyNew(cards, now, timeZone));
+}
+
 /** New words introduced, not a claim that a word has already been memorized. */
 export function weeklyProgress(cards: Card[], now: Date, timeZone: string) {
   const today = localDateKey(now, timeZone);

@@ -54,8 +54,8 @@ async function advanceClinicPrompt(page: Page, current: ClinicMode) {
   } else {
     await page.getByRole("button", { name: "Don't know" }).click();
   }
-  await expect(page.getByRole("button", { name: /^Retry/ })).toBeVisible();
-  await page.getByRole("button", { name: /^Retry/ }).click();
+  await expect(page.getByRole("button", { name: /^Again/ })).toBeVisible();
+  await page.getByRole("button", { name: /^Again/ }).click();
 }
 
 test("Mistake Clinic session locks the viewport and keeps write prompts in view", async ({ page }, info) => {
@@ -73,7 +73,7 @@ test("Mistake Clinic session locks the viewport and keeps write prompts in view"
       await expectStudyFitsViewport(page);
       await screenshot(page, `${info.project.name}-clinic-review`);
       await page.getByRole("button", { name: "Show answer" }).click();
-      await expect(page.getByRole("button", { name: /^Retry/ })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Again/ })).toBeVisible();
       await expectStudyFitsViewport(page);
     } else {
       const input = page.locator("#clinic-input");
@@ -136,7 +136,7 @@ test("spaced repetition fills the visual viewport without page scroll", async ({
   await expectStudyFitsViewport(page);
   await screenshot(page, `${info.project.name}-review`);
   await page.getByRole("button", { name: "Show answer" }).click();
-  await expect(page.getByRole("button", { name: /^Retry/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Again/ })).toBeVisible();
   await expectStudyFitsViewport(page);
 });
 

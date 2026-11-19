@@ -1,5 +1,6 @@
 "use client";
 
+import InfoButton from "@/components/InfoButton";
 import Link from "next/link";
 import type { MutableRefObject, RefObject } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -282,10 +283,20 @@ function WritingPrompt({
           )}
         </div>
 
-        <label className="mt-6 block text-sm font-medium text-muted" htmlFor="clinic-input">
-          {item.mode === "pinyin" ? "Type the Pinyin" : "Write the Chinese"}
-        </label>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <label className="text-sm font-medium text-muted" htmlFor="clinic-input">
+            {item.mode === "pinyin" ? "Type the Pinyin" : "Write the Chinese"}
+          </label>
+          <InfoButton topic="Writing answers" descriptionId={item.mode === "pinyin" ? "pinyin-input-help" : undefined}>
+            <p>Type or write with Apple Pencil, then tap Check answer.</p>
+            {item.mode === "pinyin" && <p>
+              {checkTones ? "Use tone marks or numbers: nǐ hǎo or ni3 hao3." : "Tones are optional: ni hao is accepted."}
+              {" "}Use ü, v, or u: for ü. Neutral tones can be blank, 0, or 5.
+            </p>}
+          </InfoButton>
+        </div>
         <input id="clinic-input" ref={inputRef} lang={item.mode === "pinyin" ? "en" : "zh-CN"}
+          aria-describedby={item.mode === "pinyin" ? "pinyin-input-help" : undefined}
           value={value} onChange={(event) => setValue(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !result && value.trim()) {
@@ -302,14 +313,11 @@ function WritingPrompt({
           className={`input mt-2 min-h-16 py-3 text-center text-2xl ${result ? (result.correct ? "!border-green-600/70" : "!border-red-500/70") : ""}`}
         />
         {item.mode === "pinyin" && (
-          <div className="mt-3 space-y-1.5 text-sm text-muted">
-            <label className="check-row">
-              <input type="checkbox" checked={checkTones} onChange={(event) => setCheckTones(event.target.checked)}
-                disabled={!!result} className="checkbox" />
-              Check tones
-            </label>
-            <p className="text-xs">Use tone marks or numbers: nǐ hǎo or ni3 hao3.</p>
-          </div>
+          <label className="check-row mt-2 text-sm text-muted">
+            <input type="checkbox" checked={checkTones} onChange={(event) => setCheckTones(event.target.checked)}
+              disabled={!!result} className="checkbox" />
+            Check tones
+          </label>
         )}
         <div aria-live="polite" className="mt-5 flex min-h-36 flex-col items-center justify-start gap-2 text-center">
           {result ? (
@@ -343,7 +351,6 @@ function WritingPrompt({
             </div>
           ) : (
             <span className="text-xs text-muted">
-              <span className="touch-hint">Type or write with Apple Pencil, then tap Check answer</span>
               <span className="kbd-hint">Enter ↵ to check</span>
             </span>
           )}

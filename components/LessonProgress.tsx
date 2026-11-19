@@ -1,3 +1,4 @@
+import InfoButton from "@/components/InfoButton";
 import { EXAM_MODES, type ExamMode } from "@/lib/exam";
 import { ATTRIBUTION_NOTE, HISTORY_WINDOW, recentStruggle, SKILL_NAMES, type PracticeSession, type Readiness } from "@/lib/lesson-stats";
 import { plural } from "@/lib/plural";
@@ -10,7 +11,14 @@ export default function LessonProgress({ lessons, history, target }: {
   return (
     <section className="card overflow-hidden">
       <header className="space-y-3 border-b border-border px-4 py-4 sm:px-5">
-        <h2 className="font-semibold">Lesson progress</h2>
+        <div className="flex items-center gap-1">
+          <h2 className="font-semibold">Lesson progress</h2>
+          <InfoButton topic="Lesson progress">
+            <p>The fraction shows solid words out of all words. Solid words have finished learning and meet your {target}% recall target today. Shaky words are learning, relearning, or below target.</p>
+            <p>Struggle is the share of Again and Hard ratings over the last {HISTORY_WINDOW} sessions per skill. Arrows compare the latest session with the earlier ratings combined.</p>
+            <p>{ATTRIBUTION_NOTE}</p>
+          </InfoButton>
+        </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <StatsLegend colors={readinessColors} />
           <span className="text-xs font-medium text-muted">Struggle</span>
@@ -40,10 +48,6 @@ export default function LessonProgress({ lessons, history, target }: {
         ))}
       </ul>
       {!lessons.length && <p className="px-5 py-4 text-sm text-muted">No lessons available. Edit the group to pick some.</p>}
-      <details className="border-t border-border px-4 text-xs text-muted sm:px-5">
-        <summary className="cursor-pointer py-3 font-medium">How this works</summary>
-        <p className="max-w-prose pb-4 leading-relaxed">The fraction shows solid words out of all words. Solid words have finished learning and meet your {target}% recall target today. Shaky words are learning, relearning, or below target. Struggle is the share of Again (Retry) and Hard ratings over the last {HISTORY_WINDOW} sessions per skill. Arrows compare the latest session with the earlier ratings combined. {ATTRIBUTION_NOTE}</p>
-      </details>
     </section>
   );
 }

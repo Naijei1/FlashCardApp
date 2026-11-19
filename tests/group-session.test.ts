@@ -104,7 +104,7 @@ it("saves a recognition rating through /api/review to every merged copy", async 
   expect(container.textContent).toContain("老师");
   // The normal four rating buttons.
   await click("Show answer");
-  for (const label of ["Retry", "Hard", "Good", "Easy"]) {
+  for (const label of ["Again", "Hard", "Good", "Easy"]) {
     expect([...container.querySelectorAll("button")].some((b) => b.textContent?.startsWith(label)), label).toBe(true);
   }
   await click("Good");
