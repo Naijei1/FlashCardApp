@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { newToday, rateCard, weeklyProgress } from "@/lib/practice";
+import { newToday, rateCard, remainingDailyNew, weeklyProgress } from "@/lib/practice";
+import { cardForMode, rateMode } from "@/lib/modes";
 import { buildQueue, dueCards } from "@/lib/due";
 import { uniqueWords } from "@/lib/words";
 import { emptyCardState, applyRating, previewIntervals, Rating } from "@/lib/fsrs";
@@ -7,6 +8,22 @@ import { formatInterval } from "@/lib/interval-label";
 import type { Card } from "@/lib/types";
 const now = new Date("2026-09-20T12:00:00Z");
 const make = (id = "word"): Card => ({ id, deckId: "deck", front: "你好", back: "hello", createdAt: now.toISOString(), updatedAt: now.toISOString(), fsrs: emptyCardState(now) });
+
+it.each(["write", "pinyin"] as const)("counts legacy vocabulary started in %s toward that skill's daily allowance", (mode) => {
+  const cards = Array.from({ length: 11 }, (_, index) => {
+    const card = { ...make(String(index)), front: `word-${index}` };
+    const legacy = { ...card, fsrs: { ...card.fsrs, reps: 4, state: 2 } };
+    const started = rateMode(legacy, mode, Rating.Good, now).card;
+    return rateMode(started, mode, Rating.Good, new Date(now.getTime() + 600_000)).card;
+  });
+  const projected = cards.map((card) => cardForMode(card, mode));
+  expect(remainingDailyNew(projected, now, "America/New_York")).toBe(0);
+  expect(newToday(20, projected, now, "America/New_York")).toBe(0);
+  expect(remainingDailyNew(projected, new Date("2026-09-21T04:00:00Z"), "America/New_York")).toBe(11);
+  const otherMode = mode === "write" ? "pinyin" : "write";
+  expect(remainingDailyNew(cards.map((card) => cardForMode(card, otherMode)), now, "America/New_York")).toBe(11);
+  expect(weeklyProgress(cards, now, "America/New_York")).toEqual({ week: 0, today: 0 });
+});
 
 describe("one word, one schedule", () => {
   it("keeps exact and reverse duplicates out until the latest review is due, without deleting any data", () => {

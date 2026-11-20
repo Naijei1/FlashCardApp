@@ -28,12 +28,12 @@ export function rateCard(card: Card, rating: Grade, now: Date, mode: ReviewMode 
   };
 }
 
-/** Words first studied today in the given (already mode-projected) cards. */
+/** Words first practiced in this skill today, using already mode-projected cards. */
 export function introducedToday(cards: Card[], now: Date, timeZone: string): number {
   const today = localDateKey(now, timeZone);
   const words = new Set<string>();
   for (const card of cards) {
-    const at = card.practice?.firstStudiedAt;
+    const at = card.practice?.skillStartedAt ?? card.practice?.firstStudiedAt;
     if (at && Number.isFinite(Date.parse(at)) && localDateKey(new Date(at), timeZone) === today) {
       words.add(wordKey(card));
     }
