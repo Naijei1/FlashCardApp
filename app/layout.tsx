@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { notoSans } from "./fonts";
+import GoatCounter from "./goatcounter";
 import "./globals.css";
 
 const siteUrl = new URL("https://flashcards.naijei.com");
@@ -63,7 +64,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={notoSans.variable}>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {children}
+        <GoatCounter />
+      </body>
     </html>
   );
 }
