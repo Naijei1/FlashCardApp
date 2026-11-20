@@ -22,9 +22,15 @@ export default async function GroupStudyPage({
   const query = (await searchParams) ?? {};
   const mode = (MODES as string[]).includes(query.mode ?? "") ? (query.mode as ReviewMode) : "review";
   const plan = (PLANS as string[]).includes(query.plan ?? "") ? (query.plan as GroupPlan) : "today";
-  const [group, decks] = await Promise.all([getPracticeGroup(groupId), listDecks()]);
-  if (!group) notFound();
-  const recentSessions = await recentPracticeSessions(groupId, mode, 2);
+  const [study, decks] = await Promise.all([
+    getPracticeGroup(groupId).then(async (group) => group && {
+      group,
+      recentSessions: await recentPracticeSessions(groupId, mode, 2),
+    }),
+    listDecks(),
+  ]);
+  if (!study) notFound();
+  const { group, recentSessions } = study;
   const selected = decks.filter((deck) => group.deckIds.includes(deck.id));
   const deckLangs = Object.fromEntries(selected.map((d) => [d.id, { front: d.frontLanguage, back: d.backLanguage }]));
   const chineseLang = selected.flatMap((d) => [d.frontLanguage, d.backLanguage]).find(isChineseLang) ?? "zh-CN";

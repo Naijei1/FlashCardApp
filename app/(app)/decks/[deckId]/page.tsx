@@ -46,15 +46,16 @@ export default async function DeckPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const [{ deckId }, { page: pageParam }] = await Promise.all([params, searchParams]);
-  const viewerRole = (await getAppSession())?.role === "admin" ? "admin" : "user";
-  const preloadedDecks = isVirtualDeck(deckId) ? await listDecks() : undefined;
-  const [set, decks] = await Promise.all([
-    loadStudySet(deckId, preloadedDecks),
-    preloadedDecks ? Promise.resolve(preloadedDecks) : listDecks(),
+  const virtual = isVirtualDeck(deckId);
+  const decksPromise = listDecks();
+  const [session, set, decks] = await Promise.all([
+    getAppSession(),
+    virtual ? decksPromise.then((decks) => loadStudySet(deckId, decks)) : loadStudySet(deckId),
+    decksPromise,
   ]);
+  const viewerRole = session?.role === "admin" ? "admin" : "user";
   if (!set) notFound();
   const { deck, cards, sideFor } = set;
-  const virtual = isVirtualDeck(deckId);
   const canAddCards = viewerRole === "admin" ? deck.source !== "private" : deck.source !== "global";
   const exportLink = <a href={`/api/decks/${deck.id}/export`} className="btn btn-secondary">Export CSV</a>;
   const now = new Date();

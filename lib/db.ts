@@ -1,3 +1,4 @@
+import { mapDeckReads } from "./deck-reads";
 import { syncCharacterIndexes } from "./character-index";
 import { currentRetentionSchedule } from "./fsrs";
 import {
@@ -187,20 +188,7 @@ export async function listAllCards(
 ): Promise<Card[]> {
   if (usesMultiUserData()) return (await multiUserStore()).listAllCardsForCurrentUser(decks, options);
   const sourceDecks = decks ?? (await listDecks());
-  const cardsByDeck: Card[][] = new Array(sourceDecks.length);
-  let nextIndex = 0;
-
-  async function worker(): Promise<void> {
-    while (nextIndex < sourceDecks.length) {
-      const index = nextIndex++;
-      cardsByDeck[index] = await listCards(sourceDecks[index].id, options);
-    }
-  }
-
-  // Each deck is its own partition. Eight in flight overlaps round trips on
-  // home, browse, and stats without bursting a large collection all at once.
-  const workerCount = Math.min(8, sourceDecks.length);
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  const cardsByDeck = await mapDeckReads(sourceDecks, (deck) => listCards(deck.id, options));
   return cardsByDeck.flat();
 }
 

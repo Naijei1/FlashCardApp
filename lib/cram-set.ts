@@ -21,11 +21,11 @@ export type CramSet = {
  */
 export async function loadCramSet(
   groupId: string,
-  known?: { decks: Deck[]; cards?: Card[] },
+  known?: { decks: Deck[]; cards?: Card[]; group?: PracticeGroup },
   options: { consistent?: boolean } = {}
 ): Promise<CramSet | null> {
   const [group, visible] = await Promise.all([
-    getPracticeGroup(groupId),
+    known?.group ?? getPracticeGroup(groupId),
     known ? Promise.resolve(known.decks) : listDecks(),
   ]);
   if (!group) return null;

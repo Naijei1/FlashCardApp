@@ -295,3 +295,43 @@ it("turns a hard-mark create race into an update", async () => {
   );
   expect(updates).toHaveLength(1);
 });
+
+it("overlaps lesson reads while preserving card order, progress, and visibility", async () => {
+  const { listAllCardsForCurrentUser } = await import("@/lib/multi-user-store");
+  const { hiddenCardKey } = await import("@/lib/multi-user-model");
+  mocks.session.mockResolvedValue({ userId: "user-a", role: "user", authMode: "google" });
+  const firstContent = Promise.withResolvers<void>();
+  const started = new Set<string>();
+  mocks.send.mockImplementation(async ({ input }) => {
+    if (input.Key) return { Item: { name: input.Key.SK, status: "published" } };
+    const { ":pk": pk, ":sk": sk } = input.ExpressionAttributeValues;
+    started.add(`${pk}/${sk}`);
+    expect(input.ConsistentRead).toBe(true);
+    if (pk === "GLOBAL#DECK#deck-1") {
+      await firstContent.promise;
+      return { Items: [{ ...content, SK: "CARD#card-1" }, { ...content, SK: "CARD#hidden" }] };
+    }
+    if (pk === "GLOBAL#DECK#deck-2") return { Items: [{ ...content, SK: "CARD#card-2" }] };
+    const progress = progressKey("user-a", "global", "deck-1", "card-1");
+    const hidden = hiddenCardKey("user-a", "deck-1", "hidden");
+    return { Items: [
+      ...(progress.SK.startsWith(sk) ? [{ ...progress, hard: true }] : []),
+      ...(hidden.SK.startsWith(sk) ? [hidden] : []),
+    ] };
+  });
+
+  const loading = listAllCardsForCurrentUser([{ id: "deck-1" }, { id: "deck-2" }], { consistent: true });
+  try {
+    await vi.waitFor(() => {
+      expect(started).toContain("GLOBAL#DECK#deck-2/CARD#");
+      expect(started).toContain("USER#user-a/PROGRESS#GLOBAL#deck-1#CARD#");
+      expect([...started].some((key) => key.startsWith("USER#user-a/HIDDEN#"))).toBe(true);
+    });
+  } finally {
+    firstContent.resolve();
+  }
+  expect((await loading).map(({ id, deckId, hard }) => ({ id, deckId, hard }))).toEqual([
+    { id: "card-1", deckId: "deck-1", hard: true },
+    { id: "card-2", deckId: "deck-2", hard: undefined },
+  ]);
+});

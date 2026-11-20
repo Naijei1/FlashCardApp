@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import LessonProgress from "@/components/LessonProgress";
 import { EXAM_MODES } from "@/lib/exam";
-import { recentPracticeSessions } from "@/lib/practice-group-store";
+import { getPracticeGroup, recentPracticeSessions } from "@/lib/practice-group-store";
 import GroupEditor from "@/components/GroupEditor";
 import { loadCramSet } from "@/lib/cram-set";
 import { deckKicker } from "@/lib/deck-kicker";
@@ -43,11 +43,20 @@ function StudyRow({ groupId, mode, summary }: { groupId: string; mode: ReviewMod
 export default async function PracticeGroupPage({ params }: { params: Promise<{ groupId: string }> }) {
   await requireLearnerPage();
   const { groupId } = await params;
-  const decks = await listDecks();
-  const allCards = await listAllCards(decks, { consistent: true });
-  const set = await loadCramSet(groupId, { decks, cards: allCards });
+  const groupPromise = getPracticeGroup(groupId);
+  const [study, group, history] = await Promise.all([
+    listDecks().then(async (decks) => ({
+      decks,
+      cards: await listAllCards(decks, { consistent: true }),
+    })),
+    groupPromise,
+    groupPromise.then((group) => group && Promise.all(EXAM_MODES.map((mode) => recentPracticeSessions(group.id, mode)))),
+  ]);
+  if (!group || !history) notFound();
+  const { decks, cards: allCards } = study;
+  const set = await loadCramSet(groupId, { decks, cards: allCards, group });
   if (!set) notFound();
-  const { group, missing } = set;
+  const { missing } = set;
   const counts = new Map<string, number>();
   for (const card of uniqueWords(allCards)) {
     counts.set(card.deckId, (counts.get(card.deckId) ?? 0) + 1);
@@ -55,7 +64,6 @@ export default async function PracticeGroupPage({ params }: { params: Promise<{ 
   const ctx = { group, decks: set.decks, now: new Date(), timeZone: appTimeZone() };
   const summary = summarizeGroup(set.entries, ctx);
   const readiness = lessonReadiness(set.entries, ctx);
-  const history = await Promise.all(EXAM_MODES.map((mode) => recentPracticeSessions(group.id, mode)));
   const { exam } = summary;
   const target = Math.round(groupTargetRecall(group) * 100);
 
