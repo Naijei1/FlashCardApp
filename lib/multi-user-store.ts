@@ -7,10 +7,12 @@ import {
   TransactWriteCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { cache } from "react";
 import type { ReviewLog } from "ts-fsrs";
 import { AccessError } from "./access-error";
 import { syncCharacterIndexes } from "./character-index";
 import { getAppSession } from "./app-session";
+import { mapDeckReads } from "./deck-reads";
 import { doc, tableName } from "./dynamo";
 import { emptyCardState } from "./fsrs";
 import { appTimeZone, localDateKey } from "./forecast";
@@ -153,21 +155,25 @@ function visible(deck: Deck, session: AppSession, now = new Date()): boolean {
   return isReleasedToLearners(deck, now);
 }
 
+// Home's deck list and release teaser share the same global metadata read.
+// Outside a server render, React does not cache the query.
+const readGlobalDeckItems = cache(() => queryItems("GLOBAL#DECKS"));
+
 export async function listDecksForCurrentUser(): Promise<Deck[]> {
   const session = await sessionOrThrow();
   const now = new Date();
-  const globalItems = await queryItems("GLOBAL#DECKS");
+  const [globalItems, privateItems] = await Promise.all([
+    readGlobalDeckItems(),
+    session.role === "admin" ? [] : queryItems(`USER#${session.userId}#DECKS`),
+  ]);
   const decks = globalItems
     .filter((item) => typeof item.SK === "string" && item.SK.startsWith("DECK#"))
     .map((item) => deckFromItem(item, String(item.SK).slice("DECK#".length), "global"))
     .filter((deck) => visible(deck, session, now));
-  if (session.role !== "admin") {
-    const privateItems = await queryItems(`USER#${session.userId}#DECKS`);
-    for (const item of privateItems) {
-      if (typeof item.SK !== "string" || !item.SK.startsWith("DECK#")) continue;
-      const deck = deckFromItem(item, item.SK.slice("DECK#".length), "private");
-      if (visible(deck, session, now)) decks.push(deck);
-    }
+  for (const item of privateItems) {
+    if (typeof item.SK !== "string" || !item.SK.startsWith("DECK#")) continue;
+    const deck = deckFromItem(item, item.SK.slice("DECK#".length), "private");
+    if (visible(deck, session, now)) decks.push(deck);
   }
   return decks.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -253,22 +259,14 @@ async function cardsForDeck(session: AppSession, deck: Deck, consistent?: boolea
   const contentPk = deck.source === "private"
     ? privateCardKey(session.userId, deck.id, "unused").PK
     : globalCardKey(deck.id, "unused").PK;
-  const contentItems = await queryItems(contentPk, "CARD#", consistent);
   const hideProgress = session.role === "admin";
-  const progressItems = hideProgress
-    ? []
-    : await queryItems(
-        progressPrefix(session.userId, deck.source ?? "global", deck.id).PK,
-        progressPrefix(session.userId, deck.source ?? "global", deck.id).SK,
-        consistent
-      );
-  const hiddenItems = hideProgress
-    ? []
-    : await queryItems(
-        hiddenPrefix(session.userId, deck.id).PK,
-        hiddenPrefix(session.userId, deck.id).SK,
-        consistent
-      );
+  const progress = progressPrefix(session.userId, deck.source ?? "global", deck.id);
+  const hiddenCards = hiddenPrefix(session.userId, deck.id);
+  const [contentItems, progressItems, hiddenItems] = await Promise.all([
+    queryItems(contentPk, "CARD#", consistent),
+    hideProgress ? [] : queryItems(progress.PK, progress.SK, consistent),
+    hideProgress ? [] : queryItems(hiddenCards.PK, hiddenCards.SK, consistent),
+  ]);
   const progressByCard = new Map<string, ProgressRecord>();
   for (const item of progressItems) {
     if (typeof item.SK !== "string") continue;
@@ -280,7 +278,7 @@ async function cardsForDeck(session: AppSession, deck: Deck, consistent?: boolea
   const hidden = new Set(
     hiddenItems
       .filter((item) => typeof item.SK === "string")
-      .map((item) => String(item.SK).slice(hiddenPrefix(session.userId, deck.id).SK.length))
+      .map((item) => String(item.SK).slice(hiddenCards.SK.length))
   );
   const cards: Card[] = [];
   for (const item of contentItems) {
@@ -311,12 +309,10 @@ export async function listAllCardsForCurrentUser(
 ): Promise<Card[]> {
   const session = await sessionOrThrow();
   const source = decks ?? (await listDecksForCurrentUser());
-  const cards: Card[][] = [];
-  for (const deck of source) {
+  const cards = await mapDeckReads(source, async (deck) => {
     const full = await loadDeck(session, deck.id);
-    if (!full) continue;
-    cards.push(await cardsForDeck(session, full, options.consistent));
-  }
+    return full ? cardsForDeck(session, full, options.consistent) : [];
+  });
   return cards.flat();
 }
 
@@ -790,7 +786,7 @@ export async function listHiddenGlobalCards(deckId: string): Promise<Array<Pick<
 export async function nextReleaseTeaserForCurrentUser() {
   const session = await sessionOrThrow();
   if (session.role === "admin") return null;
-  const items = await queryItems("GLOBAL#DECKS");
+  const items = await readGlobalDeckItems();
   const decks = items
     .filter((item) => typeof item.SK === "string" && item.SK.startsWith("DECK#"))
     .map((item) => deckFromItem(item, String(item.SK).slice("DECK#".length), "global"));
